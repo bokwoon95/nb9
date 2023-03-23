@@ -231,12 +231,11 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 						if localFS, ok := nbrew.FS.(*LocalFS); ok {
 							absolutePath = path.Join(localFS.rootDir, sitePrefix, response.AssetDir, name)
 						}
-						creationTime := CreationTime(absolutePath, fileInfo)
 						response.Assets = append(response.Assets, Asset{
 							Name:         name,
 							Size:         fileInfo.Size(),
 							ModTime:      fileInfo.ModTime(),
-							CreationTime: creationTime,
+							CreationTime: CreationTime(absolutePath, fileInfo),
 						})
 					}
 				}
@@ -299,12 +298,11 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 						if localFS, ok := nbrew.FS.(*LocalFS); ok {
 							absolutePath = path.Join(localFS.rootDir, sitePrefix, response.AssetDir, name)
 						}
-						creationTime := CreationTime(absolutePath, fileInfo)
 						response.Assets = append(response.Assets, Asset{
 							Name:         name,
 							Size:         fileInfo.Size(),
 							ModTime:      fileInfo.ModTime(),
-							CreationTime: creationTime,
+							CreationTime: CreationTime(absolutePath, fileInfo),
 						})
 					}
 				}
@@ -711,12 +709,11 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			if localFS, ok := nbrew.FS.(*LocalFS); ok {
 				absolutePath = path.Join(localFS.rootDir, sitePrefix, dir, name)
 			}
-			creationTime := CreationTime(absolutePath, fileInfo)
 			response.Files = append(response.Files, File{
 				Name:         name,
 				IsDir:        true,
 				ModTime:      fileInfo.ModTime(),
-				CreationTime: creationTime,
+				CreationTime: CreationTime(absolutePath, fileInfo),
 			})
 		}
 
@@ -1189,13 +1186,12 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			if localFS, ok := nbrew.FS.(*LocalFS); ok {
 				absolutePath = path.Join(localFS.rootDir, sitePrefix, filePath, name)
 			}
-			creationTime := CreationTime(absolutePath, fileInfo)
 			file := File{
 				Name:         name,
 				IsDir:        fileInfo.IsDir(),
 				Size:         fileInfo.Size(),
 				ModTime:      fileInfo.ModTime(),
-				CreationTime: creationTime,
+				CreationTime: CreationTime(absolutePath, fileInfo),
 			}
 			if file.IsDir {
 				response.Files = append(response.Files, file)
