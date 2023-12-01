@@ -1,0 +1,204 @@
+## files ##
+
+[[tables]]
+table = "files"
+
+[[tables.columns]]
+column = "file_id"
+type = { default = "BINARY(16)", postgres = "UUID" }
+primarykey = true
+
+[[tables.columns]]
+column = "parent_id"
+type = { default = "BINARY(16)", postgres = "UUID" }
+references = { table = "files", column = "file_id" }
+index = true
+
+[[tables.columns]]
+column = "file_path"
+type = { default = "VARCHAR(500)" }
+unique = true
+notnull = true
+
+[[tables.columns]]
+column = "is_dir"
+type = { default = "BOOLEAN" }
+notnull = true
+
+[[tables.columns]]
+column = "count"
+type = { default = "INT" }
+
+[[tables.columns]]
+column = "text"
+type = { default = "TEXT", mysql = "MEDIUMTEXT" }
+
+[[tables.columns]]
+column = "data"
+type = { default = "BLOB", postgres = "BYTEA", mysql = "MEDIUMBLOB" }
+
+[[tables.columns]]
+column = "size"
+type = { default = "INT" }
+
+[[tables.columns]]
+column = "modification_time"
+type = { default = "DATETIME", postgres = "TIMESTAMPTZ" }
+index = true
+
+[[tables.columns]]
+column = "perm"
+type = { default = "INT" }
+
+## site ##
+
+[[tables]]
+table = "site"
+
+[[tables.columns]]
+column = "site_id"
+type = { default = "BINARY(16)", postgres = "UUID" }
+primarykey = true
+
+[[tables.columns]]
+column = "site_name"
+type = { default = "VARCHAR(500)" }
+unique = true
+notnull = true
+
+## users ##
+
+[[tables]]
+table = "users"
+
+[[tables.columns]]
+column = "user_id"
+type = { default = "BINARY(16)", postgres = "UUID" }
+primarykey = true
+
+[[tables.columns]]
+column = "username"
+type = { default = "VARCHAR(500)" }
+references = { table = "site", column = "site_name" }
+unique = true
+notnull = true
+
+[[tables.columns]]
+column = "email"
+type = { default = "VARCHAR(500)" }
+unique = true
+notnull = true
+
+[[tables.columns]]
+column = "password_hash"
+type = { default = "VARCHAR(500)" }
+
+[[tables.columns]]
+column = "reset_token_hash"
+type = { default = "BINARY(40)", postgres = "BYTEA" }
+unique = true
+
+[[tables.columns]]
+column = "failed_logins"
+type = { default = "INT" }
+
+[[tables.columns]]
+column = "site_limit"
+type = { default = "INT" }
+
+[[tables.columns]]
+column = "storage_limit"
+type = { default = "INT" }
+
+[[tables.columns]]
+column = "storage_used"
+type = { default = "INT" }
+
+## ip_login ##
+
+[[tables]]
+table = "ip_login"
+
+[[tables.columns]]
+column = "ip"
+type = { default = "VARCHAR(500)" }
+primarykey = true
+
+[[tables.columns]]
+column = "failed_logins"
+type = { default = "INT" }
+notnull = true
+
+## site_owner ##
+
+[[tables]]
+table = "site_owner"
+
+[[tables.columns]]
+column = "site_id"
+type = { default = "BINARY(16)", postgres = "UUID" }
+primarykey = true
+references = { table = "site", column = "site_id" }
+
+[[tables.columns]]
+column = "user_id"
+type = { default = "BINARY(16)", postgres = "UUID" }
+references = { table = "users", column = "user_id" }
+index = true
+
+## site_user ##
+
+[[tables]]
+table = "site_user"
+primarykey = [ "site_id", "user_id" ]
+
+[[tables.columns]]
+column = "site_id"
+type = { default = "BINARY(16)", postgres = "UUID" }
+references = { table = "site", column = "site_id" }
+
+[[tables.columns]]
+column = "user_id"
+type = { default = "BINARY(16)", postgres = "UUID" }
+references = { table = "user", column = "user_id" }
+index = true
+
+## session ##
+
+[[tables]]
+table = "session"
+
+[[tables.columns]]
+column = "session_token_hash"
+type = { default = "BINARY(40)", postgres = "BYTEA" }
+primarykey = true
+
+[[tables.columns]]
+column = "data"
+type = { default = "JSON", postgres = "JSONB" }
+
+## signup ##
+
+[[tables]]
+table = "signup"
+
+[[tables.columns]]
+column = "signup_token_hash"
+type = { default = "BINARY(40)", postgres = "BYTEA" }
+primarykey = true
+
+## authentication ##
+
+[[tables]]
+table = "authentication"
+
+[[tables.columns]]
+column = "authentication_token_hash"
+type = { default = "BINARY(40)", postgres = "BYTEA" }
+primarykey = true
+
+[[tables.columns]]
+column = "user_id"
+type = { default = "BINARY(16)", postgres = "UUID" }
+references = { table = "user", column = "user_id" }
+index = true
