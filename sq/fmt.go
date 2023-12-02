@@ -287,6 +287,9 @@ func EscapeQuote(str string, quote byte) string {
 	return b.String()
 }
 
+// TODO: we may not need this function in notebrew since we will log the args
+// separately (although sq will handle the formatting).
+//
 // Sprintf will interpolate SQL args into a query string containing prepared
 // statement parameters. It returns an error if an argument cannot be properly
 // represented in SQL.
