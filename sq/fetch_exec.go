@@ -28,6 +28,13 @@ type Cursor[T any] struct {
 // - For new developers to see how the sausage is made?
 // - To identify problematic queries?
 // - To surface errors in queries? Will the end-user (desktop users) ever see the errors logged to console?
+// - NOTE: a prime use would be to identify queries that take like, up big
+// seconds. We only have 60 seconds per request, and we are interested in the
+// heaviest SQL queries (the ones that take the longest time). However, we
+// don't know the cutoff because it's very likely all our queries end up below
+// the cutoff or above the cutoff. What we need is some kind of statistical
+// analysis as each data point comes in to determine the min, max, median
+// latencies and so forth.
 // WithAttrs(slog.String("query", "SELECT * FROM ..."), slog.String("args", "1:'' 2:3 3:'' 5:''"))
 // Q1: do we wrap the DB with a logger like in old sq?
 // Q2: always interpolate? don't interpolate? interpolate only if no error? huh?
