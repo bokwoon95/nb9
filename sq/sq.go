@@ -7,21 +7,15 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"reflect"
-	"sync"
 
 	"github.com/bokwoon95/nb9/sq/internal/googleuuid"
 )
 
-var bufpool = &sync.Pool{
-	New: func() any { return &bytes.Buffer{} },
-}
-
 // Dialects supported.
 const (
-	DialectSQLite    = "sqlite"
-	DialectPostgres  = "postgres"
-	DialectMySQL     = "mysql"
-	DialectSQLServer = "sqlserver"
+	DialectSQLite   = "sqlite"
+	DialectPostgres = "postgres"
+	DialectMySQL    = "mysql"
 )
 
 // SQLWriter is anything that can be converted to SQL.
@@ -42,12 +36,6 @@ type DB interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
-}
-
-// Result is the result of an Exec command.
-type Result struct {
-	LastInsertId int64
-	RowsAffected int64
 }
 
 // DialectValuer is any type that will yield a different driver.Valuer

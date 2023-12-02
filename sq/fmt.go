@@ -16,10 +16,20 @@ import (
 	"unicode"
 )
 
+var bufPool = &sync.Pool{
+	New: func() any { return &bytes.Buffer{} },
+}
+
 var ordinalIndexPool = sync.Pool{
-	New: func() any {
-		return make(map[int]int)
-	},
+	New: func() any { return map[int]int{} },
+}
+
+var argsPool = sync.Pool{
+	New: func() any { return &[]any{} },
+}
+
+var paramsPool = sync.Pool{
+	New: func() any { return map[string][]int{} },
 }
 
 // Writef is a fmt.Sprintf-style function that will write a format string and
@@ -297,9 +307,9 @@ func Sprintf(dialect string, query string, args []any) (string, error) {
 	if len(args) == 0 {
 		return query, nil
 	}
-	buf := bufpool.Get().(*bytes.Buffer)
+	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufpool.Put(buf)
+	defer bufPool.Put(buf)
 	buf.Grow(len(query))
 	namedIndices := make(map[string]int)
 	for i, arg := range args {
@@ -845,8 +855,25 @@ func (expr Expression) WriteSQL(ctx context.Context, dialect string, buf *bytes.
 	return nil
 }
 
-// Params is a shortcut for typing map[string]interface{}.
-type Params = map[string]any
+type DialectExpression struct {
+	Default any
+	Cases   []DialectCase
+}
+
+type DialectCase struct {
+	Dialect string
+	Result  any
+}
+
+// WriteSQL implements the SQLWriter interface.
+func (e DialectExpression) WriteSQL(ctx context.Context, dialect string, buf *bytes.Buffer, args *[]any, params map[string][]int) error {
+	for _, dialectCase := range e.Cases {
+		if dialect == dialectCase.Dialect {
+			return WriteValue(ctx, dialect, buf, args, params, dialectCase.Result)
+		}
+	}
+	return WriteValue(ctx, dialect, buf, args, params, e.Default)
+}
 
 // Parameter is identical to sql.NamedArg, but implements the Field interface.
 type Parameter sql.NamedArg

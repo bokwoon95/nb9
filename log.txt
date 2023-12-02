@@ -1,1 +1,11 @@
 schema.go
+
+notebrew-config/metrics.txt
+Requests per second (mean) = xxx
+Requests per second (Q1)   = xxx
+Requests per second (Q2)   = xxx
+Requests per second (Q3)   = xxx
+Latency (mean) = xxx
+Latency (Q1)   = xxx
+Latency (Q2)   = xxx
+Latency (Q3)   = xxx
