@@ -35,6 +35,12 @@ type Cursor[T any] struct {
 // the cutoff or above the cutoff. What we need is some kind of statistical
 // analysis as each data point comes in to determine the min, max, median
 // latencies and so forth.
+// - NOTE: BUT: It may be more important to log the overall latencies instead
+// of just the query latencies. We can ignore logging the queries first. Only
+// when we've proven that there is a latency problem with some HTTP requests
+// (if they're timing out of the 60 second deadline) then we can dig deeper
+// into which parts of the requests are taking the most time (and we caan
+// modify it entirely within notebrew since it's a homegrown query builder).
 // WithAttrs(slog.String("query", "SELECT * FROM ..."), slog.String("args", "1:'' 2:3 3:'' 5:''"))
 // Q1: do we wrap the DB with a logger like in old sq?
 // Q2: always interpolate? don't interpolate? interpolate only if no error? huh?
