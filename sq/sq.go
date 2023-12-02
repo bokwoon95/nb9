@@ -96,33 +96,3 @@ func (v *uuidValue) DialectValuer(dialect string) (driver.Valuer, error) {
 	v.dialect = dialect
 	return v, nil
 }
-
-func preprocessValue(dialect string, value any) (any, error) {
-	if dialectValuer, ok := value.(DialectValuer); ok {
-		driverValuer, err := dialectValuer.DialectValuer(dialect)
-		if err != nil {
-			return nil, fmt.Errorf("calling DialectValuer on %#v: %w", dialectValuer, err)
-		}
-		value = driverValuer
-	}
-	switch value := value.(type) {
-	case nil:
-		return nil, nil
-	case [16]byte:
-		driverValue, err := (&uuidValue{dialect: dialect, value: value}).Value()
-		if err != nil {
-			if dialect == DialectPostgres {
-				return nil, fmt.Errorf("converting %#v to string: %w", value, err)
-			}
-			return nil, fmt.Errorf("converting %#v to bytes: %w", value, err)
-		}
-		return driverValue, nil
-	case driver.Valuer:
-		driverValue, err := value.Value()
-		if err != nil {
-			return nil, fmt.Errorf("calling Value on %#v: %w", value, err)
-		}
-		return driverValue, nil
-	}
-	return value, nil
-}

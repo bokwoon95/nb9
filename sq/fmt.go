@@ -11,9 +11,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
+
+var ordinalIndexPool = sync.Pool{
+	New: func() any {
+		return make(map[int]int)
+	},
+}
 
 // Writef is a fmt.Sprintf-style function that will write a format string and
 // values slice into an Output. The only recognized placeholder is '{}'.
@@ -36,9 +43,14 @@ import (
 // (https://bokwoon.neocities.org/sq.html#value-expansion). Otherwise, the
 // value is added to the query args slice.
 func Writef(ctx context.Context, dialect string, buf *bytes.Buffer, args *[]any, params map[string][]int, format string, values []any) error {
-	return writef(ctx, dialect, buf, args, params, format, values, nil, nil)
+	ordinalIndex := ordinalIndexPool.Get().(map[int]int)
+	clear(ordinalIndex)
+	defer ordinalIndexPool.Put(ordinalIndex)
+	return writef(ctx, dialect, buf, args, params, format, values, new(int), ordinalIndex)
 }
 
+// ordinalIndex tracks the index of the ordinals that have already been written
+// into the args slice
 func writef(ctx context.Context, dialect string, buf *bytes.Buffer, args *[]any, params map[string][]int, format string, values []any, runningValuesIndex *int, ordinalIndex map[int]int) error {
 	// optimized case when the format string does not contain any '{}'
 	// placeholders
@@ -66,15 +78,6 @@ func writef(ctx context.Context, dialect string, buf *bytes.Buffer, args *[]any,
 		}
 	}
 	buf.Grow(len(format))
-	if runningValuesIndex == nil {
-		n := 0
-		runningValuesIndex = &n
-	}
-	// ordinalIndex tracks the index of the ordinals that have already been
-	// written into the args slice
-	if ordinalIndex == nil {
-		ordinalIndex = make(map[int]int)
-	}
 
 	// jump to each '{' character in the format string
 	for i := strings.IndexByte(format, '{'); i >= 0; i = strings.IndexByte(format, '{') {
@@ -144,6 +147,36 @@ func writef(ctx context.Context, dialect string, buf *bytes.Buffer, args *[]any,
 	}
 	buf.WriteString(format)
 	return nil
+}
+
+func preprocessValue(dialect string, value any) (any, error) {
+	if dialectValuer, ok := value.(DialectValuer); ok {
+		driverValuer, err := dialectValuer.DialectValuer(dialect)
+		if err != nil {
+			return nil, fmt.Errorf("calling DialectValuer on %#v: %w", dialectValuer, err)
+		}
+		value = driverValuer
+	}
+	switch value := value.(type) {
+	case nil:
+		return nil, nil
+	case [16]byte:
+		driverValue, err := (&uuidValue{dialect: dialect, value: value}).Value()
+		if err != nil {
+			if dialect == DialectPostgres {
+				return nil, fmt.Errorf("converting %#v to string: %w", value, err)
+			}
+			return nil, fmt.Errorf("converting %#v to bytes: %w", value, err)
+		}
+		return driverValue, nil
+	case driver.Valuer:
+		driverValue, err := value.Value()
+		if err != nil {
+			return nil, fmt.Errorf("calling Value on %#v: %w", value, err)
+		}
+		return driverValue, nil
+	}
+	return value, nil
 }
 
 // WriteValue is the equivalent of Writef but for writing a single value into
@@ -256,8 +289,7 @@ func EscapeQuote(str string, quote byte) string {
 
 // Sprintf will interpolate SQL args into a query string containing prepared
 // statement parameters. It returns an error if an argument cannot be properly
-// represented in SQL. This function may be vulnerable to SQL injection and
-// should be used for logging purposes only.
+// represented in SQL.
 func Sprintf(dialect string, query string, args []any) (string, error) {
 	if len(args) == 0 {
 		return query, nil
@@ -374,7 +406,8 @@ func Sprintf(dialect string, query string, args []any) (string, error) {
 		// char in and continue
 		buf.WriteRune(char)
 	}
-	// flush the paramName buffer (to handle edge case where the query ends with a parameter name)
+	// flush the paramName buffer (to handle edge case where the query ends
+	// with a parameter name e.g. "SELECT * FROM tbl WHERE x = :param")
 	if len(paramName) > 0 {
 		paramValue, err := lookupParam(dialect, args, paramName, namedIndices, runningArgsIndex)
 		if err != nil {
@@ -787,6 +820,26 @@ func lookupParam(dialect string, args []any, paramName []rune, namedIndices map[
 		return "", err
 	}
 	return paramValue, nil
+}
+
+// Expression represents an SQL expression.
+type Expression struct {
+	Format string
+	Values []any
+}
+
+// Expr creates a new Expression using Writef syntax.
+func Expr(format string, values ...any) Expression {
+	return Expression{Format: format, Values: values}
+}
+
+// WriteSQL implements the SQLWriter interface.
+func (expr Expression) WriteSQL(ctx context.Context, dialect string, buf *bytes.Buffer, args *[]any, params map[string][]int) error {
+	err := Writef(ctx, dialect, buf, args, params, expr.Format, expr.Values)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Params is a shortcut for typing map[string]interface{}.

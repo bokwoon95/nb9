@@ -116,9 +116,8 @@ func Automigrate(dialect string, db *sql.DB) error {
 		DB:             db,
 		Dialect:        dialect,
 		DestCatalog:    catalog,
-		DropObjects:    true,
+		DropObjects:    true, // TODO: turn this off when we go live.
 		AcceptWarnings: true,
-		DryRun:         true,
 		Stderr:         io.Discard,
 	}
 	err = automigrateCmd.Run()
