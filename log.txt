@@ -1,4 +1,10 @@
 schema.go
+fs.go
+notebrew.go
+site_generator.go
+error.go
+folder.go
+file.go
 
 notebrew-config/metrics.txt
 Requests per second (mean) = xxx
