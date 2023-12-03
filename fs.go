@@ -6,9 +6,9 @@ import (
 	"io/fs"
 )
 
-type FS interface {
+type NotebrewFS interface {
 	// WithContext returns a new FS with the given context.
-	WithContext(context.Context) FS
+	NotebrewContext(context.Context) NotebrewFS
 
 	// Open opens the named file.
 	Open(name string) (fs.File, error)
@@ -52,5 +52,18 @@ type FS interface {
 	// - syscall.EISDIR (newname)
 }
 
-type File interface {
+type NotebrewFile interface {
+	// FilterByName(before, after string, limit int) // For sorting and filtering, optional and discoverable
+	// FilterByModificationTime(before, after time.Time, limit int) // For sorting and filtering, optional and discoverable
+	// ReadDirList([]DirEntry) (n int, err error) // For streaming
+	// ReadDirTree([]DirEntry) (n int, err error)
+}
+
+type NotebrewFileInfo interface {
+	// fs.FileInfo
+	// Count() (int64, error)
+	// Size() (int64, error)
+}
+
+type NotebrewDirEntry interface {
 }
