@@ -2,8 +2,8 @@ package nb9
 
 import (
 	"context"
+	"io"
 	"io/fs"
-	"time"
 )
 
 type FS interface {
@@ -13,7 +13,16 @@ type FS interface {
 	// Open opens the named file.
 	Open(name string) (fs.File, error)
 
-	Stat(name string) (FileInfo, error)
+	OpenWriter(name string) (io.WriteCloser, error)
+
+	Stat(name string) (fs.FileInfo, error)
+
+	ReadDir(name string) ([]fs.DirEntry, error)
+
+	// NOTE: WalkDir allows us to do streaming. If dirEntry is a
+	// RemoteFileInfo, we always populate the Text and Data fields so that we
+	// can get the file contents while walking.
+	WalkDir(root string, fn func(path string, d fs.DirEntry, err error) error)
 
 	// Mkdir creates a new directory with the specified name.
 	Mkdir(name string, perm fs.FileMode) error
@@ -42,14 +51,12 @@ type File interface {
 	// ReadDirTree([]DirEntry) (n int, err error)
 }
 
+// TODO: fileInfo.Sys().(*RemoteFileInfo)
+// if *RemoteFileInfo, we can get the bytes directly without having to call Open
 type FileInfo interface {
-	Name() string
-	Size() int64
-	Mode() fs.FileMode
-	ModTime() time.Time
-	IsDir() bool
-	Open() (fs.File, error)
+	fs.FileInfo
 	Count() int64
+	Bytes() string
 }
 
 type DirReader interface {
