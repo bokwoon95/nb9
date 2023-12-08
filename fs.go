@@ -22,6 +22,12 @@ type FS interface {
 	// NOTE: WalkDir allows us to do streaming. If dirEntry is a
 	// RemoteFileInfo, we always populate the Text and Data fields so that we
 	// can get the file contents while walking.
+	//
+	// What if we only want to stream a directory, not the entire file tree? No
+	// choice, we need to use fs.SkipDir and whenever we receive fs.SkipDir,
+	// set the ignorePrefix to the current directory and discard all names with
+	// that prefix. So we can't stream a directory per se but we can stream the
+	// entire tree and ignore any grandchildren of the current directory.
 	WalkDir(root string, fn func(path string, d fs.DirEntry, err error) error)
 
 	// Mkdir creates a new directory with the specified name.
