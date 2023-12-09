@@ -17,7 +17,10 @@ type FS interface {
 
 	Stat(name string) (fs.FileInfo, error)
 
-	ReadDir(name string) ([]fs.DirEntry, error)
+	ReadDir(name string, fn func(path string, d fs.DirEntry, err error) error)
+	ReadDirAfterName(dir string, name string, limit int) ([]fs.DirEntry, error)
+	ReadDirBeforeName(dir string, name string, limit int) ([]fs.DirEntry, error)
+	// seeks are only used when reading a directory. either before X limit Y or after X limit Y.
 
 	// NOTE: WalkDir allows us to do streaming. If dirEntry is a
 	// RemoteFileInfo, we always populate the Text and Data fields so that we
@@ -48,6 +51,14 @@ type FS interface {
 	Rename(oldname, newname string) error
 }
 
+// Limit
+// BeforeName
+// AfterName
+// BeforeModTime
+// FilterByName
+// FilterByModTime
+// WalkDirBeforeName(root string, fn fs.WalkDirFunc, before, after string, limit int)
+
 // NOTE: what if you want to read a directory without opening a file, which
 // incurs a database lookup? Should (*RemoteFile).Read be lazily intialized? FS.OpenFile should be as cheap as possible?
 type File interface {
@@ -70,9 +81,4 @@ type FileInfo interface {
 	fs.FileInfo
 	Count() int64
 	Bytes() string
-}
-
-type DirReader interface {
-	ReadDir(batch []FileInfo) (n int, err error)
-	Close() error
 }
