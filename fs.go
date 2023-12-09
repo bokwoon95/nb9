@@ -27,6 +27,9 @@ type FS interface {
 
 	// NOTE: We will need to stat the parent directory first in order to get
 	// the count, then we iterate the directory.
+	// NOTE: IterateDir is a specialization of WalkDir. If IterateDir is not
+	// implemented, we will just use WalkDir and fs.SkipDir together (less
+	// efficient on a database).
 	IterateDir(dir string, fn func(name string, d fs.DirEntry, err error) error)
 
 	// Mkdir creates a new directory with the specified name.
@@ -42,6 +45,8 @@ type FS interface {
 
 // NOTE: we will call these inline, without exporting a public (or private)
 // interface.
+// NOTE: ReadDirAfterName/ReadDirBeforeName is just a specialization of
+// ReadDir. If unimplemented, we will just use ReadDir (less efficient).
 type NameIndexedFS interface {
 	ReadDirAfterName(dir string, name string, limit int) ([]fs.DirEntry, error)
 	ReadDirBeforeName(dir string, name string, limit int) ([]fs.DirEntry, error)
@@ -49,6 +54,8 @@ type NameIndexedFS interface {
 
 // NOTE: we will call these inline, without exporting a public (or private)
 // interface.
+// NOTE: ReadDirAfterModTime/ReadDirBeforeModTime is just a specialization of
+// ReadDir. If unimplemented, we will just use ReadDir (less efficient).
 type ModTimeIndexedFS interface {
 	ReadDirBeforeModTime(dir string, modTime string, limit int) ([]fs.DirEntry, error)
 	ReadDirAfterModTime(dir string, modTime string, limit int) ([]fs.DirEntry, error)
