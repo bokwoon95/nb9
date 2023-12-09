@@ -6,6 +6,8 @@ import (
 	"io/fs"
 )
 
+// IndexedFS
+
 type FS interface {
 	// WithContext returns a new FS with the given context.
 	WithContext(context.Context) FS
@@ -18,9 +20,6 @@ type FS interface {
 	Stat(name string) (fs.FileInfo, error)
 
 	ReadDir(name string) ([]fs.DirEntry, error)
-	ReadDirAfterName(dir string, name string, limit int) ([]fs.DirEntry, error)
-	ReadDirBeforeName(dir string, name string, limit int) ([]fs.DirEntry, error)
-	// seeks are only used when reading a directory. either before X limit Y or after X limit Y.
 
 	// NOTE: WalkDir allows us to do streaming. If dirEntry is a
 	// RemoteFileInfo, we always populate the Text and Data fields so that we
@@ -49,6 +48,20 @@ type FS interface {
 	// Rename renames (moves) oldname to newname. If newname already exists and
 	// is not a directory, Rename replaces it.
 	Rename(oldname, newname string) error
+}
+
+// NOTE: we will call these inline, without exporting a public (or private)
+// interface.
+type NameIndexedFS interface {
+	ReadDirAfterName(dir string, name string, limit int) ([]fs.DirEntry, error)
+	ReadDirBeforeName(dir string, name string, limit int) ([]fs.DirEntry, error)
+}
+
+// NOTE: we will call these inline, without exporting a public (or private)
+// interface.
+type ModTimeIndexedFS interface {
+	ReadDirBeforeModTime(dir string, modTime string, limit int) ([]fs.DirEntry, error)
+	ReadDirAfterModTime(dir string, modTime string, limit int) ([]fs.DirEntry, error)
 }
 
 // Limit
