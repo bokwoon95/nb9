@@ -17,7 +17,7 @@ type FS interface {
 
 	Stat(name string) (fs.FileInfo, error)
 
-	ReadDir(name string, fn func(path string, d fs.DirEntry, err error) error)
+	ReadDir(name string) ([]fs.DirEntry, error)
 	ReadDirAfterName(dir string, name string, limit int) ([]fs.DirEntry, error)
 	ReadDirBeforeName(dir string, name string, limit int) ([]fs.DirEntry, error)
 	// seeks are only used when reading a directory. either before X limit Y or after X limit Y.
