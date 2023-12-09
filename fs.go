@@ -21,23 +21,13 @@ type FS interface {
 
 	ReadDir(name string) ([]fs.DirEntry, error)
 
-	// NOTE: WalkDir allows us to do streaming. If dirEntry is a
-	// RemoteFileInfo, we always populate the Text and Data fields so that we
-	// can get the file contents while walking. This only happens for the
-	// WalkDir method, not the Stat() method.
-	//
-	// What if we only want to stream a directory, not the entire file tree? No
-	// choice, we need to use fs.SkipDir and whenever we receive fs.SkipDir,
-	// set the ignorePrefix to the current directory and discard all names with
-	// that prefix. So we can't stream a directory per se but we can stream the
-	// entire tree and ignore any grandchildren of the current directory.
-	//
-	// OH and when we walk, the first entry is guaranteed to be the root so we
-	// can use that to obtain the file count of the directory if it's a
-	// RemoteFileInfo, otherwise if DirEntry is a LocalFileInfo we'll have to
-	// do a ReadDir to get the file count. Basically we'll hardcode
-	// implementations that handle RemoteFileInfo specifically.
+	// NOTE: For WalkDir, RemoteFS always fills in the Text and Data fields of
+	// the RemoteFile. Only for WalkDir(), not for Stat() or ReadDir().
 	WalkDir(root string, fn func(path string, d fs.DirEntry, err error) error)
+
+	// NOTE: We will need to stat the parent directory first in order to get
+	// the count, then we iterate the directory.
+	IterateDir(dir string, fn func(name string, d fs.DirEntry, err error) error)
 
 	// Mkdir creates a new directory with the specified name.
 	Mkdir(name string, perm fs.FileMode) error
