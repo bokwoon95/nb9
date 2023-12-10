@@ -7,6 +7,8 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"reflect"
+	"strings"
+	"time"
 
 	"github.com/bokwoon95/nb9/sq/internal/googleuuid"
 )
@@ -83,4 +85,138 @@ func (v *uuidValue) Value() (driver.Value, error) {
 func (v *uuidValue) DialectValuer(dialect string) (driver.Valuer, error) {
 	v.dialect = dialect
 	return v, nil
+}
+
+// Timestamp is as a replacement for sql.NullTime but with the following
+// enhancements:
+//
+// 1. Timestamp.Value() returns an int64 unix timestamp if the dialect is
+// SQLite, otherwise it returns a time.Time (similar to sql.NullTime).
+//
+// 2. Timestamp.Scan() additionally supports scanning from int64 and text
+// (string/[]byte) values on top of what sql.NullTime already supports. The
+// following text timestamp formats are supported:
+//
+//	var timestampFormats = []string{
+//		"2006-01-02 15:04:05.999999999-07:00",
+//		"2006-01-02T15:04:05.999999999-07:00",
+//		"2006-01-02 15:04:05.999999999",
+//		"2006-01-02T15:04:05.999999999",
+//		"2006-01-02 15:04:05",
+//		"2006-01-02T15:04:05",
+//		"2006-01-02 15:04",
+//		"2006-01-02T15:04",
+//		"2006-01-02",
+//	}
+type Timestamp struct {
+	time.Time
+	Valid   bool
+	dialect string
+}
+
+// copied from https://pkg.go.dev/github.com/mattn/go-sqlite3#pkg-variables
+var timestampFormats = []string{
+	"2006-01-02 15:04:05.999999999-07:00",
+	"2006-01-02T15:04:05.999999999-07:00",
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04:05",
+	"2006-01-02T15:04:05",
+	"2006-01-02 15:04",
+	"2006-01-02T15:04",
+	"2006-01-02",
+}
+
+// Scan implements the sql.Scanner interface. It additionally supports scanning
+// from int64 and text (string/[]byte) values on top of what sql.NullTime
+// already supports. The following text timestamp formats are supported:
+//
+//	var timestampFormats = []string{
+//		"2006-01-02 15:04:05.999999999-07:00",
+//		"2006-01-02T15:04:05.999999999-07:00",
+//		"2006-01-02 15:04:05.999999999",
+//		"2006-01-02T15:04:05.999999999",
+//		"2006-01-02 15:04:05",
+//		"2006-01-02T15:04:05",
+//		"2006-01-02 15:04",
+//		"2006-01-02T15:04",
+//		"2006-01-02",
+//	}
+func (ts *Timestamp) Scan(value any) error {
+	if value == nil {
+		ts.Time, ts.Valid = time.Time{}, false
+		return nil
+	}
+	// int64 and string handling copied from
+	// https://github.com/mattn/go-sqlite3/issues/748#issuecomment-538643131
+	switch value := value.(type) {
+	case int64:
+		// Assume a millisecond unix timestamp if it's 13 digits -- too
+		// large to be a reasonable timestamp in seconds.
+		if value > 1e12 || value < -1e12 {
+			value *= int64(time.Millisecond) // convert ms to nsec
+			ts.Time = time.Unix(0, value)
+		} else {
+			ts.Time = time.Unix(value, 0)
+		}
+		ts.Valid = true
+		return nil
+	case string:
+		if len(value) == 0 {
+			ts.Time, ts.Valid = time.Time{}, false
+			return nil
+		}
+		var err error
+		var timeVal time.Time
+		value = strings.TrimSuffix(value, "Z")
+		for _, format := range timestampFormats {
+			if timeVal, err = time.ParseInLocation(format, value, time.UTC); err == nil {
+				ts.Time, ts.Valid = timeVal, true
+				return nil
+			}
+		}
+		return fmt.Errorf("could not convert %q into time", value)
+	case []byte:
+		if len(value) == 0 {
+			ts.Time, ts.Valid = time.Time{}, false
+			return nil
+		}
+		var err error
+		var timeVal time.Time
+		value = bytes.TrimSuffix(value, []byte("Z"))
+		for _, format := range timestampFormats {
+			if timeVal, err = time.ParseInLocation(format, string(value), time.UTC); err == nil {
+				ts.Time, ts.Valid = timeVal, true
+				return nil
+			}
+		}
+		return fmt.Errorf("could not convert %q into time", value)
+	default:
+		var nulltime sql.NullTime
+		err := nulltime.Scan(value)
+		if err != nil {
+			return err
+		}
+		ts.Time, ts.Valid = nulltime.Time, nulltime.Valid
+		return nil
+	}
+}
+
+// Value implements the driver.Valuer interface. It returns an int64 unix
+// timestamp if the dialect is SQLite, otherwise it returns a time.Time
+// (similar to sql.NullTime).
+func (ts Timestamp) Value() (driver.Value, error) {
+	if !ts.Valid {
+		return nil, nil
+	}
+	if ts.dialect == DialectSQLite {
+		return ts.Time.UTC().Unix(), nil
+	}
+	return ts.Time, nil
+}
+
+// DialectValuer implements the DialectValuer interface.
+func (ts Timestamp) DialectValuer(dialect string) (driver.Valuer, error) {
+	ts.dialect = dialect
+	return ts, nil
 }
