@@ -178,6 +178,25 @@ func (row *Row) NullInt64(format string, values ...any) sql.NullInt64 {
 	return *scanDest
 }
 
+// String returns the string value of the expression.
+func (row *Row) String(format string, values ...any) string {
+	return row.NullString(format, values...).String
+}
+
+// NullString returns the sql.NullString value of the expression.
+func (row *Row) NullString(format string, values ...any) sql.NullString {
+	if row.sqlRows == nil {
+		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
+		row.scanDest = append(row.scanDest, &sql.NullString{})
+		return sql.NullString{}
+	}
+	defer func() {
+		row.index++
+	}()
+	scanDest := row.scanDest[row.index].(*sql.NullString)
+	return *scanDest
+}
+
 // Time returns the time.Time value of the expression.
 func (row *Row) Time(format string, values ...any) time.Time {
 	return row.NullTime(format, values...).Time
