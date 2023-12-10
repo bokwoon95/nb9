@@ -439,7 +439,7 @@ func NewS3Storage(ctx context.Context, config S3StorageConfig) (*S3Storage, erro
 	// Ping the bucket and see if we have access.
 	_, err := storage.Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 		Bucket:  &storage.Bucket,
-		MaxKeys: 1,
+		MaxKeys: aws.Int32(1),
 	})
 	if err != nil {
 		return nil, err
