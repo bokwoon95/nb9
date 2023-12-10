@@ -1,7 +1,10 @@
 package nb9
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"io"
 	"io/fs"
@@ -9,6 +12,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 )
 
 // IndexedFS
@@ -298,26 +308,272 @@ type ModTimeIndexedFS interface {
 // FilterByModTime
 // WalkDirBeforeName(root string, fn fs.WalkDirFunc, before, after string, limit int)
 
-// NOTE: what if you want to read a directory without opening a file, which
-// incurs a database lookup? Should (*RemoteFile).Read be lazily intialized? FS.OpenFile should be as cheap as possible?
-type File interface {
-	Stat() (FileInfo, error)
-	Read([]byte) (int, error)
-	Write([]byte) (int, error)
-	Close() error
-	NameFilter(before, after string, limit int) error
-	ReadDirList(batch []FileInfo) (n int, err error)
-	ReadDirTree(batch []FileInfo) (n int, err error)
-	// FilterByName(before, after string, limit int) // For sorting and filtering, optional and discoverable
-	// FilterByModificationTime(before, after time.Time, limit int) // For sorting and filtering, optional and discoverable
-	// ReadDirList([]DirEntry) (n int, err error) // For streaming
-	// ReadDirTree([]DirEntry) (n int, err error)
+type Storage interface {
+	Get(ctx context.Context, key string) (io.ReadCloser, error)
+	Put(ctx context.Context, key string, reader io.Reader) error
+	Delete(ctx context.Context, key string) error
 }
 
-// TODO: fileInfo.Sys().(*RemoteFileInfo)
-// if *RemoteFileInfo, we can get the bytes directly without having to call Open
-type FileInfo interface {
-	fs.FileInfo
-	Count() int64
-	Bytes() string
+type S3Storage struct {
+	Client *s3.Client
+	Bucket string
+}
+
+var _ Storage = (*S3Storage)(nil)
+
+type S3StorageConfig struct {
+	Endpoint        string `json:"endpoint,omitempty"`
+	Region          string `json:"region,omitempty"`
+	Bucket          string `json:"bucket,omitempty"`
+	AccessKeyID     string `json:"accessKeyID,omitempty"`
+	SecretAccessKey string `json:"secretAccessKey,omitempty"`
+}
+
+func NewS3Storage(ctx context.Context, config S3StorageConfig) (*S3Storage, error) {
+	storage := &S3Storage{
+		Client: s3.New(s3.Options{
+			BaseEndpoint: aws.String(config.Endpoint),
+			Region:       config.Region,
+			Credentials:  aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(config.AccessKeyID, config.SecretAccessKey, "")),
+		}),
+		Bucket: config.Bucket,
+	}
+	// Ping the bucket and see if we have access.
+	_, err := storage.Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+		Bucket:  &storage.Bucket,
+		MaxKeys: 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return storage, nil
+}
+
+func (storage *S3Storage) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	output, err := storage.Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &storage.Bucket,
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			if apiErr.ErrorCode() == "NoSuchKey" {
+				return nil, &fs.PathError{Op: "open", Path: key, Err: fs.ErrNotExist}
+			}
+		}
+		return nil, err
+	}
+	return output.Body, nil
+}
+
+func (storage *S3Storage) Put(ctx context.Context, key string, reader io.Reader) error {
+	_, err := storage.Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: &storage.Bucket,
+		Key:    aws.String(key),
+		Body:   reader,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (storage *S3Storage) Delete(ctx context.Context, key string) error {
+	_, err := storage.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: &storage.Bucket,
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type InMemoryStorage struct {
+	mu      sync.RWMutex
+	entries map[string][]byte
+}
+
+var _ Storage = (*InMemoryStorage)(nil)
+
+func NewInMemoryStorage() *InMemoryStorage {
+	return &InMemoryStorage{
+		mu:      sync.RWMutex{},
+		entries: make(map[string][]byte),
+	}
+}
+
+func (storage *InMemoryStorage) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	storage.mu.RLock()
+	value, ok := storage.entries[key]
+	storage.mu.RUnlock()
+	if !ok {
+		return nil, &fs.PathError{Op: "open", Path: key, Err: fs.ErrNotExist}
+	}
+	return io.NopCloser(bytes.NewReader(value)), nil
+}
+
+func (storage *InMemoryStorage) Put(ctx context.Context, key string, reader io.Reader) error {
+	value, err := io.ReadAll(reader)
+	if err != nil {
+		return err
+	}
+	storage.mu.Lock()
+	storage.entries[key] = value
+	storage.mu.Unlock()
+	return nil
+}
+
+func (storage *InMemoryStorage) Delete(ctx context.Context, key string) error {
+	storage.mu.Lock()
+	delete(storage.entries, key)
+	storage.mu.Unlock()
+	return nil
+}
+
+type FileStorage struct {
+	rootDir string
+	tempDir string
+}
+
+func NewFileStorage(rootDir, tempDir string) *FileStorage {
+	return &FileStorage{
+		rootDir: filepath.FromSlash(rootDir),
+		tempDir: filepath.FromSlash(tempDir),
+	}
+}
+
+func (storage *FileStorage) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	err := ctx.Err()
+	if err != nil {
+		return nil, err
+	}
+	if len(key) < 4 {
+		return nil, &fs.PathError{Op: "get", Path: key, Err: fs.ErrInvalid}
+	}
+	file, err := os.Open(filepath.Join(storage.rootDir, key[:4], key))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, &fs.PathError{Op: "open", Path: key, Err: fs.ErrNotExist}
+		}
+		return nil, err
+	}
+	return file, nil
+}
+
+func (storage *FileStorage) Put(ctx context.Context, key string, reader io.Reader) error {
+	err := ctx.Err()
+	if err != nil {
+		return err
+	}
+	if len(key) < 4 {
+		return &fs.PathError{Op: "put", Path: key, Err: fs.ErrInvalid}
+	}
+	if runtime.GOOS == "windows" {
+		file, err := os.OpenFile(filepath.Join(storage.rootDir, key[:4], key), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(file, reader)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	tempDir := storage.tempDir
+	if tempDir == "" {
+		tempDir = os.TempDir()
+	}
+	tempFile, err := os.CreateTemp(tempDir, "__notebrewtemp*__")
+	if err != nil {
+		return err
+	}
+	fileInfo, err := tempFile.Stat()
+	if err != nil {
+		return err
+	}
+	tempFilePath := filepath.Join(tempDir, fileInfo.Name())
+	destFilePath := filepath.Join(storage.rootDir, key[:4], key)
+	defer os.Remove(tempFilePath)
+	defer tempFile.Close()
+	_, err = io.Copy(tempFile, reader)
+	if err != nil {
+		return err
+	}
+	err = tempFile.Close()
+	if err != nil {
+		return err
+	}
+	err = os.Rename(tempFilePath, destFilePath)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		err := os.Mkdir(filepath.Join(storage.rootDir, key[:4]), 0755)
+		if err != nil && !errors.Is(err, fs.ErrExist) {
+			return err
+		}
+		err = os.Rename(tempFilePath, destFilePath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (storage *FileStorage) Delete(ctx context.Context, key string) error {
+	err := ctx.Err()
+	if err != nil {
+		return err
+	}
+	if len(key) < 4 {
+		return &fs.PathError{Op: "put", Path: key, Err: fs.ErrInvalid}
+	}
+	err = os.Remove(filepath.Join(storage.rootDir, key[:4], key))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func NewID() [16]byte {
+	var timestamp [8]byte
+	binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
+	var id [16]byte
+	copy(id[:5], timestamp[len(timestamp)-5:])
+	_, err := rand.Read(id[5:])
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
+func IsKeyViolation(dialect string, errcode string) bool {
+	switch dialect {
+	case "sqlite":
+		return errcode == "1555" || errcode == "2067" // SQLITE_CONSTRAINT_PRIMARYKEY, SQLITE_CONSTRAINT_UNIQUE
+	case "postgres":
+		return errcode == "23505" // unique_violation
+	case "mysql":
+		return errcode == "1062" // ER_DUP_ENTRY
+	case "sqlserver":
+		return errcode == "2627"
+	default:
+		return false
+	}
+}
+
+func IsForeignKeyViolation(dialect string, errcode string) bool {
+	switch dialect {
+	case "sqlite":
+		return errcode == "787" //  SQLITE_CONSTRAINT_FOREIGNKEY
+	case "postgres":
+		return errcode == "23503" // foreign_key_violation
+	case "mysql":
+		return errcode == "1216" // ER_NO_REFERENCED_ROW
+	case "sqlserver":
+		return errcode == "547"
+	default:
+		return false
+	}
 }
