@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -300,13 +301,45 @@ type ModTimeIndexedFS interface {
 	ReadDirAfterModTime(dir string, modTime string, limit int) ([]fs.DirEntry, error)
 }
 
-// Limit
-// BeforeName
-// AfterName
-// BeforeModTime
-// FilterByName
-// FilterByModTime
-// WalkDirBeforeName(root string, fn fs.WalkDirFunc, before, after string, limit int)
+type RemoteFS struct {
+	ctx       context.Context
+	db        *sql.DB
+	dialect   string
+	errorCode func(error) string
+	storage   Storage
+}
+
+func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, storage Storage) *RemoteFS {
+	return &RemoteFS{
+		ctx:       context.Background(),
+		db:        db,
+		dialect:   dialect,
+		errorCode: errorCode,
+		storage:   storage,
+	}
+}
+
+// func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
+// 	return &RemoteFS{
+// 		ctx:     ctx,
+// 		db:      fsys.db,
+// 		dialect: fsys.dialect,
+// 		storage: fsys.storage,
+// 	}
+// }
+
+type RemoteFile struct {
+	fileID   [16]byte
+	parentID [16]byte
+	filePath string
+	isDir    bool
+	count    int64
+	text     []byte
+	data     []byte
+	size     int64
+	modTime  time.Time
+	perm     fs.FileMode
+}
 
 type Storage interface {
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
