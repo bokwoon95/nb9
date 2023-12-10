@@ -331,16 +331,17 @@ func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, stora
 // }
 
 type RemoteFile struct {
-	fileID   [16]byte
-	parentID [16]byte
-	filePath string
-	isDir    bool
-	count    int64
-	size     int64
-	modTime  time.Time
-	perm     fs.FileMode
-	text     []byte
-	data     []byte
+	fileID     [16]byte
+	parentID   [16]byte
+	filePath   string
+	isDir      bool
+	count      int64
+	size       int64
+	modTime    time.Time
+	perm       fs.FileMode
+	text       []byte
+	data       []byte
+	readCloser io.ReadCloser
 }
 
 func (file *RemoteFile) Name() string {
@@ -390,7 +391,13 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
-		file.size = row.Int64("size")
+		file.size = row.Int64("{}", sq.DialectExpression{
+			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Cases: []sq.DialectCase{{
+				Dialect: "sqlite",
+				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+			}},
+		})
 		var modTime sq.Timestamp
 		row.Scan(&modTime, "mod_time")
 		file.modTime = modTime.Time
@@ -404,6 +411,40 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		return nil, err
 	}
 	return &file, nil
+}
+
+var textExtensions = map[string]bool{
+	".html": true,
+	".css":  true,
+	".js":   true,
+	".md":   true,
+	".txt":  true,
+	".json": true,
+	".xml":  true,
+}
+
+func isFulltextIndexed(filePath string) bool {
+	ext := path.Ext(filePath)
+	head, tail, _ := strings.Cut(filePath, "/")
+	switch head {
+	case "notes":
+		return ext == ".html" || ext == ".css" || ext == ".js" || ext == ".md" || ext == ".txt"
+	case "pages":
+		return ext == ".html"
+	case "posts":
+		return ext == ".md"
+	case "output":
+		next, _, _ := strings.Cut(tail, "/")
+		switch next {
+		case "posts":
+			return false
+		case "themes":
+			return ext == ".html" || ext == ".css" || ext == ".js" || ext == ".md" || ext == ".txt"
+		default:
+			return ext == ".css" || ext == ".js" || ext == ".md"
+		}
+	}
+	return false
 }
 
 type Storage interface {
