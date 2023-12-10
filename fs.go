@@ -336,11 +336,11 @@ type RemoteFile struct {
 	filePath string
 	isDir    bool
 	count    int64
-	text     []byte
-	data     []byte
 	size     int64
 	modTime  time.Time
 	perm     fs.FileMode
+	text     []byte
+	data     []byte
 }
 
 func (file *RemoteFile) Name() string {
