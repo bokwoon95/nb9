@@ -6,6 +6,11 @@ error.go
 folder.go
 file.go
 
+TODO: when serving files, allocate a special case for handling *os.File: an *os.File can be rewinded (bypassing the need to store the file in a *bytes.Buffer just to calculate the hash, we can rewind it), and it can be served by http.ServeContent far more efficiently than a *bytes.Buffer using sendfile.
+https://github.com/seanmonstar/warp/issues/209
+https://github.com/golang/go/blob/13d0af4e704bee164f873701e326048bdaf23933/src/net/http/server.go#L567
+TODO: when serving files, allocate a special case for handling *RemoteFile, as it allows us to potentially obtain the entirety of the file body without having to stream into an intermediate *bytes.Buffer.
+
 notebrew-config/metrics.txt
 Requests per second (mean) = xxx
 Requests per second (Q1)   = xxx

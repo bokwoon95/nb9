@@ -17,8 +17,6 @@ type FS interface {
 
 	OpenWriter(name string) (io.WriteCloser, error)
 
-	Stat(name string) (fs.FileInfo, error)
-
 	ReadDir(name string) ([]fs.DirEntry, error)
 
 	// NOTE: For WalkDir, RemoteFS always fills in the Text and Data fields of
@@ -27,7 +25,7 @@ type FS interface {
 
 	// NOTE: We will need to stat the parent directory first in order to get
 	// the count, then we iterate the directory.
-	// NOTE: IterateDir is a specialization of WalkDir. If IterateDir is not
+	// NOTE: IterateDir is a specialization of ReadDir. If IterateDir is not
 	// implemented, we will just use WalkDir and fs.SkipDir together (less
 	// efficient on a database).
 	IterateDir(dir string, fn func(name string, d fs.DirEntry, err error) error)
