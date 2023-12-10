@@ -399,7 +399,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+			return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrNotExist}
 		}
 		return nil, err
 	}
