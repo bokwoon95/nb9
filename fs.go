@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
+	"github.com/bokwoon95/nb9/sq"
 )
 
 // IndexedFS
@@ -339,6 +341,69 @@ type RemoteFile struct {
 	size     int64
 	modTime  time.Time
 	perm     fs.FileMode
+}
+
+func (file *RemoteFile) Name() string {
+	return path.Base(file.filePath)
+}
+
+func (file *RemoteFile) Size() int64 {
+	return file.size
+}
+
+func (file *RemoteFile) Mode() fs.FileMode {
+	if file.isDir {
+		return file.perm | fs.ModeDir
+	}
+	return file.perm &^ fs.ModeDir
+}
+
+func (file *RemoteFile) ModTime() time.Time { return file.modTime }
+
+func (file *RemoteFile) IsDir() bool { return file.isDir }
+
+func (file *RemoteFile) Sys() any { return &file }
+
+func (file *RemoteFile) Type() fs.FileMode { return file.Mode().Type() }
+
+func (file *RemoteFile) Info() (fs.FileInfo, error) { return file, nil }
+
+func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return nil, err
+	}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
+	}
+	if name == "." {
+		return &RemoteFile{filePath: ".", isDir: true}, nil
+	}
+	file, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
+		Values: []any{
+			sq.StringParam("name", name),
+		},
+	}, func(row *sq.Row) (file RemoteFile) {
+		row.UUID(&file.fileID, "file_id")
+		row.UUID(&file.parentID, "parent_id")
+		file.filePath = row.String("file_path")
+		file.isDir = row.Bool("is_dir")
+		file.size = row.Int64("size")
+		var modTime sq.Timestamp
+		row.Scan(&modTime, "mod_time")
+		file.modTime = modTime.Time
+		file.perm = fs.FileMode(row.Int("perm"))
+		return file
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+		}
+		return nil, err
+	}
+	return &file, nil
 }
 
 type Storage interface {

@@ -23,7 +23,7 @@ type Row struct {
 }
 
 // Scan scans the expression into destPtr.
-func (row *Row) scan(destPtr any, format string, values ...any) {
+func (row *Row) Scan(destPtr any, format string, values ...any) {
 	if row.sqlRows == nil {
 		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
 		switch destPtr.(type) {
