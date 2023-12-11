@@ -498,29 +498,30 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	if name == "." {
 		return &RemoteFile{filePath: ".", isDir: true}, nil
 	}
-	result, err := sq.FetchOneContext(fsys.ctx, fsys.db, sq.CustomQuery{
+	result, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
 		Values: []any{
 			sq.StringParam("name", name),
 		},
-	}, func(row *sq.Row) (result struct {
-		RemoteFileInfo
-		text []byte
-		data []byte
-	}) {
-		row.UUID(&result.fileID, "file_id")
-		row.UUID(&result.parentID, "parent_id")
-		result.filePath = row.String("file_path")
-		result.isDir = row.Bool("is_dir")
-		result.size = row.Int64("size")
+	}, func(row *sq.Row) (file RemoteFile) {
+		row.UUID(&file.fileID, "file_id")
+		row.UUID(&file.parentID, "parent_id")
+		file.filePath = row.String("file_path")
+		file.isDir = row.Bool("is_dir")
+		file.size = row.Int64("{}", sq.DialectExpression{
+			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Cases: []sq.DialectCase{{
+				Dialect: "sqlite",
+				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+			}},
+		})
 		var modTime sq.Timestamp
 		row.Scan(&modTime, "mod_time")
-		result.modTime = modTime.Time
-		result.perm = fs.FileMode(row.Int("perm"))
-		result.text = row.Bytes("text")
-		result.data = row.Bytes("data")
-		return result
+		file.modTime = modTime.Time
+		file.perm = fs.FileMode(row.Int("perm"))
+		file.buf = bytes.NewBuffer(row.Bytes("COALESCE(text, data)"))
+		return file
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
