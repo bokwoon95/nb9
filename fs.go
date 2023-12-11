@@ -430,6 +430,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
+		file.count = row.Int64("count")
 		file.size = row.Int64("{}", sq.DialectExpression{
 			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
 			Cases: []sq.DialectCase{{
@@ -507,6 +508,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
+		file.count = row.Int64("count")
 		file.size = row.Int64("{}", sq.DialectExpression{
 			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
 			Cases: []sq.DialectCase{{
@@ -526,22 +528,14 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		return nil, err
 	}
 	if !file.isDir {
-		if textExtensions[path.Ext(result.filePath)] {
-			if isFulltextIndexed(result.filePath) {
-				file.readCloser = io.NopCloser(bytes.NewReader(result.text))
-				file.fileInfo.size = int64(len(result.text))
-			} else {
-				file.readCloser = io.NopCloser(bytes.NewReader(result.data))
-				file.fileInfo.size = int64(len(result.data))
-			}
-		} else {
-			file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(result.fileID[:])+path.Ext(result.filePath))
+		if !textExtensions[path.Ext(file.filePath)] {
+			file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-	return file, nil
+	return &file, nil
 }
 
 type Storage interface {
