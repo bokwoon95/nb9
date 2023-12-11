@@ -514,7 +514,10 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		})
 		file.modTime = row.Time("mod_time")
 		file.perm = fs.FileMode(row.Int("perm"))
-		file.buf = bytes.NewBuffer(row.Bytes("COALESCE(text, data)"))
+		b := row.Bytes("COALESCE(text, data)")
+		if b != nil {
+			file.buf = bytes.NewBuffer(b)
+		}
 		return file
 	})
 	if err != nil {
@@ -525,7 +528,6 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	}
 	if !file.isDir {
 		if !textExtensions[path.Ext(file.filePath)] {
-			file.buf = nil
 			file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
 			if err != nil {
 				return nil, err
