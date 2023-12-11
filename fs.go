@@ -551,6 +551,82 @@ type RemoteFileWriter struct {
 	writeFailed    bool
 }
 
+func (fsys *RemoteFS) OpenWriter(name string, perm fs.FileMode) (io.WriteCloser, error) {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return nil, err
+	}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrInvalid}
+	}
+	if name == "." {
+		return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.EISDIR}
+	}
+	file := &RemoteFileWriter{
+		ctx:      fsys.ctx,
+		db:       fsys.db,
+		dialect:  fsys.dialect,
+		storage:  fsys.storage,
+		filePath: name,
+		perm:     perm,
+		modTime:  time.Now().UTC().Truncate(time.Second),
+	}
+	filePaths := []string{file.filePath}
+	parentDir := path.Dir(file.filePath)
+	if parentDir != "." {
+		filePaths = append(filePaths, parentDir)
+	}
+	results, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE file_path IN ({filePaths})",
+		Values: []any{
+			sq.Param("filePaths", filePaths),
+		},
+	}, func(row *sq.Row) (result struct {
+		fileID   [16]byte
+		filePath string
+		isDir    bool
+	}) {
+		row.UUID(&result.fileID, "file_id")
+		result.filePath = row.String("file_path")
+		result.isDir = row.Bool("is_dir")
+		return result
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, result := range results {
+		switch result.filePath {
+		case name:
+			if result.isDir {
+				return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.EISDIR}
+			}
+			file.fileID = result.fileID
+		case parentDir:
+			if !result.isDir {
+				return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.ENOTDIR}
+			}
+			file.parentID = result.fileID
+		}
+	}
+	if parentDir != "." && file.parentID == nil {
+		return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrNotExist}
+	}
+	if textExtensions[path.Ext(file.filePath)] {
+		file.buf = bufPool.Get().(*bytes.Buffer)
+		file.buf.Reset()
+	} else {
+		pipeReader, pipeWriter := io.Pipe()
+		file.storageWriter = pipeWriter
+		file.storageResult = make(chan error, 1)
+		go func() {
+			file.storageResult <- fsys.storage.Put(file.ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath), pipeReader)
+			close(file.storageResult)
+		}()
+	}
+	return file, nil
+}
+
 func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
 	err = file.ctx.Err()
 	if err != nil {
