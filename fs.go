@@ -367,13 +367,13 @@ func (file *RemoteFile) Close() error {
 	if file.isDir {
 		return nil
 	}
+	if file.buf == nil && file.readCloser == nil {
+		panic("unreachable")
+	}
 	if file.buf != nil {
 		return nil
 	}
-	if file.readCloser != nil {
-		return file.readCloser.Close()
-	}
-	return nil
+	return file.readCloser.Close()
 }
 
 func (file *RemoteFile) Stat() (fs.FileInfo, error) {
