@@ -525,6 +525,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	}
 	if !file.isDir {
 		if !textExtensions[path.Ext(file.filePath)] {
+			file.buf = nil
 			file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
 			if err != nil {
 				return nil, err
