@@ -26,7 +26,9 @@ import (
 	"github.com/bokwoon95/nb9/sq"
 )
 
-// IndexedFS
+var bufPool = sync.Pool{
+	New: func() any { return &bytes.Buffer{} },
+}
 
 type FS interface {
 	// WithContext returns a new FS with the given context.
@@ -354,9 +356,6 @@ func (file *RemoteFile) Read(p []byte) (n int, err error) {
 	if file.isDir {
 		return 0, &fs.PathError{Op: "read", Path: file.filePath, Err: syscall.EISDIR}
 	}
-	if file.buf == nil && file.readCloser == nil {
-		panic("unreachable")
-	}
 	if file.buf != nil {
 		return file.buf.Read(p)
 	}
@@ -366,9 +365,6 @@ func (file *RemoteFile) Read(p []byte) (n int, err error) {
 func (file *RemoteFile) Close() error {
 	if file.isDir {
 		return nil
-	}
-	if file.buf == nil && file.readCloser == nil {
-		panic("unreachable")
 	}
 	if file.buf != nil {
 		return nil
@@ -553,6 +549,151 @@ type RemoteFileWriter struct {
 	storageWritten int
 	storageResult  chan error
 	writeFailed    bool
+}
+
+func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
+	err = file.ctx.Err()
+	if err != nil {
+		file.writeFailed = true
+		return 0, err
+	}
+	if textExtensions[path.Ext(file.filePath)] {
+		n, err = file.buf.Write(p)
+		if err != nil {
+			file.writeFailed = true
+		}
+		return n, err
+	}
+	n, err = file.storageWriter.Write(p)
+	file.storageWritten += n
+	if err != nil {
+		file.writeFailed = true
+	}
+	return n, err
+}
+
+func (file *RemoteFileWriter) Close() error {
+	if textExtensions[path.Ext(file.filePath)] {
+		defer bufPool.Put(file.buf)
+	} else {
+		file.storageWriter.Close()
+		err := <-file.storageResult
+		if err != nil {
+			return err
+		}
+	}
+	if file.writeFailed {
+		return nil
+	}
+
+	// If file exists, just have to update the file entry in the database.
+	if file.fileID != [16]byte{} {
+		if textExtensions[path.Ext(file.filePath)] {
+			if isFulltextIndexed(file.filePath) {
+				_, err := sq.Exec(file.ctx, file.db, sq.Query{
+					Dialect: file.dialect,
+					Format:  "UPDATE files SET text = {text}, data = NULL, size = NULL, mod_time = {modTime} WHERE file_id = {fileID}",
+					Values: []any{
+						sq.BytesParam("text", file.buf.Bytes()),
+						sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+						sq.UUIDParam("fileID", file.fileID),
+					},
+				})
+				if err != nil {
+					return err
+				}
+			} else {
+				_, err := sq.Exec(file.ctx, file.db, sq.Query{
+					Dialect: file.dialect,
+					Format:  "UPDATE files SET text = NULL, data = {data}, size = NULL, mod_time = {modTime} WHERE file_id = {fileID}",
+					Values: []any{
+						sq.BytesParam("data", file.buf.Bytes()),
+						sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+						sq.UUIDParam("fileID", file.fileID),
+					},
+				})
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			_, err := sq.Exec(file.ctx, file.db, sq.Query{
+				Dialect: file.dialect,
+				Format:  "UPDATE files SET text = NULL, data = NULL, size = {size}, mod_time = {modTime} WHERE file_id = {fileID}",
+				Values: []any{
+					sq.IntParam("size", file.storageWritten),
+					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+					sq.UUIDParam("fileID", file.fileID),
+				},
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// If we reach here it means file doesn't exist. Insert a new file entry
+	// into the database.
+	if textExtensions[path.Ext(file.filePath)] {
+		if isFulltextIndexed(file.filePath) {
+			_, err := sq.Exec(file.ctx, file.db, sq.Query{
+				Dialect: file.dialect,
+				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, text, mod_time, perm)" +
+					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {text}, {modTime}, {perm})",
+				Values: []any{
+					sq.UUIDParam("fileID", NewID()),
+					sq.UUIDParam("parentID", file.parentID),
+					sq.StringParam("filePath", file.filePath),
+					sq.BoolParam("isDir", false),
+					sq.BytesParam("text", file.buf.Bytes()),
+					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+					sq.Param("perm", file.perm),
+				},
+			})
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err := sq.Exec(file.ctx, file.db, sq.Query{
+				Dialect: file.dialect,
+				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, data, mod_time, perm)" +
+					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {data}, {modTime}, {perm})",
+				Values: []any{
+					sq.UUIDParam("fileID", NewID()),
+					sq.UUIDParam("parentID", file.parentID),
+					sq.StringParam("filePath", file.filePath),
+					sq.BoolParam("isDir", false),
+					sq.BytesParam("data", file.buf.Bytes()),
+					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+					sq.Param("perm", file.perm),
+				},
+			})
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		_, err := sq.Exec(file.ctx, file.db, sq.Query{
+			Dialect: file.dialect,
+			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, size, mod_time, perm)" +
+				" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {size}, {modTime}, {perm})",
+			Values: []any{
+				sq.UUIDParam("fileID", NewID()),
+				sq.UUIDParam("parentID", file.parentID),
+				sq.StringParam("filePath", file.filePath),
+				sq.BoolParam("isDir", false),
+				sq.IntParam("size", file.storageWritten),
+				sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+				sq.Param("perm", file.perm),
+			},
+		})
+		if err != nil {
+			go file.storage.Delete(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
+			return err
+		}
+	}
+	return nil
 }
 
 type Storage interface {
