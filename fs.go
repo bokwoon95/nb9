@@ -354,13 +354,13 @@ func (file *RemoteFile) Read(p []byte) (n int, err error) {
 	if file.isDir {
 		return 0, &fs.PathError{Op: "read", Path: file.filePath, Err: syscall.EISDIR}
 	}
+	if file.buf == nil && file.readCloser == nil {
+		panic("unreachable")
+	}
 	if file.buf != nil {
 		return file.buf.Read(p)
 	}
-	if file.readCloser != nil {
-		return file.readCloser.Read(p)
-	}
-	return 0, io.EOF
+	return file.readCloser.Read(p)
 }
 
 func (file *RemoteFile) Close() error {
@@ -536,6 +536,23 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		}
 	}
 	return &file, nil
+}
+
+type RemoteFileWriter struct {
+	ctx            context.Context
+	db             *sql.DB
+	dialect        string
+	storage        Storage
+	fileID         [16]byte
+	parentID       any // either nil or [16]byte
+	filePath       string
+	perm           fs.FileMode
+	buf            *bytes.Buffer
+	modTime        time.Time
+	storageWriter  *io.PipeWriter
+	storageWritten int
+	storageResult  chan error
+	writeFailed    bool
 }
 
 type Storage interface {
