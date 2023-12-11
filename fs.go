@@ -573,6 +573,14 @@ func (fsys *RemoteFS) OpenWriter(name string, perm fs.FileMode) (io.WriteCloser,
 	}
 	filePaths := []string{file.filePath}
 	parentDir := path.Dir(file.filePath)
+	type Result struct {
+		fileID   [16]byte
+		filePath string
+		isDir    bool
+	}
+	if parentDir != "." {
+	} else {
+	}
 	if parentDir != "." {
 		filePaths = append(filePaths, parentDir)
 	}
