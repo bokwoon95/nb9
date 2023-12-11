@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"io"
 	"io/fs"
@@ -15,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -331,6 +333,7 @@ func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, stora
 // }
 
 type RemoteFile struct {
+	ctx        context.Context
 	fileID     [16]byte
 	parentID   [16]byte
 	filePath   string
@@ -339,9 +342,42 @@ type RemoteFile struct {
 	size       int64
 	modTime    time.Time
 	perm       fs.FileMode
-	text       []byte
-	data       []byte
+	buf        *bytes.Buffer
 	readCloser io.ReadCloser
+}
+
+func (file *RemoteFile) Read(p []byte) (n int, err error) {
+	err = file.ctx.Err()
+	if err != nil {
+		return 0, err
+	}
+	if file.isDir {
+		return 0, &fs.PathError{Op: "read", Path: file.filePath, Err: syscall.EISDIR}
+	}
+	if file.buf != nil {
+		return file.buf.Read(p)
+	}
+	if file.readCloser != nil {
+		return file.readCloser.Read(p)
+	}
+	return 0, io.EOF
+}
+
+func (file *RemoteFile) Close() error {
+	if file.isDir {
+		return nil
+	}
+	if file.buf != nil {
+		return nil
+	}
+	if file.readCloser != nil {
+		return file.readCloser.Close()
+	}
+	return nil
+}
+
+func (file *RemoteFile) Stat() (fs.FileInfo, error) {
+	return file, nil
 }
 
 func (file *RemoteFile) Name() string {
@@ -349,6 +385,9 @@ func (file *RemoteFile) Name() string {
 }
 
 func (file *RemoteFile) Size() int64 {
+	if file.buf != nil {
+		return int64(file.buf.Len())
+	}
 	return file.size
 }
 
@@ -410,6 +449,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		}
 		return nil, err
 	}
+	file.ctx = fsys.ctx
 	return &file, nil
 }
 
@@ -445,6 +485,70 @@ func isFulltextIndexed(filePath string) bool {
 		}
 	}
 	return false
+}
+
+func (fsys *RemoteFS) Open(name string) (fs.File, error) {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return nil, err
+	}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
+	}
+	if name == "." {
+		return &RemoteFile{filePath: ".", isDir: true}, nil
+	}
+	result, err := sq.FetchOneContext(fsys.ctx, fsys.db, sq.CustomQuery{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
+		Values: []any{
+			sq.StringParam("name", name),
+		},
+	}, func(row *sq.Row) (result struct {
+		RemoteFileInfo
+		text []byte
+		data []byte
+	}) {
+		row.UUID(&result.fileID, "file_id")
+		row.UUID(&result.parentID, "parent_id")
+		result.filePath = row.String("file_path")
+		result.isDir = row.Bool("is_dir")
+		result.size = row.Int64("size")
+		var modTime sq.Timestamp
+		row.Scan(&modTime, "mod_time")
+		result.modTime = modTime.Time
+		result.perm = fs.FileMode(row.Int("perm"))
+		result.text = row.Bytes("text")
+		result.data = row.Bytes("data")
+		return result
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+		}
+		return nil, err
+	}
+	file := &RemoteFile{
+		ctx:      fsys.ctx,
+		fileInfo: &result.RemoteFileInfo,
+	}
+	if !result.isDir {
+		if textExtensions[path.Ext(result.filePath)] {
+			if isFulltextIndexed(result.filePath) {
+				file.readCloser = io.NopCloser(bytes.NewReader(result.text))
+				file.fileInfo.size = int64(len(result.text))
+			} else {
+				file.readCloser = io.NopCloser(bytes.NewReader(result.data))
+				file.fileInfo.size = int64(len(result.data))
+			}
+		} else {
+			file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(result.fileID[:])+path.Ext(result.filePath))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return file, nil
 }
 
 type Storage interface {
