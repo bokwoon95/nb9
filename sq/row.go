@@ -206,14 +206,17 @@ func (row *Row) Time(format string, values ...any) time.Time {
 func (row *Row) NullTime(format string, values ...any) sql.NullTime {
 	if row.sqlRows == nil {
 		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
-		row.scanDest = append(row.scanDest, &sql.NullTime{})
+		row.scanDest = append(row.scanDest, &Timestamp{})
 		return sql.NullTime{}
 	}
 	defer func() {
 		row.index++
 	}()
-	scanDest := row.scanDest[row.index].(*sql.NullTime)
-	return *scanDest
+	scanDest := row.scanDest[row.index].(*Timestamp)
+	return sql.NullTime{
+		Time:  scanDest.Time,
+		Valid: scanDest.Valid,
+	}
 }
 
 // UUID scans the UUID expression into destPtr.

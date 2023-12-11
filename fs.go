@@ -437,9 +437,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
 			}},
 		})
-		var modTime sq.Timestamp
-		row.Scan(&modTime, "mod_time")
-		file.modTime = modTime.Time
+		file.modTime = row.Time("mod_time")
 		file.perm = fs.FileMode(row.Int("perm"))
 		return file
 	})
@@ -498,7 +496,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	if name == "." {
 		return &RemoteFile{filePath: ".", isDir: true}, nil
 	}
-	result, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
+	file, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
 		Values: []any{
@@ -516,9 +514,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
 			}},
 		})
-		var modTime sq.Timestamp
-		row.Scan(&modTime, "mod_time")
-		file.modTime = modTime.Time
+		file.modTime = row.Time("mod_time")
 		file.perm = fs.FileMode(row.Int("perm"))
 		file.buf = bytes.NewBuffer(row.Bytes("COALESCE(text, data)"))
 		return file
@@ -529,11 +525,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		}
 		return nil, err
 	}
-	file := &RemoteFile{
-		ctx:      fsys.ctx,
-		fileInfo: &result.RemoteFileInfo,
-	}
-	if !result.isDir {
+	if !file.isDir {
 		if textExtensions[path.Ext(result.filePath)] {
 			if isFulltextIndexed(result.filePath) {
 				file.readCloser = io.NopCloser(bytes.NewReader(result.text))
