@@ -42,6 +42,10 @@ type FS interface {
 	// should be created. If the file exists, its should be truncated.
 	OpenWriter(name string, perm fs.FileMode) (io.WriteCloser, error)
 
+	// TODO: ReadDir is useless if IterateDir is mandatory. Maybe we should
+	// rename IterateDir to ReadDir(dir string, func (name string, dirEntry
+	// fs.DirEntry, err error) error) error so that we don't need to use a
+	// nonstandard name like "IterateDir".
 	// ReadDir reads the named directory and returns a list of directory
 	// entries sorted by filename.
 	ReadDir(name string) ([]fs.DirEntry, error)
