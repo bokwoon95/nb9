@@ -284,6 +284,45 @@ func (fsys *LocalFS) Rename(oldname, newname string) error {
 	return os.Rename(filepath.Join(fsys.rootDir, oldname), filepath.Join(fsys.rootDir, newname))
 }
 
+func (fsys *LocalFS) IterateDir(dir string, fn func(name string, d fs.DirEntry, err error) error) error {
+	type _ fs.WalkDirFunc
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "iteratedir", Path: dir, Err: fs.ErrInvalid}
+	}
+	file, err := os.Open(filepath.Join(fsys.rootDir, dir))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return fn(dir, nil, err)
+	}
+	if !fileInfo.IsDir() {
+		return &fs.PathError{Op: "iteratedir", Path: dir, Err: syscall.ENOTDIR}
+	}
+	var done bool
+	for !done {
+		dirEntries, err := file.ReadDir(1)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		dirEntry := dirEntries[0]
+		err = fn(dirEntry.Name(), dirEntry, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TODO: RemoteFS implements WalkDir (fallback: fs.WalkDir).
 // - WalkDir must fetch the file info as well (fallback: FS.Open).
 // TODO: RemoteFS implements IterateDir, IterateDirAfterName, IterateDirBeforeName, IterateDirAfterModTime, IterateDirBeforeModTime (fallback: ReadDir).
