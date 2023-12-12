@@ -800,6 +800,89 @@ func (file *RemoteFileWriter) Close() error {
 	return nil
 }
 
+func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return nil, err
+	}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrInvalid}
+	}
+	// Special case: if name is ".", ReadDir returns all top-level files in
+	// the root directory (identified by a NULL parent_id).
+	if name == "." {
+		dirEntries, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "SELECT {*} FROM files WHERE parent_id IS NULL ORDER BY file_path",
+			Values: []any{
+				sq.StringParam("name", name),
+			},
+		}, func(row *sq.Row) fs.DirEntry {
+			var file RemoteFile
+			row.UUID(&file.fileID, "file_id")
+			file.filePath = row.String("file_path")
+			file.isDir = row.Bool("is_dir")
+			file.size = row.Int64("size")
+			file.modTime = row.Time("mod_time")
+			file.perm = fs.FileMode(row.Int("perm"))
+			return &file
+		})
+		if err != nil {
+			return nil, err
+		}
+		return dirEntries, nil
+	}
+	cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
+		Dialect: fsys.dialect,
+		Format: "SELECT {*}" +
+			" FROM files AS parent" +
+			" LEFT JOIN files AS child ON child.parent_id = parent.file_id" +
+			" WHERE parent.file_path = {name}" +
+			" ORDER BY child.file_path",
+		Values: []any{
+			sq.StringParam("name", name),
+		},
+	}, func(row *sq.Row) (result struct {
+		RemoteFile
+		ParentIsDir bool
+	}) {
+		row.UUID(&result.fileID, "child.file_id")
+		row.UUID(&result.parentID, "child.parent_id")
+		result.filePath = row.String("child.file_path")
+		result.isDir = row.Bool("child.is_dir")
+		result.size = row.Int64("child.size")
+		result.modTime = row.Time("child.mod_time")
+		result.perm = fs.FileMode(row.Int("child.perm"))
+		result.ParentIsDir = row.Bool("parent.is_dir")
+		return result
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close()
+	var dirEntries []fs.DirEntry
+	for cursor.Next() {
+		result, err := cursor.Result()
+		if err != nil {
+			return nil, err
+		}
+		if !result.ParentIsDir {
+			return nil, &fs.PathError{Op: "readdir", Path: name, Err: syscall.ENOTDIR}
+		}
+		// file_id is a primary key, it must always exist. If it doesn't exist,
+		// it means the left join failed to match any child entries i.e. the
+		// directory is empty, so we return no entries.
+		if result.fileID == [16]byte{} {
+			return nil, cursor.Close()
+		}
+		dirEntries = append(dirEntries, &result.RemoteFile)
+	}
+	if len(dirEntries) == 0 {
+		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrNotExist}
+	}
+	return dirEntries, cursor.Close()
+}
+
 type Storage interface {
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	Put(ctx context.Context, key string, reader io.Reader) error

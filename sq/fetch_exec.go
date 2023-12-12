@@ -38,7 +38,7 @@ type Cursor[T any] struct {
 }
 
 // FetchCursor returns a new cursor.
-func FetchCursor[T any](ctx context.Context, db DB, query Query, rowmapper func(*Row) T, skip int) (cursor *Cursor[T], err error) {
+func FetchCursor[T any](ctx context.Context, db DB, query Query, rowmapper func(*Row) T) (cursor *Cursor[T], err error) {
 	cursor = &Cursor[T]{
 		ctx:       ctx,
 		rowmapper: rowmapper,
@@ -148,7 +148,7 @@ func (cursor *Cursor[T]) Close() error {
 // FetchOne returns the first result from running the given Query on the given
 // DB.
 func FetchOne[T any](ctx context.Context, db DB, query Query, rowmapper func(*Row) T) (T, error) {
-	cursor, err := FetchCursor(ctx, db, query, rowmapper, 1)
+	cursor, err := FetchCursor(ctx, db, query, rowmapper)
 	if err != nil {
 		return *new(T), err
 	}
@@ -165,7 +165,7 @@ func FetchOne[T any](ctx context.Context, db DB, query Query, rowmapper func(*Ro
 
 // FetchAll returns all results from running the given Query on the given DB.
 func FetchAll[T any](ctx context.Context, db DB, query Query, rowmapper func(*Row) T) ([]T, error) {
-	cursor, err := FetchCursor(ctx, db, query, rowmapper, 1)
+	cursor, err := FetchCursor(ctx, db, query, rowmapper)
 	if err != nil {
 		return nil, err
 	}
