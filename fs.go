@@ -574,54 +574,71 @@ func (fsys *RemoteFS) OpenWriter(name string, perm fs.FileMode) (io.WriteCloser,
 		perm:     perm,
 		modTime:  time.Now().UTC().Truncate(time.Second),
 	}
-	filePaths := []string{file.filePath}
 	parentDir := path.Dir(file.filePath)
-	type Result struct {
-		fileID   [16]byte
-		filePath string
-		isDir    bool
-	}
 	if parentDir != "." {
-	} else {
-	}
-	if parentDir != "." {
-		filePaths = append(filePaths, parentDir)
-	}
-	results, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
-		Dialect: fsys.dialect,
-		Format:  "SELECT {*} FROM files WHERE file_path IN ({filePaths})",
-		Values: []any{
-			sq.Param("filePaths", filePaths),
-		},
-	}, func(row *sq.Row) (result struct {
-		fileID   [16]byte
-		filePath string
-		isDir    bool
-	}) {
-		row.UUID(&result.fileID, "file_id")
-		result.filePath = row.String("file_path")
-		result.isDir = row.Bool("is_dir")
-		return result
-	})
-	if err != nil {
-		return nil, err
-	}
-	for _, result := range results {
-		switch result.filePath {
-		case name:
-			if result.isDir {
-				return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.EISDIR}
-			}
-			file.fileID = result.fileID
-		case parentDir:
-			if !result.isDir {
-				return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.ENOTDIR}
-			}
-			file.parentID = result.fileID
+		results, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "SELECT {*} FROM files WHERE file_path IN ({parentDir}, {filePath})",
+			Values: []any{
+				sq.StringParam("parentDir", parentDir),
+				sq.StringParam("filePath", file.filePath),
+			},
+		}, func(row *sq.Row) (result struct {
+			fileID   [16]byte
+			filePath string
+			isDir    bool
+		}) {
+			row.UUID(&result.fileID, "file_id")
+			result.filePath = row.String("file_path")
+			result.isDir = row.Bool("is_dir")
+			return result
+		})
+		if err != nil {
+			return nil, err
 		}
-	}
-	if parentDir != "." && file.parentID == nil {
-		return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrNotExist}
+		for _, result := range results {
+			switch result.filePath {
+			case name:
+				if result.isDir {
+					return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.EISDIR}
+				}
+				file.fileID = result.fileID
+			case parentDir:
+				if !result.isDir {
+					return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.ENOTDIR}
+				}
+				file.parentID = result.fileID
+			}
+		}
+		if file.parentID == nil {
+			return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrNotExist}
+		}
+	} else {
+		result, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
+			Values: []any{
+				sq.StringParam("filePath", file.filePath),
+			},
+		}, func(row *sq.Row) (result struct {
+			fileID   [16]byte
+			filePath string
+			isDir    bool
+		}) {
+			row.UUID(&result.fileID, "file_id")
+			result.filePath = row.String("file_path")
+			result.isDir = row.Bool("is_dir")
+			return result
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrNotExist}
+			}
+			return nil, err
+		}
+		if result.isDir {
+			return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.EISDIR}
+		}
 	}
 	if textExtensions[path.Ext(file.filePath)] {
 		file.buf = bufPool.Get().(*bytes.Buffer)
