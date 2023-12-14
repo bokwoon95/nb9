@@ -370,15 +370,6 @@ func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, stora
 	}
 }
 
-// func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
-// 	return &RemoteFS{
-// 		ctx:     ctx,
-// 		db:      fsys.db,
-// 		dialect: fsys.dialect,
-// 		storage: fsys.storage,
-// 	}
-// }
-
 func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 	err := fsys.ctx.Err()
 	if err != nil {
@@ -387,8 +378,50 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
 		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
 	}
-	return nil, nil
+	if name == "." {
+		return &RemoteFile{filePath: ".", isDir: true}, nil
+	}
+	file, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
+		Values: []any{
+			sq.StringParam("name", name),
+		},
+	}, func(row *sq.Row) (file RemoteFile) {
+		row.UUID(&file.fileID, "file_id")
+		row.UUID(&file.parentID, "parent_id")
+		file.filePath = row.String("file_path")
+		file.isDir = row.Bool("is_dir")
+		file.count = row.Int64("count")
+		file.size = row.Int64("{}", sq.DialectExpression{
+			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Cases: []sq.DialectCase{{
+				Dialect: "sqlite",
+				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+			}},
+		})
+		file.modTime = row.Time("mod_time")
+		file.perm = fs.FileMode(row.Int("perm"))
+		return file
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrNotExist}
+		}
+		return nil, err
+	}
+	file.ctx = fsys.ctx
+	return &file, nil
 }
+
+// func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
+// 	return &RemoteFS{
+// 		ctx:     ctx,
+// 		db:      fsys.db,
+// 		dialect: fsys.dialect,
+// 		storage: fsys.storage,
+// 	}
+// }
 
 type RemoteFile struct {
 	ctx        context.Context
@@ -456,48 +489,12 @@ func (file *RemoteFile) Type() fs.FileMode { return file.Mode().Type() }
 
 func (file *RemoteFile) Info() (fs.FileInfo, error) { return file, nil }
 
-func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
-	err := fsys.ctx.Err()
+func (file *RemoteFile) Stat() (fs.FileInfo, error) {
+	err := file.ctx.Err()
 	if err != nil {
 		return nil, err
 	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
-	}
-	if name == "." {
-		return &RemoteFile{filePath: ".", isDir: true}, nil
-	}
-	file, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
-		Dialect: fsys.dialect,
-		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
-		Values: []any{
-			sq.StringParam("name", name),
-		},
-	}, func(row *sq.Row) (file RemoteFile) {
-		row.UUID(&file.fileID, "file_id")
-		row.UUID(&file.parentID, "parent_id")
-		file.filePath = row.String("file_path")
-		file.isDir = row.Bool("is_dir")
-		file.count = row.Int64("count")
-		file.size = row.Int64("{}", sq.DialectExpression{
-			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
-			Cases: []sq.DialectCase{{
-				Dialect: "sqlite",
-				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
-			}},
-		})
-		file.modTime = row.Time("mod_time")
-		file.perm = fs.FileMode(row.Int("perm"))
-		return file
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrNotExist}
-		}
-		return nil, err
-	}
-	file.ctx = fsys.ctx
-	return &file, nil
+	return nil, nil
 }
 
 var textExtensions = map[string]bool{
