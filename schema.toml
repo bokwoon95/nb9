@@ -42,13 +42,9 @@ column = "size"
 type = { default = "INT" }
 
 [[tables.columns]]
-column = "modification_time"
+column = "mod_time"
 type = { default = "DATETIME", postgres = "TIMESTAMPTZ" }
 index = true
-
-[[tables.columns]]
-column = "perm"
-type = { default = "INT" }
 
 ## site ##
 
