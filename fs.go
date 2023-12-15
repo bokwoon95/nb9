@@ -316,25 +316,25 @@ func (fsys *LocalFS) WalkDir(name string, fn fs.WalkDirFunc) error {
 	return fs.WalkDir(os.DirFS(fsys.rootDir), name, fn)
 }
 
-func (fsys *LocalFS) ReadDir(name string, fn fs.WalkDirFunc) error {
+func (fsys *LocalFS) ReadDir(dir string, fn fs.WalkDirFunc) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrInvalid}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "readdir", Path: dir, Err: fs.ErrInvalid}
 	}
-	file, err := os.Open(filepath.Join(fsys.rootDir, name))
+	file, err := os.Open(filepath.Join(fsys.rootDir, dir))
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 	fileInfo, err := file.Stat()
 	if err != nil {
-		return fn(name, nil, err)
+		return err
 	}
 	if !fileInfo.IsDir() {
-		return &fs.PathError{Op: "readdir", Path: name, Err: syscall.ENOTDIR}
+		return &fs.PathError{Op: "readdir", Path: dir, Err: syscall.ENOTDIR}
 	}
 	for {
 		dirEntries, err := file.ReadDir(1000)
@@ -345,7 +345,7 @@ func (fsys *LocalFS) ReadDir(name string, fn fs.WalkDirFunc) error {
 			return err
 		}
 		for _, dirEntry := range dirEntries {
-			err = fn(dirEntry.Name(), dirEntry, nil)
+			err = fn(path.Join(dir, dirEntry.Name()), dirEntry, nil)
 			if err != nil {
 				return err
 			}
@@ -468,12 +468,10 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		}
 		return nil, err
 	}
-	if !file.isDir {
-		if !textExtensions[path.Ext(file.filePath)] {
-			file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
-			if err != nil {
-				return nil, err
-			}
+	if !file.isDir && !textExtensions[path.Ext(file.filePath)] {
+		file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
+		if err != nil {
+			return nil, err
 		}
 	}
 	return &file, nil
@@ -868,12 +866,7 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 			return err
 		}
 	} else {
-		tx, err := fsys.db.BeginTx(fsys.ctx, nil)
-		if err != nil {
-			return err
-		}
-		defer tx.Rollback()
-		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+		_, err = sq.Exec(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
 			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
 				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})",
@@ -895,20 +888,6 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 			}
 			return err
 		}
-		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
-			Dialect: fsys.dialect,
-			Format:  "UPDATE files SET count = count + 1 WHERE file_path = {parentDir}",
-			Values: []any{
-				sq.StringParam("parentDir", parentDir),
-			},
-		})
-		if err != nil {
-			return err
-		}
-		err = tx.Commit()
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -924,18 +903,18 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 	if name == "." {
 		return nil
 	}
-	tx, err := fsys.db.BeginTx(fsys.ctx, nil)
+	conn, err := fsys.db.Conn(fsys.ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer conn.Close()
 
 	// Insert the top level directory (no parent), ignoring duplicates.
 	modTime := time.Now().UTC().Truncate(time.Second)
 	segments := strings.Split(name, "/")
 	switch fsys.dialect {
 	case "sqlite", "postgres":
-		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
+		_, err := sq.Exec(fsys.ctx, conn, sq.Query{
 			Dialect: fsys.dialect,
 			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
 				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})" +
@@ -951,7 +930,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 			return err
 		}
 	case "mysql":
-		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
+		_, err := sq.Exec(fsys.ctx, conn, sq.Query{
 			Dialect: fsys.dialect,
 			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
 				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})" +
@@ -972,10 +951,10 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 
 	// Insert the rest of the directories, ignoring duplicates.
 	if len(segments) > 1 {
-		var insertDir *sq.PreparedExec
+		var preparedExec *sq.PreparedExec
 		switch fsys.dialect {
 		case "sqlite", "postgres":
-			insertDir, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
+			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
 				Dialect: fsys.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
 					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, TRUE, {modTime})" +
@@ -991,7 +970,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 				return err
 			}
 		case "mysql":
-			insertDir, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
+			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
 				Dialect: fsys.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
 					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, TRUE, {modTime})" +
@@ -1009,22 +988,11 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 		default:
 			return fmt.Errorf("unsupported dialect %q", fsys.dialect)
 		}
-		defer insertDir.Close()
-		incrementCount, err := sq.PrepareExec(fsys.ctx, tx, sq.Query{
-			Dialect: fsys.dialect,
-			Format:  "UPDATE files SET count = count + 1 WHERE file_path = {parentDir}",
-			Values: []any{
-				sq.Param("parentDir", nil),
-			},
-		})
-		if err != nil {
-			return err
-		}
-		defer incrementCount.Close()
+		defer preparedExec.Close()
 		for i := 1; i < len(segments); i++ {
 			parentDir := path.Join(segments[:i]...)
 			filePath := path.Join(segments[:i+1]...)
-			result, err := insertDir.Exec(fsys.ctx,
+			_, err := preparedExec.Exec(fsys.ctx,
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("parentDir", parentDir),
 				sq.StringParam("filePath", filePath),
@@ -1033,20 +1001,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 			if err != nil {
 				return err
 			}
-			if result.RowsAffected > 0 {
-				_, err = incrementCount.Exec(fsys.ctx,
-					sq.StringParam("parentDir", parentDir),
-				)
-				if err != nil {
-					return err
-				}
-			}
 		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
 	}
 	return nil
 }
@@ -1068,13 +1023,15 @@ func (fsys *RemoteFS) Remove(name string) error {
 	}, func(row *sq.Row) (file struct {
 		fileID       [16]byte
 		filePath     string
-		hasChildren  bool
+		isDir        bool
 		isStoredInDB bool
+		hasChildren  bool
 	}) {
 		row.UUID(&file.fileID, "file_id")
 		file.filePath = row.String("file_path")
-		file.hasChildren = row.Bool("EXISTS (SELECT 1 FROM files WHERE file_path LIKE {pattern} ESCAPE '\\')", sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(name)+"/%"))
+		file.isDir = row.Bool("is_dir")
 		file.isStoredInDB = row.Bool("text IS NOT NULL OR data IS NOT NULL")
+		file.hasChildren = row.Bool("EXISTS (SELECT 1 FROM files WHERE file_path LIKE {pattern} ESCAPE '\\')", sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(name)+"/%"))
 		return file
 	})
 	if err != nil {
@@ -1097,7 +1054,10 @@ func (fsys *RemoteFS) Remove(name string) error {
 		return err
 	}
 	defer tx.Rollback()
-	result, err := sq.Exec(fsys.ctx, tx, sq.Query{
+	// NOTE: For SQLite and Postgres, we can reduce the number of queries to 2
+	// (current is 3) by using DELETE ... RETURNING. Do this if Remove() proves
+	// to be too slow.
+	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "DELETE FROM files WHERE file_path = {name}",
 		Values: []any{
@@ -1107,17 +1067,19 @@ func (fsys *RemoteFS) Remove(name string) error {
 	if err != nil {
 		return err
 	}
-	parentDir := path.Dir(name)
-	if result.RowsAffected > 0 && parentDir != "." {
-		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
-			Dialect: fsys.dialect,
-			Format:  "UPDATE files SET count = count - 1 WHERE file_path = {parentDir} AND count > 0",
-			Values: []any{
-				sq.StringParam("parentDir", parentDir),
-			},
-		})
-		if err != nil {
-			return err
+	if !file.isDir {
+		parentDir := path.Dir(name)
+		if parentDir != "." {
+			_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+				Dialect: fsys.dialect,
+				Format:  "UPDATE files SET count = count - 1 WHERE file_path = {parentDir} AND count > 0",
+				Values: []any{
+					sq.StringParam("parentDir", parentDir),
+				},
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 	err = tx.Commit()
@@ -1174,7 +1136,28 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 			sq.StringParam("pattern", pattern),
 		},
 	})
-	result, err := sq.Exec(fsys.ctx, tx, sq.Query{
+	if err != nil {
+		return err
+	}
+	isDir, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
+		Values: []any{
+			sq.StringParam("name", name),
+		},
+	}, func(row *sq.Row) bool {
+		return row.Bool("is_dir")
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	// NOTE: For SQLite and Postgres, we can reduce the number of queries to 2
+	// (current is 5) by using DELETE ... RETURNING. Do this if RemoveAll()
+	// proves to be too slow.
+	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "DELETE FROM files WHERE file_path = {name}",
 		Values: []any{
@@ -1184,17 +1167,19 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	if err != nil {
 		return err
 	}
-	parentDir := path.Dir(name)
-	if result.RowsAffected > 0 && parentDir != "." {
-		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
-			Dialect: fsys.dialect,
-			Format:  "UPDATE files SET count = count - 1 WHERE file_path = {parentDir} AND count > 0",
-			Values: []any{
-				sq.StringParam("parentDir", parentDir),
-			},
-		})
-		if err != nil {
-			return err
+	if !isDir {
+		parentDir := path.Dir(name)
+		if parentDir != "." {
+			_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+				Dialect: fsys.dialect,
+				Format:  "UPDATE files SET count = count - 1 WHERE file_path = {parentDir} AND count > 0",
+				Values: []any{
+					sq.StringParam("parentDir", parentDir),
+				},
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 	err = tx.Commit()
@@ -1333,24 +1318,53 @@ func (fsys *RemoteFS) WalkDir(dir string, fn fs.WalkDirFunc) error {
 	}
 	// Special case: if dir is ".", WalkDir visits every file.
 	if dir == "." {
+		err = fn(".", &RemoteFile{
+			ctx: fsys.ctx,
+		}, nil)
 		cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
 			Format:  "SELECT {*} FROM files ORDER BY file_path",
-		}, func(row *sq.Row) fs.DirEntry {
-			var file RemoteFile
+		}, func(row *sq.Row) (file RemoteFile) {
 			file.ctx = fsys.ctx
 			row.UUID(&file.fileID, "file_id")
 			row.UUID(&file.parentID, "parent_id")
 			file.filePath = row.String("file_path")
 			file.isDir = row.Bool("is_dir")
-			file.size = row.Int64("size")
+			file.count = row.Int64("count")
+			file.size = row.Int64("{}", sq.DialectExpression{
+				Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+				Cases: []sq.DialectCase{{
+					Dialect: "sqlite",
+					Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+				}},
+			})
 			file.modTime = row.Time("mod_time")
-			return &file
+			b := row.Bytes("COALESCE(text, data)")
+			if b != nil {
+				file.buf = bytes.NewBuffer(b)
+			}
+			if !file.isDir && !textExtensions[path.Ext(file.filePath)] {
+				file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
+				if err != nil {
+					panic(err)
+				}
+			}
+			return file
 		})
 		if err != nil {
 			return err
 		}
-		_ = cursor
+		for cursor.Next() {
+			file, err := cursor.Result()
+			if err != nil {
+				return err
+			}
+			err = fn(file.filePath, &file, nil)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+		}
 	}
 	return nil
 }

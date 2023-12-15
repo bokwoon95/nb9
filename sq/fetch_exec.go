@@ -397,10 +397,7 @@ func PrepareExec(ctx context.Context, db DB, query Query) (*PreparedExec, error)
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
-	args := argsPool.Get().(*[]any)
-	*args = (*args)[:0]
-	defer argsPool.Put(args)
-	err := Writef(ctx, query.Dialect, buf, args, nil, query.Format, query.Values)
+	err := Writef(ctx, query.Dialect, buf, preparedExec.oldArgs, nil, query.Format, query.Values)
 	if err != nil {
 		return nil, err
 	}
