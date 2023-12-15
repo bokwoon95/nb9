@@ -484,7 +484,9 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 }
 
 // TODO: What does an artificially constructed RemoteFile for "." look like? Do
-// we need to fill in the count?
+// we need to fill in the count? Nope, if we're adhering to the convention that
+// the root dir never has any files, only directories (count represents the
+// file count and not the directory count).
 type RemoteFile struct {
 	ctx        context.Context
 	fileID     [16]byte
