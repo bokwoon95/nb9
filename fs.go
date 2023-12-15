@@ -1111,7 +1111,7 @@ func (fsys *RemoteFS) Remove(name string) error {
 	if result.RowsAffected > 0 && parentDir != "." {
 		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.dialect,
-			Format:  "UPDATE files SET count = CASE WHEN count - 1 >= 0 THEN count - 1 ELSE 0 END WHERE file_path = {parentDir}",
+			Format:  "UPDATE files SET count = count - 1 WHERE file_path = {parentDir} AND count > 0",
 			Values: []any{
 				sq.StringParam("parentDir", parentDir),
 			},
@@ -1138,7 +1138,7 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	pattern := strings.NewReplacer("%", "\\%", "_", "\\_").Replace(name) + "/%"
 	files, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
 		Dialect: fsys.dialect,
-		Format:  "SELECT {*} FROM files WHERE file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\' AND data IS NULL",
+		Format:  "SELECT {*} FROM files WHERE (file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\') AND text IS NULL AND data IS NULL",
 		Values: []any{
 			sq.StringParam("name", name),
 			sq.StringParam("pattern", pattern),
@@ -1162,14 +1162,42 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	if err != nil {
 		return err
 	}
-	_, err = sq.Exec(fsys.ctx, fsys.db, sq.Query{
+	tx, err := fsys.db.BeginTx(fsys.ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.dialect,
-		Format:  "DELETE FROM files WHERE file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\'",
+		Format:  "DELETE FROM files WHERE file_path LIKE {pattern} ESCAPE '\\'",
 		Values: []any{
-			sq.StringParam("name", name),
 			sq.StringParam("pattern", pattern),
 		},
 	})
+	result, err := sq.Exec(fsys.ctx, tx, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "DELETE FROM files WHERE file_path = {name}",
+		Values: []any{
+			sq.StringParam("name", name),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	parentDir := path.Dir(name)
+	if result.RowsAffected > 0 && parentDir != "." {
+		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "UPDATE files SET count = count - 1 WHERE file_path = {parentDir} AND count > 0",
+			Values: []any{
+				sq.StringParam("parentDir", parentDir),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}
@@ -1322,6 +1350,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn fs.WalkDirFunc) error {
 		if err != nil {
 			return err
 		}
+		_ = cursor
 	}
 	return nil
 }
