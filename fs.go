@@ -55,6 +55,10 @@ type FS interface {
 	Rename(oldname, newname string) error
 
 	// TODO: Should WalkDirFunc be called on the initial dir?
+	// TODO: ListDirFunc and WalkDirFunc. I guess we should imitate
+	// fs.WalkDirFunc's semantics for WalkDir: the initial call is always to
+	// the root, if any ReadDirs along the way fails (which never happens for
+	// RemoteFS) we call the WalkDirFunc again for that dir.
 
 	// For RemoteFS, WalkDir should fetch the file contents as well.
 	WalkDir(dir string, fn fs.WalkDirFunc) error
@@ -479,6 +483,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	return &file, nil
 }
 
+// TODO: What does an artificially constructed RemoteFile for "." look like?
 type RemoteFile struct {
 	ctx        context.Context
 	fileID     [16]byte
