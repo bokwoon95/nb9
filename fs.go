@@ -825,14 +825,13 @@ func (fsys *RemoteFS) Mkdir(name string, perm fs.FileMode) error {
 	if parentDir == "." {
 		_, err := sq.Exec(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
-			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time, perm)" +
-				" VALUES ({fileID}, {filePath}, {isDir}, {modTime}, {perm})",
+			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
+				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("filePath", name),
 				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
-				sq.Param("perm", perm),
 			},
 		})
 		if err != nil {
@@ -848,15 +847,14 @@ func (fsys *RemoteFS) Mkdir(name string, perm fs.FileMode) error {
 	} else {
 		_, err := sq.Exec(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
-			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time, perm)" +
-				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime}, {perm})",
+			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
+				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("parentDir", parentDir),
 				sq.StringParam("filePath", name),
 				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
-				sq.Param("perm", perm),
 			},
 		})
 		if err != nil {
@@ -873,7 +871,7 @@ func (fsys *RemoteFS) Mkdir(name string, perm fs.FileMode) error {
 	return nil
 }
 
-func (fsys *RemoteFS) MkdirAll(name string, perm fs.FileMode) error {
+func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
@@ -892,16 +890,15 @@ func (fsys *RemoteFS) MkdirAll(name string, perm fs.FileMode) error {
 	// Insert the top level directory (no parent), ignoring duplicates.
 	modTime := time.Now().UTC().Truncate(time.Second)
 	segments := strings.Split(name, "/")
-	query := sq.CustomQuery{
+	query := sq.Query{
 		Dialect: fsys.dialect,
-		Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time, perm)" +
-			" VALUES ({fileID}, {filePath}, {isDir}, {modTime}, {perm})",
+		Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
+			" VALUES ({fileID}, {filePath}, {isDir}, {modTime})",
 		Values: []any{
 			sq.UUIDParam("fileID", NewID()),
 			sq.StringParam("filePath", segments[0]),
 			sq.BoolParam("isDir", true),
-			sq.Param("modTime", sq.NewTimestamp(modTime)),
-			sq.Param("perm", perm),
+			sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 		},
 	}
 	switch fsys.dialect {
@@ -910,7 +907,7 @@ func (fsys *RemoteFS) MkdirAll(name string, perm fs.FileMode) error {
 	case "mysql":
 		query = query.Append("ON DUPLICATE KEY UPDATE file_id = file_id")
 	}
-	_, err = sq.ExecContext(fsys.ctx, conn, query)
+	_, err = sq.Exec(fsys.ctx, conn, query)
 	if err != nil {
 		return err
 	}
@@ -935,7 +932,7 @@ func (fsys *RemoteFS) MkdirAll(name string, perm fs.FileMode) error {
 		case "mysql":
 			query = query.Append("ON DUPLICATE KEY UPDATE file_id = file_id")
 		}
-		preparedExec, err := sq.PrepareExecContext(fsys.ctx, conn, query)
+		preparedExec, err := sq.PrepareExec(fsys.ctx, conn, query)
 		if err != nil {
 			return err
 		}

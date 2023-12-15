@@ -438,6 +438,21 @@ func (preparedExec *PreparedExec) Exec(ctx context.Context, params ...Parameter)
 	return result, nil
 }
 
+// Close closes the PreparedExec.
+func (preparedExec *PreparedExec) Close() error {
+	if preparedExec.stmt == nil {
+		return nil
+	}
+	defer func() {
+		preparedExec.oldArgs = nil
+		preparedExec.params = nil
+		preparedExec.stmt = nil
+	}()
+	argsPool.Put(preparedExec.oldArgs)
+	paramsPool.Put(preparedExec.params)
+	return preparedExec.stmt.Close()
+}
+
 // FetchExists returns a boolean indicating if running the given Query on the
 // given DB returned any results.
 func FetchExists(ctx context.Context, db DB, query Query) (exists bool, err error) {
