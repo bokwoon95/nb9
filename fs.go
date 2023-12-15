@@ -54,6 +54,8 @@ type FS interface {
 	// is not a directory, Rename replaces it.
 	Rename(oldname, newname string) error
 
+	// TODO: Should WalkDirFunc be called on the initial dir?
+
 	// For RemoteFS, WalkDir should fetch the file contents as well.
 	WalkDir(dir string, fn fs.WalkDirFunc) error
 
