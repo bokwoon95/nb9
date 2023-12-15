@@ -275,6 +275,9 @@ const (
 	displayTypeUUID
 )
 
+// TODO: since we're not logging, we can remove this and scan into a *[]byte
+// instead.
+//
 // nullBytes is used in place of scanning into *[]byte. We use *nullBytes
 // instead of *[]byte because of the displayType field, which determines how to
 // render the value to the user. This is important for logging the query

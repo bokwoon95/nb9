@@ -15,9 +15,10 @@ import (
 
 // Dialects supported.
 const (
-	DialectSQLite   = "sqlite"
-	DialectPostgres = "postgres"
-	DialectMySQL    = "mysql"
+	DialectSQLite    = "sqlite"
+	DialectPostgres  = "postgres"
+	DialectMySQL     = "mysql"
+	DialectSQLServer = "sqlserver"
 )
 
 // SQLWriter is anything that can be converted to SQL.
