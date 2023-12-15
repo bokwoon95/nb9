@@ -483,7 +483,8 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	return &file, nil
 }
 
-// TODO: What does an artificially constructed RemoteFile for "." look like?
+// TODO: What does an artificially constructed RemoteFile for "." look like? Do
+// we need to fill in the count?
 type RemoteFile struct {
 	ctx        context.Context
 	fileID     [16]byte
