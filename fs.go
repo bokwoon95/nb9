@@ -809,7 +809,7 @@ func (file *RemoteFileWriter) Close() error {
 	return nil
 }
 
-func (fsys *RemoteFS) Mkdir(name string, perm fs.FileMode) error {
+func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
@@ -913,17 +913,16 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 	}
 	// Insert the rest of the directories, ignoring duplicates.
 	if len(segments) > 1 {
-		query := sq.CustomQuery{
+		query := sq.Query{
 			Dialect: fsys.dialect,
-			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time, perm)" +
-				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime}, {perm})",
+			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
+				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})",
 			Values: []any{
 				sq.Param("fileID", nil),
 				sq.Param("parentDir", nil),
 				sq.Param("filePath", nil),
 				sq.Param("isDir", nil),
 				sq.Param("modTime", nil),
-				sq.Param("perm", nil),
 			},
 		}
 		switch fsys.dialect {
@@ -938,14 +937,13 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 		}
 		defer preparedExec.Close()
 		for i := 1; i < len(segments); i++ {
-			_, err = preparedExec.ExecContext(fsys.ctx, map[string]any{
-				"fileID":    NewID(),
-				"parentDir": path.Join(segments[:i]...),
-				"filePath":  path.Join(segments[:i+1]...),
-				"isDir":     true,
-				"modTime":   sq.NewTimestamp(modTime),
-				"perm":      perm,
-			})
+			_, err = preparedExec.Exec(fsys.ctx,
+				sq.UUIDParam("fileID", NewID()),
+				sq.StringParam("parentDir", path.Join(segments[:i]...)),
+				sq.StringParam("filePath", path.Join(segments[:i+1]...)),
+				sq.BoolParam("isDir", true),
+				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
+			)
 			if err != nil {
 				return err
 			}
@@ -966,7 +964,7 @@ func (fsys *RemoteFS) Remove(name string) error {
 	if !fs.ValidPath(name) || strings.Contains(name, "\\") || name == "." {
 		return &fs.PathError{Op: "remove", Path: name, Err: fs.ErrInvalid}
 	}
-	file, err := sq.FetchOneContext(fsys.ctx, fsys.db, sq.CustomQuery{
+	file, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
 		Values: []any{
@@ -999,7 +997,7 @@ func (fsys *RemoteFS) Remove(name string) error {
 			return err
 		}
 	}
-	_, err = sq.ExecContext(fsys.ctx, fsys.db, sq.CustomQuery{
+	_, err = sq.Exec(fsys.ctx, fsys.db, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "DELETE FROM files WHERE file_path = {name}",
 		Values: []any{
@@ -1021,7 +1019,7 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 		return &fs.PathError{Op: "removeall", Path: name, Err: fs.ErrInvalid}
 	}
 	pattern := strings.NewReplacer("%", "\\%", "_", "\\_").Replace(name) + "/%"
-	files, err := sq.FetchAllContext(fsys.ctx, fsys.db, sq.CustomQuery{
+	files, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "SELECT {*} FROM files WHERE file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\' AND data IS NULL",
 		Values: []any{
@@ -1047,7 +1045,7 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	if err != nil {
 		return err
 	}
-	_, err = sq.ExecContext(fsys.ctx, fsys.db, sq.CustomQuery{
+	_, err = sq.Exec(fsys.ctx, fsys.db, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "DELETE FROM files WHERE file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\'",
 		Values: []any{
@@ -1072,13 +1070,16 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	if !fs.ValidPath(newname) || strings.Contains(newname, "\\") {
 		return &fs.PathError{Op: "rename", Path: newname, Err: fs.ErrInvalid}
 	}
-	modTime := sq.NewTimestamp(time.Now().UTC().Truncate(time.Second))
+	modTime := sq.Timestamp{
+		Time:  time.Now().UTC().Truncate(time.Second),
+		Valid: true,
+	}
 	tx, err := fsys.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	oldnameIsDir, err := sq.FetchOneContext(fsys.ctx, tx, sq.CustomQuery{
+	oldnameIsDir, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "SELECT {*} FROM files WHERE file_path = {oldname}",
 		Values: []any{
@@ -1096,7 +1097,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	if !oldnameIsDir && textExtensions[path.Ext(oldname)] != textExtensions[path.Ext(newname)] {
 		return fmt.Errorf("cannot rename file from %q to %q because their extensions are not compatible", oldname, newname)
 	}
-	_, err = sq.ExecContext(fsys.ctx, tx, sq.CustomQuery{
+	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "DELETE FROM files WHERE file_path = {newname} AND NOT is_dir",
 		Values: []any{
@@ -1128,7 +1129,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			}
 		}
 	}
-	_, err = sq.ExecContext(fsys.ctx, tx, sq.CustomQuery{
+	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime}{updateTextOrData} WHERE file_path = {oldname}",
 		Values: []any{
@@ -1151,7 +1152,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		return err
 	}
 	if oldnameIsDir {
-		_, err = sq.ExecContext(fsys.ctx, tx, sq.CustomQuery{
+		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.dialect,
 			Format:  "UPDATE files SET file_path = {newFilePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 			Values: []any{
