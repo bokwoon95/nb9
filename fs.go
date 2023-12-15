@@ -399,6 +399,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 			sq.StringParam("name", name),
 		},
 	}, func(row *sq.Row) (file RemoteFile) {
+		file.ctx = fsys.ctx
 		row.UUID(&file.fileID, "file_id")
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
@@ -420,7 +421,6 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		}
 		return nil, err
 	}
-	file.ctx = fsys.ctx
 	return &file, nil
 }
 
@@ -442,6 +442,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 			sq.StringParam("name", name),
 		},
 	}, func(row *sq.Row) (file RemoteFile) {
+		file.ctx = fsys.ctx
 		row.UUID(&file.fileID, "file_id")
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
@@ -571,7 +572,34 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 		modTime:  time.Now().UTC().Truncate(time.Second),
 	}
 	parentDir := path.Dir(file.filePath)
-	if parentDir != "." {
+	if parentDir == "." {
+		// If parentDir is the root directory, just fetch the file information
+		// (if it exists).
+		result, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
+			Values: []any{
+				sq.StringParam("filePath", file.filePath),
+			},
+		}, func(row *sq.Row) (result struct {
+			fileID [16]byte
+			isDir  bool
+		}) {
+			row.UUID(&result.fileID, "file_id")
+			result.isDir = row.Bool("is_dir")
+			return result
+		})
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return nil, err
+			}
+		} else {
+			if result.isDir {
+				return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.EISDIR}
+			}
+			file.fileID = result.fileID
+		}
+	} else {
 		results, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
 			Format:  "SELECT {*} FROM files WHERE file_path IN ({parentDir}, {filePath})",
@@ -608,32 +636,6 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 		}
 		if file.parentID == nil {
 			return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrNotExist}
-		}
-	} else {
-		result, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
-			Dialect: fsys.dialect,
-			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
-			Values: []any{
-				sq.StringParam("filePath", file.filePath),
-			},
-		}, func(row *sq.Row) (result struct {
-			fileID   [16]byte
-			filePath string
-			isDir    bool
-		}) {
-			row.UUID(&result.fileID, "file_id")
-			result.filePath = row.String("file_path")
-			result.isDir = row.Bool("is_dir")
-			return result
-		})
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrNotExist}
-			}
-			return nil, err
-		}
-		if result.isDir {
-			return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.EISDIR}
 		}
 	}
 	if textExtensions[path.Ext(file.filePath)] {
@@ -751,9 +753,14 @@ func (file *RemoteFileWriter) Close() error {
 
 	// If we reach here it means file doesn't exist. Insert a new file entry
 	// into the database.
+	tx, err := file.db.BeginTx(file.ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	if textExtensions[path.Ext(file.filePath)] {
 		if isFulltextIndexed(file.filePath) {
-			_, err := sq.Exec(file.ctx, file.db, sq.Query{
+			_, err := sq.Exec(file.ctx, tx, sq.Query{
 				Dialect: file.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, text, mod_time)" +
 					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {text}, {modTime})",
@@ -770,7 +777,7 @@ func (file *RemoteFileWriter) Close() error {
 				return err
 			}
 		} else {
-			_, err := sq.Exec(file.ctx, file.db, sq.Query{
+			_, err := sq.Exec(file.ctx, tx, sq.Query{
 				Dialect: file.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, data, mod_time)" +
 					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {data}, {modTime})",
@@ -788,7 +795,7 @@ func (file *RemoteFileWriter) Close() error {
 			}
 		}
 	} else {
-		_, err := sq.Exec(file.ctx, file.db, sq.Query{
+		_, err := sq.Exec(file.ctx, tx, sq.Query{
 			Dialect: file.dialect,
 			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, size, mod_time)" +
 				" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {size}, {modTime})",
@@ -805,6 +812,22 @@ func (file *RemoteFileWriter) Close() error {
 			go file.storage.Delete(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
 			return err
 		}
+	}
+	if file.parentID != nil {
+		_, err := sq.Exec(file.ctx, tx, sq.Query{
+			Dialect: file.dialect,
+			Format:  "UPDATE files SET count = count + 1 WHERE file_id = {parentID}",
+			Values: []any{
+				sq.UUIDParam("parentID", file.parentID),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -845,7 +868,12 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 			return err
 		}
 	} else {
-		_, err := sq.Exec(fsys.ctx, fsys.db, sq.Query{
+		tx, err := fsys.db.BeginTx(fsys.ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.dialect,
 			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
 				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})",
@@ -867,6 +895,20 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 			}
 			return err
 		}
+		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "UPDATE files SET count = count + 1 WHERE file_path = {parentDir}",
+			Values: []any{
+				sq.StringParam("parentDir", parentDir),
+			},
+		})
+		if err != nil {
+			return err
+		}
+		err = tx.Commit()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -882,74 +924,127 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 	if name == "." {
 		return nil
 	}
-	conn, err := fsys.db.Conn(fsys.ctx)
+	tx, err := fsys.db.BeginTx(fsys.ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer tx.Rollback()
+
 	// Insert the top level directory (no parent), ignoring duplicates.
 	modTime := time.Now().UTC().Truncate(time.Second)
 	segments := strings.Split(name, "/")
-	query := sq.Query{
-		Dialect: fsys.dialect,
-		Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
-			" VALUES ({fileID}, {filePath}, {isDir}, {modTime})",
-		Values: []any{
-			sq.UUIDParam("fileID", NewID()),
-			sq.StringParam("filePath", segments[0]),
-			sq.BoolParam("isDir", true),
-			sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
-		},
-	}
 	switch fsys.dialect {
 	case "sqlite", "postgres":
-		query = query.Append("ON CONFLICT DO NOTHING")
-	case "mysql":
-		query = query.Append("ON DUPLICATE KEY UPDATE file_id = file_id")
-	}
-	_, err = sq.Exec(fsys.ctx, conn, query)
-	if err != nil {
-		return err
-	}
-	// Insert the rest of the directories, ignoring duplicates.
-	if len(segments) > 1 {
-		query := sq.Query{
+		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.dialect,
-			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
-				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})",
+			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
+				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})" +
+				" ON CONFLICT DO NOTHING",
 			Values: []any{
-				sq.Param("fileID", nil),
-				sq.Param("parentDir", nil),
-				sq.Param("filePath", nil),
-				sq.Param("isDir", nil),
-				sq.Param("modTime", nil),
+				sq.UUIDParam("fileID", NewID()),
+				sq.StringParam("filePath", segments[0]),
+				sq.BoolParam("isDir", true),
+				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			},
-		}
-		switch fsys.dialect {
-		case "sqlite", "postgres":
-			query = query.Append("ON CONFLICT DO NOTHING")
-		case "mysql":
-			query = query.Append("ON DUPLICATE KEY UPDATE file_id = file_id")
-		}
-		preparedExec, err := sq.PrepareExec(fsys.ctx, conn, query)
+		})
 		if err != nil {
 			return err
 		}
-		defer preparedExec.Close()
-		for i := 1; i < len(segments); i++ {
-			_, err = preparedExec.Exec(fsys.ctx,
+	case "mysql":
+		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.dialect,
+			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
+				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})" +
+				" ON DUPLICATE KEY UPDATE file_id = file_id",
+			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
-				sq.StringParam("parentDir", path.Join(segments[:i]...)),
-				sq.StringParam("filePath", path.Join(segments[:i+1]...)),
+				sq.StringParam("filePath", segments[0]),
 				sq.BoolParam("isDir", true),
+				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported dialect %q", fsys.dialect)
+	}
+
+	// Insert the rest of the directories, ignoring duplicates.
+	if len(segments) > 1 {
+		var insertDir *sq.PreparedExec
+		switch fsys.dialect {
+		case "sqlite", "postgres":
+			insertDir, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
+				Dialect: fsys.dialect,
+				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
+					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, TRUE, {modTime})" +
+					" ON CONFLICT DO NOTHING",
+				Values: []any{
+					sq.Param("fileID", nil),
+					sq.Param("parentDir", nil),
+					sq.Param("filePath", nil),
+					sq.Param("modTime", nil),
+				},
+			})
+			if err != nil {
+				return err
+			}
+		case "mysql":
+			insertDir, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
+				Dialect: fsys.dialect,
+				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
+					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, TRUE, {modTime})" +
+					" ON DUPLICATE KEY UPDATE file_id = file_id",
+				Values: []any{
+					sq.Param("fileID", nil),
+					sq.Param("parentDir", nil),
+					sq.Param("filePath", nil),
+					sq.Param("modTime", nil),
+				},
+			})
+			if err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported dialect %q", fsys.dialect)
+		}
+		defer insertDir.Close()
+		incrementCount, err := sq.PrepareExec(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "UPDATE files SET count = count + 1 WHERE file_path = {parentDir}",
+			Values: []any{
+				sq.Param("parentDir", nil),
+			},
+		})
+		if err != nil {
+			return err
+		}
+		defer incrementCount.Close()
+		for i := 1; i < len(segments); i++ {
+			parentDir := path.Join(segments[:i]...)
+			filePath := path.Join(segments[:i+1]...)
+			result, err := insertDir.Exec(fsys.ctx,
+				sq.UUIDParam("fileID", NewID()),
+				sq.StringParam("parentDir", parentDir),
+				sq.StringParam("filePath", filePath),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			)
 			if err != nil {
 				return err
 			}
+			if result.RowsAffected > 0 {
+				_, err = incrementCount.Exec(fsys.ctx,
+					sq.StringParam("parentDir", parentDir),
+				)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
-	err = conn.Close()
+
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}
@@ -997,13 +1092,35 @@ func (fsys *RemoteFS) Remove(name string) error {
 			return err
 		}
 	}
-	_, err = sq.Exec(fsys.ctx, fsys.db, sq.Query{
+	tx, err := fsys.db.BeginTx(fsys.ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.dialect,
 		Format:  "DELETE FROM files WHERE file_path = {name}",
 		Values: []any{
 			sq.StringParam("name", name),
 		},
 	})
+	if err != nil {
+		return err
+	}
+	parentDir := path.Dir(name)
+	if result.RowsAffected > 0 && parentDir != "." {
+		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "UPDATE files SET count = CASE WHEN count - 1 >= 0 THEN count - 1 ELSE 0 END WHERE file_path = {parentDir}",
+			Values: []any{
+				sq.StringParam("parentDir", parentDir),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}
@@ -1074,7 +1191,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		Time:  time.Now().UTC().Truncate(time.Second),
 		Valid: true,
 	}
-	tx, err := fsys.db.Begin()
+	tx, err := fsys.db.BeginTx(fsys.ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -1178,6 +1295,37 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	return nil
 }
 
+func (fsys *RemoteFS) WalkDir(dir string, fn fs.WalkDirFunc) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "readdir", Path: dir, Err: fs.ErrInvalid}
+	}
+	// Special case: if dir is ".", WalkDir visits every file.
+	if dir == "." {
+		cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "SELECT {*} FROM files ORDER BY file_path",
+		}, func(row *sq.Row) fs.DirEntry {
+			var file RemoteFile
+			file.ctx = fsys.ctx
+			row.UUID(&file.fileID, "file_id")
+			row.UUID(&file.parentID, "parent_id")
+			file.filePath = row.String("file_path")
+			file.isDir = row.Bool("is_dir")
+			file.size = row.Int64("size")
+			file.modTime = row.Time("mod_time")
+			return &file
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (fsys *RemoteFS) ReadDir_Old(name string) ([]fs.DirEntry, error) {
 	err := fsys.ctx.Err()
 	if err != nil {
@@ -1192,9 +1340,6 @@ func (fsys *RemoteFS) ReadDir_Old(name string) ([]fs.DirEntry, error) {
 		dirEntries, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
 			Format:  "SELECT {*} FROM files WHERE parent_id IS NULL ORDER BY file_path",
-			Values: []any{
-				sq.StringParam("name", name),
-			},
 		}, func(row *sq.Row) fs.DirEntry {
 			var file RemoteFile
 			row.UUID(&file.fileID, "file_id")

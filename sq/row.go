@@ -238,15 +238,17 @@ func (row *Row) UUID(destPtr any, format string, values ...any) {
 	defer func() {
 		row.index++
 	}()
-	scanDest := row.scanDest[row.index].(*nullBytes)
 	var err error
 	var uuid [16]byte
-	if len(scanDest.bytes) == 16 {
-		copy(uuid[:], scanDest.bytes)
-	} else {
-		uuid, err = googleuuid.ParseBytes(scanDest.bytes)
-		if err != nil {
-			panic(fmt.Errorf(callsite(1)+"parsing %q as UUID string: %w", string(scanDest.bytes), err))
+	scanDest := row.scanDest[row.index].(*nullBytes)
+	if scanDest.valid {
+		if len(scanDest.bytes) == 16 {
+			copy(uuid[:], scanDest.bytes)
+		} else {
+			uuid, err = googleuuid.ParseBytes(scanDest.bytes)
+			if err != nil {
+				panic(fmt.Errorf(callsite(1)+"parsing %q as UUID string: %w", string(scanDest.bytes), err))
+			}
 		}
 	}
 	if destArrayPtr, ok := destPtr.(*[16]byte); ok {
