@@ -370,6 +370,15 @@ func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, stora
 	}
 }
 
+// func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
+// 	return &RemoteFS{
+// 		ctx:     ctx,
+// 		db:      fsys.db,
+// 		dialect: fsys.dialect,
+// 		storage: fsys.storage,
+// 	}
+// }
+
 func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 	err := fsys.ctx.Err()
 	if err != nil {
@@ -401,7 +410,6 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 			}},
 		})
 		file.modTime = row.Time("mod_time")
-		file.perm = fs.FileMode(row.Int("perm"))
 		return file
 	})
 	if err != nil {
@@ -414,14 +422,59 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 	return &file, nil
 }
 
-// func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
-// 	return &RemoteFS{
-// 		ctx:     ctx,
-// 		db:      fsys.db,
-// 		dialect: fsys.dialect,
-// 		storage: fsys.storage,
-// 	}
-// }
+func (fsys *RemoteFS) Open(name string) (fs.File, error) {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return nil, err
+	}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
+	}
+	if name == "." {
+		return &RemoteFile{filePath: ".", isDir: true}, nil
+	}
+	file, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
+		Values: []any{
+			sq.StringParam("name", name),
+		},
+	}, func(row *sq.Row) (file RemoteFile) {
+		row.UUID(&file.fileID, "file_id")
+		row.UUID(&file.parentID, "parent_id")
+		file.filePath = row.String("file_path")
+		file.isDir = row.Bool("is_dir")
+		file.count = row.Int64("count")
+		file.size = row.Int64("{}", sq.DialectExpression{
+			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Cases: []sq.DialectCase{{
+				Dialect: "sqlite",
+				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+			}},
+		})
+		file.modTime = row.Time("mod_time")
+		b := row.Bytes("COALESCE(text, data)")
+		if b != nil {
+			file.buf = bytes.NewBuffer(b)
+		}
+		return file
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+		}
+		return nil, err
+	}
+	if !file.isDir {
+		if !textExtensions[path.Ext(file.filePath)] {
+			file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return &file, nil
+}
 
 type RemoteFile struct {
 	ctx        context.Context
@@ -432,7 +485,6 @@ type RemoteFile struct {
 	count      int64
 	size       int64
 	modTime    time.Time
-	perm       fs.FileMode
 	buf        *bytes.Buffer
 	readCloser io.ReadCloser
 }
@@ -474,16 +526,16 @@ func (file *RemoteFile) Size() int64 {
 
 func (file *RemoteFile) Mode() fs.FileMode {
 	if file.isDir {
-		return file.perm | fs.ModeDir
+		return fs.ModeDir
 	}
-	return file.perm &^ fs.ModeDir
+	return 0
 }
 
 func (file *RemoteFile) ModTime() time.Time { return file.modTime }
 
 func (file *RemoteFile) IsDir() bool { return file.isDir }
 
-func (file *RemoteFile) Sys() any { return &file }
+func (file *RemoteFile) Sys() any { return file }
 
 func (file *RemoteFile) Type() fs.FileMode { return file.Mode().Type() }
 
@@ -494,113 +546,7 @@ func (file *RemoteFile) Stat() (fs.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
-}
-
-var textExtensions = map[string]bool{
-	".html": true,
-	".css":  true,
-	".js":   true,
-	".md":   true,
-	".txt":  true,
-	".json": true,
-	".xml":  true,
-}
-
-func isFulltextIndexed(filePath string) bool {
-	ext := path.Ext(filePath)
-	head, tail, _ := strings.Cut(filePath, "/")
-	switch head {
-	case "notes":
-		return ext == ".html" || ext == ".css" || ext == ".js" || ext == ".md" || ext == ".txt"
-	case "pages":
-		return ext == ".html"
-	case "posts":
-		return ext == ".md"
-	case "output":
-		next, _, _ := strings.Cut(tail, "/")
-		switch next {
-		case "posts":
-			return false
-		case "themes":
-			return ext == ".html" || ext == ".css" || ext == ".js" || ext == ".md" || ext == ".txt"
-		default:
-			return ext == ".css" || ext == ".js" || ext == ".md"
-		}
-	}
-	return false
-}
-
-func (fsys *RemoteFS) Open(name string) (fs.File, error) {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return nil, err
-	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
-	}
-	if name == "." {
-		return &RemoteFile{filePath: ".", isDir: true}, nil
-	}
-	file, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
-		Dialect: fsys.dialect,
-		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
-		Values: []any{
-			sq.StringParam("name", name),
-		},
-	}, func(row *sq.Row) (file RemoteFile) {
-		row.UUID(&file.fileID, "file_id")
-		row.UUID(&file.parentID, "parent_id")
-		file.filePath = row.String("file_path")
-		file.isDir = row.Bool("is_dir")
-		file.count = row.Int64("count")
-		file.size = row.Int64("{}", sq.DialectExpression{
-			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
-			Cases: []sq.DialectCase{{
-				Dialect: "sqlite",
-				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
-			}},
-		})
-		file.modTime = row.Time("mod_time")
-		file.perm = fs.FileMode(row.Int("perm"))
-		b := row.Bytes("COALESCE(text, data)")
-		if b != nil {
-			file.buf = bytes.NewBuffer(b)
-		}
-		return file
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
-		}
-		return nil, err
-	}
-	if !file.isDir {
-		if !textExtensions[path.Ext(file.filePath)] {
-			file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	return &file, nil
-}
-
-type RemoteFileWriter struct {
-	ctx            context.Context
-	db             *sql.DB
-	dialect        string
-	storage        Storage
-	fileID         [16]byte
-	parentID       any // either nil or [16]byte
-	filePath       string
-	perm           fs.FileMode
-	buf            *bytes.Buffer
-	modTime        time.Time
-	storageWriter  *io.PipeWriter
-	storageWritten int
-	storageResult  chan error
-	writeFailed    bool
+	return file, nil
 }
 
 func (fsys *RemoteFS) OpenWriter(name string, perm fs.FileMode) (io.WriteCloser, error) {
@@ -620,7 +566,6 @@ func (fsys *RemoteFS) OpenWriter(name string, perm fs.FileMode) (io.WriteCloser,
 		dialect:  fsys.dialect,
 		storage:  fsys.storage,
 		filePath: name,
-		perm:     perm,
 		modTime:  time.Now().UTC().Truncate(time.Second),
 	}
 	parentDir := path.Dir(file.filePath)
@@ -702,6 +647,22 @@ func (fsys *RemoteFS) OpenWriter(name string, perm fs.FileMode) (io.WriteCloser,
 		}()
 	}
 	return file, nil
+}
+
+type RemoteFileWriter struct {
+	ctx            context.Context
+	db             *sql.DB
+	dialect        string
+	storage        Storage
+	fileID         [16]byte
+	parentID       any // either nil or [16]byte
+	filePath       string
+	buf            *bytes.Buffer
+	modTime        time.Time
+	storageWriter  *io.PipeWriter
+	storageWritten int
+	storageResult  chan error
+	writeFailed    bool
 }
 
 func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
@@ -792,8 +753,8 @@ func (file *RemoteFileWriter) Close() error {
 		if isFulltextIndexed(file.filePath) {
 			_, err := sq.Exec(file.ctx, file.db, sq.Query{
 				Dialect: file.dialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, text, mod_time, perm)" +
-					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {text}, {modTime}, {perm})",
+				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, text, mod_time)" +
+					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {text}, {modTime})",
 				Values: []any{
 					sq.UUIDParam("fileID", NewID()),
 					sq.UUIDParam("parentID", file.parentID),
@@ -801,7 +762,6 @@ func (file *RemoteFileWriter) Close() error {
 					sq.BoolParam("isDir", false),
 					sq.BytesParam("text", file.buf.Bytes()),
 					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
-					sq.Param("perm", file.perm),
 				},
 			})
 			if err != nil {
@@ -810,8 +770,8 @@ func (file *RemoteFileWriter) Close() error {
 		} else {
 			_, err := sq.Exec(file.ctx, file.db, sq.Query{
 				Dialect: file.dialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, data, mod_time, perm)" +
-					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {data}, {modTime}, {perm})",
+				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, data, mod_time)" +
+					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {data}, {modTime})",
 				Values: []any{
 					sq.UUIDParam("fileID", NewID()),
 					sq.UUIDParam("parentID", file.parentID),
@@ -819,7 +779,6 @@ func (file *RemoteFileWriter) Close() error {
 					sq.BoolParam("isDir", false),
 					sq.BytesParam("data", file.buf.Bytes()),
 					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
-					sq.Param("perm", file.perm),
 				},
 			})
 			if err != nil {
@@ -829,8 +788,8 @@ func (file *RemoteFileWriter) Close() error {
 	} else {
 		_, err := sq.Exec(file.ctx, file.db, sq.Query{
 			Dialect: file.dialect,
-			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, size, mod_time, perm)" +
-				" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {size}, {modTime}, {perm})",
+			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, size, mod_time)" +
+				" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {size}, {modTime})",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.UUIDParam("parentID", file.parentID),
@@ -838,7 +797,6 @@ func (file *RemoteFileWriter) Close() error {
 				sq.BoolParam("isDir", false),
 				sq.IntParam("size", file.storageWritten),
 				sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
-				sq.Param("perm", file.perm),
 			},
 		})
 		if err != nil {
@@ -873,7 +831,6 @@ func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
 			file.isDir = row.Bool("is_dir")
 			file.size = row.Int64("size")
 			file.modTime = row.Time("mod_time")
-			file.perm = fs.FileMode(row.Int("perm"))
 			return &file
 		})
 		if err != nil {
@@ -901,7 +858,6 @@ func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		result.isDir = row.Bool("child.is_dir")
 		result.size = row.Int64("child.size")
 		result.modTime = row.Time("child.mod_time")
-		result.perm = fs.FileMode(row.Int("child.perm"))
 		result.ParentIsDir = row.Bool("parent.is_dir")
 		return result
 	})
@@ -1200,4 +1156,38 @@ func IsForeignKeyViolation(dialect string, errcode string) bool {
 	default:
 		return false
 	}
+}
+
+var textExtensions = map[string]bool{
+	".html": true,
+	".css":  true,
+	".js":   true,
+	".md":   true,
+	".txt":  true,
+	".json": true,
+	".xml":  true,
+}
+
+func isFulltextIndexed(filePath string) bool {
+	ext := path.Ext(filePath)
+	head, tail, _ := strings.Cut(filePath, "/")
+	switch head {
+	case "notes":
+		return ext == ".html" || ext == ".css" || ext == ".js" || ext == ".md" || ext == ".txt"
+	case "pages":
+		return ext == ".html"
+	case "posts":
+		return ext == ".md"
+	case "output":
+		next, _, _ := strings.Cut(tail, "/")
+		switch next {
+		case "posts":
+			return false
+		case "themes":
+			return ext == ".html" || ext == ".css" || ext == ".js" || ext == ".md" || ext == ".txt"
+		default:
+			return ext == ".css" || ext == ".js" || ext == ".md"
+		}
+	}
+	return false
 }
