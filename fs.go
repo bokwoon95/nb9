@@ -77,6 +77,10 @@ type FS interface {
 	// ReadDirBeforeModTime(dir string, fn fs.WalkDirFunc, modTime time.Time, limit int) error
 }
 
+type WalkDirFunc = func(path string, d fs.DirEntry, err error) error
+
+type ListDirFunc = func(d fs.DirEntry) error // fs.SkipAll and fs.SkipDir will terminate iteration immediately.
+
 // LocalFS represents a filesystem rooted on a local directory.
 type LocalFS struct {
 	// ctx provides the context of all operations called on the LocalFS.
