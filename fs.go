@@ -1524,15 +1524,16 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 		return cursor.Close()
 	}
 
-	// TODO: use a LEFT JOIN instead, so we can fetch the parentDir information
 	cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
 		Dialect: fsys.dialect,
-		Format:  "SELECT {*} FROM files WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {name}) ORDER BY file_path",
+		Format:  "SELECT {*} FROM files WHERE file_path = {dir} OR parent_id = (SELECT file_id FROM files WHERE file_path = {dir}) ORDER BY file_path",
+		Values: []any{
+			sq.StringParam("dir", dir),
+		},
 	}, func(row *sq.Row) (file RemoteFile) {
 		file.ctx = fsys.ctx
 		file.storage = fsys.storage
 		row.UUID(&file.fileID, "file_id")
-		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
 		file.numFiles = row.Int64("num_files")
@@ -1551,10 +1552,18 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 		return err
 	}
 	defer cursor.Close()
+	dirExists := false
 	for cursor.Next() {
 		file, err := cursor.Result()
 		if err != nil {
 			return err
+		}
+		if file.filePath == dir {
+			if !file.isDir {
+				return &fs.PathError{Op: "scandir", Path: dir, Err: syscall.ENOTDIR}
+			}
+			dirExists = true
+			continue
 		}
 		err = fn(&file)
 		if err != nil {
@@ -1564,85 +1573,10 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 			return err
 		}
 	}
+	if !dirExists {
+		return &fs.PathError{Op: "scandir", Path: dir, Err: fs.ErrNotExist}
+	}
 	return cursor.Close()
-}
-
-func (fsys *RemoteFS) ReadDir_Old(name string) ([]fs.DirEntry, error) {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return nil, err
-	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrInvalid}
-	}
-	// Special case: if name is ".", ReadDir returns all top-level files in
-	// the root directory (identified by a NULL parent_id).
-	if name == "." {
-		dirEntries, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
-			Dialect: fsys.dialect,
-			Format:  "SELECT {*} FROM files WHERE parent_id IS NULL ORDER BY file_path",
-		}, func(row *sq.Row) fs.DirEntry {
-			var file RemoteFile
-			row.UUID(&file.fileID, "file_id")
-			file.filePath = row.String("file_path")
-			file.isDir = row.Bool("is_dir")
-			file.size = row.Int64("size")
-			file.modTime = row.Time("mod_time")
-			return &file
-		})
-		if err != nil {
-			return nil, err
-		}
-		return dirEntries, nil
-	}
-	cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
-		Dialect: fsys.dialect,
-		Format: "SELECT {*}" +
-			" FROM files AS parent" +
-			" LEFT JOIN files AS child ON child.parent_id = parent.file_id" +
-			" WHERE parent.file_path = {name}" +
-			" ORDER BY child.file_path",
-		Values: []any{
-			sq.StringParam("name", name),
-		},
-	}, func(row *sq.Row) (result struct {
-		RemoteFile
-		ParentIsDir bool
-	}) {
-		row.UUID(&result.fileID, "child.file_id")
-		row.UUID(&result.parentID, "child.parent_id")
-		result.filePath = row.String("child.file_path")
-		result.isDir = row.Bool("child.is_dir")
-		result.size = row.Int64("child.size")
-		result.modTime = row.Time("child.mod_time")
-		result.ParentIsDir = row.Bool("parent.is_dir")
-		return result
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close()
-	var dirEntries []fs.DirEntry
-	for cursor.Next() {
-		result, err := cursor.Result()
-		if err != nil {
-			return nil, err
-		}
-		if !result.ParentIsDir {
-			return nil, &fs.PathError{Op: "readdir", Path: name, Err: syscall.ENOTDIR}
-		}
-		// file_id is a primary key, it must always exist. If it doesn't exist,
-		// it means the left join failed to match any child entries i.e. the
-		// directory is empty, so we return no entries.
-		if result.fileID == [16]byte{} {
-			return nil, cursor.Close()
-		}
-		dirEntries = append(dirEntries, &result.RemoteFile)
-	}
-	if len(dirEntries) == 0 {
-		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrNotExist}
-	}
-	return dirEntries, cursor.Close()
 }
 
 type Storage interface {
