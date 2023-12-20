@@ -45,7 +45,7 @@ type FS interface {
 	OpenWriter(name string, perm fs.FileMode) (io.WriteCloser, error)
 
 	// Mkdir creates a new directory with the specified name.
-	Mkdir(name string, perm fs.FileMode) error
+	Mkdir(dir string, perm fs.FileMode) error
 
 	// Remove removes the named file or directory.
 	Remove(name string) error
@@ -55,25 +55,25 @@ type FS interface {
 	Rename(oldname, newname string) error
 
 	// For RemoteFS, WalkDir should fetch the file contents as well.
-	WalkDir(root string, fn WalkDirFunc) error
+	WalkDir(dir string, fn WalkDirFunc) error
 
-	// Extensions: ReadDirAfterName, ReadDirBeforeName, ReadDirAfterModTime, ReadDirBeforeModTime
+	// Extensions: ScanDirAfterName, ScanDirBeforeName, ScanDirAfterModTime, ScanDirBeforeModTime
 	// For RemoteFS, ReadDir should fetch the file contents as well.
 	// Nevertheless, if the file contents aren't fetched on ReadDir we can
 	// still fetch it using FS.Open(). This specialization is not needed for
 	// ReadDirAfterName, ReadDirBeforeName, ReadDirAfterModTime,
 	// ReadDirBeforeModTime.
-	ListDir(name string, fn ListDirFunc) error
+	ScanDir(dir string, fn ScanDirFunc) error
 
-	// ReadDirAfterName(dir string, fn fs.WalkDirFunc, name string, limit int) error
-	// ReadDirBeforeName(dir string, fn fs.WalkDirFunc, name string, limit int) error
-	// ReadDirAfterModTime(dir string, fn fs.WalkDirFunc, modTime time.Time, limit int) error
-	// ReadDirBeforeModTime(dir string, fn fs.WalkDirFunc, modTime time.Time, limit int) error
+	// ScanDirAfterName(dir string, fn fs.WalkDirFunc, name string, limit int) error
+	// ScanDirBeforeName(dir string, fn fs.WalkDirFunc, name string, limit int) error
+	// ScanDirAfterModTime(dir string, fn fs.WalkDirFunc, modTime time.Time, limit int) error
+	// ScanDirBeforeModTime(dir string, fn fs.WalkDirFunc, modTime time.Time, limit int) error
 }
 
 type WalkDirFunc = func(path string, d fs.DirEntry, err error) error
 
-type ListDirFunc = func(d fs.DirEntry) error // fs.SkipAll and fs.SkipDir will terminate iteration immediately.
+type ScanDirFunc = func(d fs.DirEntry) error // fs.SkipAll and fs.SkipDir will terminate iteration immediately.
 
 // LocalFS represents a filesystem rooted on a local directory.
 type LocalFS struct {
@@ -245,28 +245,28 @@ func (file *LocalFileWriter) Close() error {
 	return nil
 }
 
-func (fsys *LocalFS) Mkdir(name string, _ fs.FileMode) error {
+func (fsys *LocalFS) Mkdir(dir string, _ fs.FileMode) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return &fs.PathError{Op: "mkdir", Path: name, Err: fs.ErrInvalid}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "mkdir", Path: dir, Err: fs.ErrInvalid}
 	}
-	name = filepath.FromSlash(name)
-	return os.Mkdir(filepath.Join(fsys.rootDir, name), 0755)
+	dir = filepath.FromSlash(dir)
+	return os.Mkdir(filepath.Join(fsys.rootDir, dir), 0755)
 }
 
-func (fsys *LocalFS) MkdirAll(name string, _ fs.FileMode) error {
+func (fsys *LocalFS) MkdirAll(dir string, _ fs.FileMode) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return &fs.PathError{Op: "mkdirall", Path: name, Err: fs.ErrInvalid}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "mkdirall", Path: dir, Err: fs.ErrInvalid}
 	}
-	name = filepath.FromSlash(name)
-	return os.MkdirAll(filepath.Join(fsys.rootDir, name), 0755)
+	dir = filepath.FromSlash(dir)
+	return os.MkdirAll(filepath.Join(fsys.rootDir, dir), 0755)
 }
 
 func (fsys *LocalFS) Remove(name string) error {
@@ -320,15 +320,15 @@ func (fsys *LocalFS) WalkDir(dir string, fn WalkDirFunc) error {
 	return fs.WalkDir(os.DirFS(fsys.rootDir), dir, fn)
 }
 
-func (fsys *LocalFS) ListDir(name string, fn ListDirFunc) error {
+func (fsys *LocalFS) ScanDir(dir string, fn ScanDirFunc) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return &fs.PathError{Op: "listdir", Path: name, Err: fs.ErrInvalid}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "scandir", Path: dir, Err: fs.ErrInvalid}
 	}
-	file, err := os.Open(filepath.Join(fsys.rootDir, name))
+	file, err := os.Open(filepath.Join(fsys.rootDir, dir))
 	if err != nil {
 		return err
 	}
@@ -338,7 +338,7 @@ func (fsys *LocalFS) ListDir(name string, fn ListDirFunc) error {
 		return err
 	}
 	if !fileInfo.IsDir() {
-		return &fs.PathError{Op: "listdir", Path: name, Err: syscall.ENOTDIR}
+		return &fs.PathError{Op: "scandir", Path: dir, Err: syscall.ENOTDIR}
 	}
 	for {
 		dirEntries, err := file.ReadDir(1000)
@@ -450,6 +450,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		},
 	}, func(row *sq.Row) (file RemoteFile) {
 		file.ctx = fsys.ctx
+		file.storage = fsys.storage
 		row.UUID(&file.fileID, "file_id")
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
@@ -464,7 +465,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		})
 		file.modTime = row.Time("mod_time")
 		b := row.Bytes("COALESCE(text, data)")
-		if b != nil {
+		if textExtensions[path.Ext(file.filePath)] {
 			file.buf = bytes.NewBuffer(b)
 		}
 		return file
@@ -475,17 +476,16 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		}
 		return nil, err
 	}
-	if !file.isDir && !textExtensions[path.Ext(file.filePath)] {
-		file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
-		if err != nil {
-			return nil, err
-		}
-	}
 	return &file, nil
 }
 
+// NOTE: For RemoteFiles type asserted from an fs.DirEntry, if you call Read()
+// you must call Close() when you are done. If you never call Read() you don't
+// have to call Close(), if you do you must account for the case where Close()
+// returns fs.ErrClosed.
 type RemoteFile struct {
 	ctx        context.Context
+	storage    Storage
 	fileID     [16]byte
 	parentID   [16]byte
 	filePath   string
@@ -505,8 +505,14 @@ func (file *RemoteFile) Read(p []byte) (n int, err error) {
 	if file.isDir {
 		return 0, &fs.PathError{Op: "read", Path: file.filePath, Err: syscall.EISDIR}
 	}
-	if file.buf != nil {
+	if textExtensions[path.Ext(file.filePath)] {
 		return file.buf.Read(p)
+	}
+	if file.readCloser == nil {
+		file.readCloser, err = file.storage.Get(file.ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
+		if err != nil {
+			return 0, err
+		}
 	}
 	return file.readCloser.Read(p)
 }
@@ -515,10 +521,22 @@ func (file *RemoteFile) Close() error {
 	if file.isDir {
 		return nil
 	}
-	if file.buf != nil {
+	if textExtensions[path.Ext(file.filePath)] {
+		if file.buf == nil {
+			return fs.ErrClosed
+		}
+		file.buf = nil
 		return nil
 	}
-	return file.readCloser.Close()
+	if file.readCloser == nil {
+		return fs.ErrClosed
+	}
+	err := file.readCloser.Close()
+	if err != nil {
+		return err
+	}
+	file.readCloser = nil
+	return nil
 }
 
 func (file *RemoteFile) Name() string {
@@ -526,7 +544,7 @@ func (file *RemoteFile) Name() string {
 }
 
 func (file *RemoteFile) Size() int64 {
-	if file.buf != nil {
+	if textExtensions[path.Ext(file.filePath)] {
 		return int64(file.buf.Len())
 	}
 	return file.size
@@ -549,13 +567,7 @@ func (file *RemoteFile) Type() fs.FileMode { return file.Mode().Type() }
 
 func (file *RemoteFile) Info() (fs.FileInfo, error) { return file, nil }
 
-func (file *RemoteFile) Stat() (fs.FileInfo, error) {
-	err := file.ctx.Err()
-	if err != nil {
-		return nil, err
-	}
-	return file, nil
-}
+func (file *RemoteFile) Stat() (fs.FileInfo, error) { return file, nil }
 
 func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, error) {
 	err := fsys.ctx.Err()
@@ -837,19 +849,19 @@ func (file *RemoteFileWriter) Close() error {
 	return nil
 }
 
-func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
+func (fsys *RemoteFS) Mkdir(dir string, _ fs.FileMode) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return &fs.PathError{Op: "mkdir", Path: name, Err: fs.ErrInvalid}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "mkdir", Path: dir, Err: fs.ErrInvalid}
 	}
-	if name == "." {
+	if dir == "." {
 		return nil
 	}
 	modTime := time.Now().UTC().Truncate(time.Second)
-	parentDir := path.Dir(name)
+	parentDir := path.Dir(dir)
 	if parentDir == "." {
 		_, err := sq.Exec(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
@@ -857,7 +869,7 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
-				sq.StringParam("filePath", name),
+				sq.StringParam("filePath", dir),
 				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			},
@@ -868,7 +880,7 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 			}
 			errcode := fsys.errorCode(err)
 			if IsKeyViolation(fsys.dialect, errcode) {
-				return &fs.PathError{Op: "mkdir", Path: name, Err: fs.ErrExist}
+				return &fs.PathError{Op: "mkdir", Path: dir, Err: fs.ErrExist}
 			}
 			return err
 		}
@@ -880,7 +892,7 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("parentDir", parentDir),
-				sq.StringParam("filePath", name),
+				sq.StringParam("filePath", dir),
 				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			},
@@ -891,7 +903,7 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 			}
 			errcode := fsys.errorCode(err)
 			if IsKeyViolation(fsys.dialect, errcode) {
-				return &fs.PathError{Op: "mkdir", Path: name, Err: fs.ErrExist}
+				return &fs.PathError{Op: "mkdir", Path: dir, Err: fs.ErrExist}
 			}
 			return err
 		}
@@ -899,15 +911,15 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 	return nil
 }
 
-func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
+func (fsys *RemoteFS) MkdirAll(dir string, _ fs.FileMode) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return &fs.PathError{Op: "mkdirall", Path: name, Err: fs.ErrInvalid}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "mkdirall", Path: dir, Err: fs.ErrInvalid}
 	}
-	if name == "." {
+	if dir == "." {
 		return nil
 	}
 	conn, err := fsys.db.Conn(fsys.ctx)
@@ -918,7 +930,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 
 	// Insert the top level directory (no parent), ignoring duplicates.
 	modTime := time.Now().UTC().Truncate(time.Second)
-	segments := strings.Split(name, "/")
+	segments := strings.Split(dir, "/")
 	switch fsys.dialect {
 	case "sqlite", "postgres":
 		_, err := sq.Exec(fsys.ctx, conn, sq.Query{
@@ -964,12 +976,13 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
 				Dialect: fsys.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
-					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, TRUE, {modTime})" +
+					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})" +
 					" ON CONFLICT DO NOTHING",
 				Values: []any{
 					sq.Param("fileID", nil),
 					sq.Param("parentDir", nil),
 					sq.Param("filePath", nil),
+					sq.Param("isDir", nil),
 					sq.Param("modTime", nil),
 				},
 			})
@@ -980,12 +993,13 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
 				Dialect: fsys.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
-					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, TRUE, {modTime})" +
+					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})" +
 					" ON DUPLICATE KEY UPDATE file_id = file_id",
 				Values: []any{
 					sq.Param("fileID", nil),
 					sq.Param("parentDir", nil),
 					sq.Param("filePath", nil),
+					sq.Param("isDir", nil),
 					sq.Param("modTime", nil),
 				},
 			})
@@ -1003,6 +1017,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("parentDir", parentDir),
 				sq.StringParam("filePath", filePath),
+				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			)
 			if err != nil {
@@ -1323,16 +1338,21 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
 		return &fs.PathError{Op: "walkdir", Path: dir, Err: fs.ErrInvalid}
 	}
-	// Special case: if dir is ".", WalkDir visits every file.
+
 	if dir == "." {
-		err = fn(".", &RemoteFile{
-			ctx: fsys.ctx,
-		}, nil)
+		err = fn(".", &RemoteFile{ctx: fsys.ctx, filePath: ".", isDir: true}, nil)
+		if err != nil {
+			if err == fs.SkipDir || err == fs.SkipAll {
+				return nil
+			}
+			return err
+		}
 		cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
 			Format:  "SELECT {*} FROM files ORDER BY file_path",
 		}, func(row *sq.Row) (file RemoteFile) {
 			file.ctx = fsys.ctx
+			file.storage = fsys.storage
 			row.UUID(&file.fileID, "file_id")
 			row.UUID(&file.parentID, "parent_id")
 			file.filePath = row.String("file_path")
@@ -1347,33 +1367,202 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 			})
 			file.modTime = row.Time("mod_time")
 			b := row.Bytes("COALESCE(text, data)")
-			if b != nil {
+			if textExtensions[path.Ext(file.filePath)] {
 				file.buf = bytes.NewBuffer(b)
-			}
-			if !file.isDir && !textExtensions[path.Ext(file.filePath)] {
-				file.readCloser, err = fsys.storage.Get(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
-				if err != nil {
-					panic(err)
-				}
 			}
 			return file
 		})
 		if err != nil {
 			return err
 		}
+		defer cursor.Close()
+		var skipDir string
 		for cursor.Next() {
 			file, err := cursor.Result()
 			if err != nil {
 				return err
 			}
+			if skipDir != "" && strings.HasPrefix(file.filePath, skipDir) {
+				continue
+			}
 			err = fn(file.filePath, &file, nil)
+			if err != nil {
+				if err == fs.SkipAll {
+					return nil
+				}
+				if err == fs.SkipDir {
+					if file.isDir {
+						skipDir = file.filePath + "/"
+					} else {
+						skipDir = path.Dir(file.filePath) + "/"
+					}
+					continue
+				}
+				return err
+			}
+		}
+		return cursor.Close()
+	}
+
+	cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE file_path = {root} OR file_path LIKE {pattern} ESCAPE '\\' ORDER BY file_path",
+		Values: []any{
+			sq.StringParam("root", dir),
+			sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(dir)+"/%"),
+		},
+	}, func(row *sq.Row) (file RemoteFile) {
+		file.ctx = fsys.ctx
+		file.storage = fsys.storage
+		row.UUID(&file.fileID, "file_id")
+		row.UUID(&file.parentID, "parent_id")
+		file.filePath = row.String("file_path")
+		file.isDir = row.Bool("is_dir")
+		file.numFiles = row.Int64("num_files")
+		file.size = row.Int64("{}", sq.DialectExpression{
+			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Cases: []sq.DialectCase{{
+				Dialect: "sqlite",
+				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+			}},
+		})
+		file.modTime = row.Time("mod_time")
+		b := row.Bytes("COALESCE(text, data)")
+		if textExtensions[path.Ext(file.filePath)] {
+			file.buf = bytes.NewBuffer(b)
+		}
+		return file
+	})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close()
+	var skipDir string
+	for cursor.Next() {
+		file, err := cursor.Result()
+		if err != nil {
+			return err
+		}
+		if file.isDir && skipDir != "" && (file.filePath == strings.TrimSuffix(skipDir, "/") || strings.HasPrefix(file.filePath, skipDir)) {
+			continue
+		}
+		err = fn(file.filePath, &file, nil)
+		if err != nil {
+			if err == fs.SkipAll {
+				return nil
+			}
+			if err == fs.SkipDir {
+				if file.isDir {
+					skipDir = file.filePath + "/"
+				} else {
+					skipDir = path.Dir(file.filePath) + "/"
+				}
+				continue
+			}
+			return err
+		}
+	}
+	return cursor.Close()
+}
+
+func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "scandir", Path: dir, Err: fs.ErrInvalid}
+	}
+
+	if dir == "." {
+		cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "SELECT {*} FROM files WHERE parent_id IS NULL ORDER BY file_path",
+		}, func(row *sq.Row) (file RemoteFile) {
+			file.ctx = fsys.ctx
+			file.storage = fsys.storage
+			row.UUID(&file.fileID, "file_id")
+			file.filePath = row.String("file_path")
+			file.isDir = row.Bool("is_dir")
+			file.numFiles = row.Int64("num_files")
+			file.size = row.Int64("{}", sq.DialectExpression{
+				Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+				Cases: []sq.DialectCase{{
+					Dialect: "sqlite",
+					Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+				}},
+			})
+			file.modTime = row.Time("mod_time")
+			b := row.Bytes("COALESCE(text, data)")
+			if textExtensions[path.Ext(file.filePath)] {
+				file.buf = bytes.NewBuffer(b)
+			}
+			return file
+		})
+		if err != nil {
+			return err
+		}
+		defer cursor.Close()
+		for cursor.Next() {
+			file, err := cursor.Result()
 			if err != nil {
 				return err
 			}
-			defer file.Close()
+			err = fn(&file)
+			if err != nil {
+				if err == fs.SkipAll || err == fs.SkipDir {
+					return nil
+				}
+				return err
+			}
+		}
+		return cursor.Close()
+	}
+
+	// TODO: use a LEFT JOIN instead, so we can fetch the parentDir information
+	cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {name}) ORDER BY file_path",
+	}, func(row *sq.Row) (file RemoteFile) {
+		file.ctx = fsys.ctx
+		file.storage = fsys.storage
+		row.UUID(&file.fileID, "file_id")
+		row.UUID(&file.parentID, "parent_id")
+		file.filePath = row.String("file_path")
+		file.isDir = row.Bool("is_dir")
+		file.numFiles = row.Int64("num_files")
+		file.size = row.Int64("{}", sq.DialectExpression{
+			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Cases: []sq.DialectCase{{
+				Dialect: "sqlite",
+				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+			}},
+		})
+		file.modTime = row.Time("mod_time")
+		b := row.Bytes("COALESCE(text, data)")
+		if textExtensions[path.Ext(file.filePath)] {
+			file.buf = bytes.NewBuffer(b)
+		}
+		return file
+	})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close()
+	for cursor.Next() {
+		file, err := cursor.Result()
+		if err != nil {
+			return err
+		}
+		err = fn(&file)
+		if err != nil {
+			if err == fs.SkipAll || err == fs.SkipDir {
+				return nil
+			}
+			return err
 		}
 	}
-	return nil
+	return cursor.Close()
 }
 
 func (fsys *RemoteFS) ReadDir_Old(name string) ([]fs.DirEntry, error) {
