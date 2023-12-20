@@ -54,14 +54,8 @@ type FS interface {
 	// is not a directory, Rename replaces it.
 	Rename(oldname, newname string) error
 
-	// TODO: Should WalkDirFunc be called on the initial dir?
-	// TODO: ListDirFunc and WalkDirFunc. I guess we should imitate
-	// fs.WalkDirFunc's semantics for WalkDir: the initial call is always to
-	// the root, if any ReadDirs along the way fails (which never happens for
-	// RemoteFS) we call the WalkDirFunc again for that dir.
-
 	// For RemoteFS, WalkDir should fetch the file contents as well.
-	WalkDir(dir string, fn fs.WalkDirFunc) error
+	WalkDir(dir string, fn WalkDirFunc) error
 
 	// Extensions: ReadDirAfterName, ReadDirBeforeName, ReadDirAfterModTime, ReadDirBeforeModTime
 	// For RemoteFS, ReadDir should fetch the file contents as well.
@@ -69,7 +63,7 @@ type FS interface {
 	// still fetch it using FS.Open(). This specialization is not needed for
 	// ReadDirAfterName, ReadDirBeforeName, ReadDirAfterModTime,
 	// ReadDirBeforeModTime.
-	ReadDir(dir string, fn fs.WalkDirFunc) error
+	ListDir(dir string, fn ListDirFunc) error
 
 	// ReadDirAfterName(dir string, fn fs.WalkDirFunc, name string, limit int) error
 	// ReadDirBeforeName(dir string, fn fs.WalkDirFunc, name string, limit int) error
@@ -315,24 +309,24 @@ func (fsys *LocalFS) Rename(oldname, newname string) error {
 	return os.Rename(filepath.Join(fsys.rootDir, oldname), filepath.Join(fsys.rootDir, newname))
 }
 
-func (fsys *LocalFS) WalkDir(name string, fn fs.WalkDirFunc) error {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return err
-	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return &fs.PathError{Op: "walkdir", Path: name, Err: fs.ErrInvalid}
-	}
-	return fs.WalkDir(os.DirFS(fsys.rootDir), name, fn)
-}
-
-func (fsys *LocalFS) ReadDir(dir string, fn fs.WalkDirFunc) error {
+func (fsys *LocalFS) WalkDir(dir string, fn WalkDirFunc) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
 	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
-		return &fs.PathError{Op: "readdir", Path: dir, Err: fs.ErrInvalid}
+		return &fs.PathError{Op: "walkdir", Path: dir, Err: fs.ErrInvalid}
+	}
+	return fs.WalkDir(os.DirFS(fsys.rootDir), dir, fn)
+}
+
+func (fsys *LocalFS) ListDir(dir string, fn ListDirFunc) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "listdir", Path: dir, Err: fs.ErrInvalid}
 	}
 	file, err := os.Open(filepath.Join(fsys.rootDir, dir))
 	if err != nil {
@@ -344,7 +338,7 @@ func (fsys *LocalFS) ReadDir(dir string, fn fs.WalkDirFunc) error {
 		return err
 	}
 	if !fileInfo.IsDir() {
-		return &fs.PathError{Op: "readdir", Path: dir, Err: syscall.ENOTDIR}
+		return &fs.PathError{Op: "listdir", Path: dir, Err: syscall.ENOTDIR}
 	}
 	for {
 		dirEntries, err := file.ReadDir(1000)
@@ -355,7 +349,10 @@ func (fsys *LocalFS) ReadDir(dir string, fn fs.WalkDirFunc) error {
 			return err
 		}
 		for _, dirEntry := range dirEntries {
-			err = fn(path.Join(dir, dirEntry.Name()), dirEntry, nil)
+			err = fn(dirEntry)
+			if err == fs.SkipDir || err == fs.SkipAll {
+				return nil
+			}
 			if err != nil {
 				return err
 			}
