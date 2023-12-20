@@ -464,7 +464,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 			}},
 		})
 		file.modTime = row.Time("mod_time")
-		file.buf = getBytes(row, "COALESCE(text, data)")
+		file.buf = getBuffer(row, "COALESCE(text, data)")
 		return file
 	})
 	if err != nil {
@@ -476,7 +476,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	return &file, nil
 }
 
-func getBytes(row *sq.Row, format string, values ...any) *bytes.Buffer {
+func getBuffer(row *sq.Row, format string, values ...any) *bytes.Buffer {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	b := buf.Bytes()
@@ -1380,7 +1380,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 				}},
 			})
 			file.modTime = row.Time("mod_time")
-			file.buf = getBytes(row, "COALESCE(text, data)")
+			file.buf = getBuffer(row, "COALESCE(text, data)")
 			return file
 		})
 		if err != nil {
@@ -1438,7 +1438,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 			}},
 		})
 		file.modTime = row.Time("mod_time")
-		file.buf = getBytes(row, "COALESCE(text, data)")
+		file.buf = getBuffer(row, "COALESCE(text, data)")
 		return file
 	})
 	if err != nil {
@@ -1501,7 +1501,7 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 				}},
 			})
 			file.modTime = row.Time("mod_time")
-			file.buf = getBytes(row, "COALESCE(text, data)")
+			file.buf = getBuffer(row, "COALESCE(text, data)")
 			return file
 		})
 		if err != nil {
@@ -1544,7 +1544,7 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 			}},
 		})
 		file.modTime = row.Time("mod_time")
-		file.buf = getBytes(row, "COALESCE(text, data)")
+		file.buf = getBuffer(row, "COALESCE(text, data)")
 		return file
 	})
 	if err != nil {
