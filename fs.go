@@ -411,7 +411,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
-		file.count = row.Int64("count")
+		file.numFiles = row.Int64("count")
 		file.size = row.Int64("{}", sq.DialectExpression{
 			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
 			Cases: []sq.DialectCase{{
@@ -454,7 +454,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
-		file.count = row.Int64("count")
+		file.numFiles = row.Int64("count")
 		file.size = row.Int64("{}", sq.DialectExpression{
 			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
 			Cases: []sq.DialectCase{{
@@ -494,7 +494,7 @@ type RemoteFile struct {
 	parentID   [16]byte
 	filePath   string
 	isDir      bool
-	count      int64
+	numFiles   int64
 	size       int64
 	modTime    time.Time
 	buf        *bytes.Buffer
@@ -1341,7 +1341,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn fs.WalkDirFunc) error {
 			row.UUID(&file.parentID, "parent_id")
 			file.filePath = row.String("file_path")
 			file.isDir = row.Bool("is_dir")
-			file.count = row.Int64("count")
+			file.numFiles = row.Int64("count")
 			file.size = row.Int64("{}", sq.DialectExpression{
 				Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
 				Cases: []sq.DialectCase{{

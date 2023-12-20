@@ -16,25 +16,23 @@ import (
 var schemaTOML []byte
 
 func Automigrate(dialect string, db *sql.DB) error {
-	type RawColumn struct {
-		Column     string
-		Type       map[string]string
-		References struct {
-			Table  string
-			Column string
-		}
-		Index      bool
-		Primarykey bool
-		Unique     bool
-		Notnull    bool
-	}
-	type RawTable struct {
-		Table      string
-		PrimaryKey []string
-		Columns    []RawColumn
-	}
 	var rawSchema struct {
-		Tables []RawTable
+		Tables []struct {
+			Table      string
+			PrimaryKey []string
+			Columns    []struct {
+				Column     string
+				Type       map[string]string
+				References struct {
+					Table  string
+					Column string
+				}
+				Index      bool
+				Primarykey bool
+				Unique     bool
+				Notnull    bool
+			}
+		}
 	}
 	decoder := toml.NewDecoder(bytes.NewReader(schemaTOML))
 	decoder.DisallowUnknownFields()
