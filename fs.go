@@ -45,7 +45,7 @@ type FS interface {
 	OpenWriter(name string, perm fs.FileMode) (io.WriteCloser, error)
 
 	// Mkdir creates a new directory with the specified name.
-	Mkdir(dir string, perm fs.FileMode) error
+	Mkdir(name string, perm fs.FileMode) error
 
 	// Remove removes the named file or directory.
 	Remove(name string) error
@@ -55,7 +55,7 @@ type FS interface {
 	Rename(oldname, newname string) error
 
 	// For RemoteFS, WalkDir should fetch the file contents as well.
-	WalkDir(dir string, fn WalkDirFunc) error
+	WalkDir(root string, fn WalkDirFunc) error
 
 	// Extensions: ReadDirAfterName, ReadDirBeforeName, ReadDirAfterModTime, ReadDirBeforeModTime
 	// For RemoteFS, ReadDir should fetch the file contents as well.
@@ -63,7 +63,7 @@ type FS interface {
 	// still fetch it using FS.Open(). This specialization is not needed for
 	// ReadDirAfterName, ReadDirBeforeName, ReadDirAfterModTime,
 	// ReadDirBeforeModTime.
-	ListDir(dir string, fn ListDirFunc) error
+	ListDir(name string, fn ListDirFunc) error
 
 	// ReadDirAfterName(dir string, fn fs.WalkDirFunc, name string, limit int) error
 	// ReadDirBeforeName(dir string, fn fs.WalkDirFunc, name string, limit int) error
@@ -245,16 +245,16 @@ func (file *LocalFileWriter) Close() error {
 	return nil
 }
 
-func (fsys *LocalFS) Mkdir(dir string, _ fs.FileMode) error {
+func (fsys *LocalFS) Mkdir(name string, _ fs.FileMode) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
-		return &fs.PathError{Op: "mkdir", Path: dir, Err: fs.ErrInvalid}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return &fs.PathError{Op: "mkdir", Path: name, Err: fs.ErrInvalid}
 	}
-	dir = filepath.FromSlash(dir)
-	return os.Mkdir(filepath.Join(fsys.rootDir, dir), 0755)
+	name = filepath.FromSlash(name)
+	return os.Mkdir(filepath.Join(fsys.rootDir, name), 0755)
 }
 
 func (fsys *LocalFS) MkdirAll(name string, _ fs.FileMode) error {
@@ -320,15 +320,15 @@ func (fsys *LocalFS) WalkDir(dir string, fn WalkDirFunc) error {
 	return fs.WalkDir(os.DirFS(fsys.rootDir), dir, fn)
 }
 
-func (fsys *LocalFS) ListDir(dir string, fn ListDirFunc) error {
+func (fsys *LocalFS) ListDir(name string, fn ListDirFunc) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
-		return &fs.PathError{Op: "listdir", Path: dir, Err: fs.ErrInvalid}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return &fs.PathError{Op: "listdir", Path: name, Err: fs.ErrInvalid}
 	}
-	file, err := os.Open(filepath.Join(fsys.rootDir, dir))
+	file, err := os.Open(filepath.Join(fsys.rootDir, name))
 	if err != nil {
 		return err
 	}
@@ -338,7 +338,7 @@ func (fsys *LocalFS) ListDir(dir string, fn ListDirFunc) error {
 		return err
 	}
 	if !fileInfo.IsDir() {
-		return &fs.PathError{Op: "listdir", Path: dir, Err: syscall.ENOTDIR}
+		return &fs.PathError{Op: "listdir", Path: name, Err: syscall.ENOTDIR}
 	}
 	for {
 		dirEntries, err := file.ReadDir(1000)
@@ -411,7 +411,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
-		file.numFiles = row.Int64("count")
+		file.numFiles = row.Int64("num_files")
 		file.size = row.Int64("{}", sq.DialectExpression{
 			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
 			Cases: []sq.DialectCase{{
@@ -454,7 +454,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
-		file.numFiles = row.Int64("count")
+		file.numFiles = row.Int64("num_files")
 		file.size = row.Int64("{}", sq.DialectExpression{
 			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
 			Cases: []sq.DialectCase{{
@@ -484,10 +484,6 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	return &file, nil
 }
 
-// TODO: What does an artificially constructed RemoteFile for "." look like? Do
-// we need to fill in the count? Nope, if we're adhering to the convention that
-// the root dir never has any files, only directories (count represents the
-// file count and not the directory count).
 type RemoteFile struct {
 	ctx        context.Context
 	fileID     [16]byte
@@ -825,7 +821,7 @@ func (file *RemoteFileWriter) Close() error {
 	if file.parentID != nil {
 		_, err := sq.Exec(file.ctx, tx, sq.Query{
 			Dialect: file.dialect,
-			Format:  "UPDATE files SET count = count + 1 WHERE file_id = {parentID}",
+			Format:  "UPDATE files SET num_files = num_files + 1 WHERE file_id = {parentID}",
 			Values: []any{
 				sq.UUIDParam("parentID", file.parentID),
 			},
@@ -1083,7 +1079,7 @@ func (fsys *RemoteFS) Remove(name string) error {
 		if parentDir != "." {
 			_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 				Dialect: fsys.dialect,
-				Format:  "UPDATE files SET count = count - 1 WHERE file_path = {parentDir} AND count > 0",
+				Format:  "UPDATE files SET num_files = num_files - 1 WHERE file_path = {parentDir} AND num_files > 0",
 				Values: []any{
 					sq.StringParam("parentDir", parentDir),
 				},
@@ -1183,7 +1179,7 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 		if parentDir != "." {
 			_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 				Dialect: fsys.dialect,
-				Format:  "UPDATE files SET count = count - 1 WHERE file_path = {parentDir} AND count > 0",
+				Format:  "UPDATE files SET num_files = num_files - 1 WHERE file_path = {parentDir} AND num_files > 0",
 				Values: []any{
 					sq.StringParam("parentDir", parentDir),
 				},
@@ -1319,13 +1315,13 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	return nil
 }
 
-func (fsys *RemoteFS) WalkDir(dir string, fn fs.WalkDirFunc) error {
+func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
 	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
-		return &fs.PathError{Op: "readdir", Path: dir, Err: fs.ErrInvalid}
+		return &fs.PathError{Op: "walkdir", Path: dir, Err: fs.ErrInvalid}
 	}
 	// Special case: if dir is ".", WalkDir visits every file.
 	if dir == "." {
@@ -1341,7 +1337,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn fs.WalkDirFunc) error {
 			row.UUID(&file.parentID, "parent_id")
 			file.filePath = row.String("file_path")
 			file.isDir = row.Bool("is_dir")
-			file.numFiles = row.Int64("count")
+			file.numFiles = row.Int64("num_files")
 			file.size = row.Int64("{}", sq.DialectExpression{
 				Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
 				Cases: []sq.DialectCase{{
