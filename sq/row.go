@@ -1,6 +1,7 @@
 package sq
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"path/filepath"
@@ -93,11 +94,15 @@ func (row *Row) Scan(destPtr any, format string, values ...any) {
 		*destPtr = *scanDest
 	case *[]byte:
 		scanDest := row.scanDest[row.index].(*sql.RawBytes)
-		if cap(*destPtr) < len(*scanDest) {
-			*destPtr = make([]byte, len(*scanDest))
+		if *scanDest == nil {
+			*destPtr = nil
+		} else {
+			if cap(*destPtr) < len(*scanDest) {
+				*destPtr = make([]byte, len(*scanDest))
+			}
+			*destPtr = (*destPtr)[:len(*scanDest)]
+			copy(*destPtr, *scanDest)
 		}
-		*destPtr = (*destPtr)[:len(*scanDest)]
-		copy(*destPtr, *scanDest)
 	default:
 		destValue := reflect.ValueOf(destPtr).Elem()
 		srcValue := reflect.ValueOf(row.scanDest[row.index]).Elem()
@@ -106,7 +111,7 @@ func (row *Row) Scan(destPtr any, format string, values ...any) {
 }
 
 // Bytes returns the []byte value of the expression.
-func (row *Row) Bytes(b []byte, format string, values ...any) []byte {
+func (row *Row) Bytes(format string, values ...any) []byte {
 	if row.sqlRows == nil {
 		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
 		row.scanDest = append(row.scanDest, &sql.RawBytes{})
@@ -116,12 +121,7 @@ func (row *Row) Bytes(b []byte, format string, values ...any) []byte {
 		row.index++
 	}()
 	scanDest := row.scanDest[row.index].(*sql.RawBytes)
-	if cap(b) < len(*scanDest) {
-		b = make([]byte, len(*scanDest))
-	}
-	b = b[:len(*scanDest)]
-	copy(b, *scanDest)
-	return b
+	return bytes.Clone(*scanDest)
 }
 
 // Bool returns the bool value of the expression.
