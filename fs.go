@@ -1693,7 +1693,7 @@ func (storage *S3Storage) Get(ctx context.Context, key string) (io.ReadCloser, e
 		var apiErr smithy.APIError
 		if errors.As(err, &apiErr) {
 			if apiErr.ErrorCode() == "NoSuchKey" {
-				return nil, &fs.PathError{Op: "open", Path: key, Err: fs.ErrNotExist}
+				return nil, &fs.PathError{Op: "get", Path: key, Err: fs.ErrNotExist}
 			}
 		}
 		return nil, err
@@ -1743,7 +1743,7 @@ func (storage *InMemoryStorage) Get(ctx context.Context, key string) (io.ReadClo
 	value, ok := storage.entries[key]
 	storage.mu.RUnlock()
 	if !ok {
-		return nil, &fs.PathError{Op: "open", Path: key, Err: fs.ErrNotExist}
+		return nil, &fs.PathError{Op: "get", Path: key, Err: fs.ErrNotExist}
 	}
 	return io.NopCloser(bytes.NewReader(value)), nil
 }
@@ -1789,7 +1789,7 @@ func (storage *FileStorage) Get(ctx context.Context, key string) (io.ReadCloser,
 	file, err := os.Open(filepath.Join(storage.rootDir, key[:4], key))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return nil, &fs.PathError{Op: "open", Path: key, Err: fs.ErrNotExist}
+			return nil, &fs.PathError{Op: "get", Path: key, Err: fs.ErrNotExist}
 		}
 		return nil, err
 	}
@@ -1862,7 +1862,7 @@ func (storage *FileStorage) Delete(ctx context.Context, key string) error {
 		return err
 	}
 	if len(key) < 4 {
-		return &fs.PathError{Op: "put", Path: key, Err: fs.ErrInvalid}
+		return &fs.PathError{Op: "delete", Path: key, Err: fs.ErrInvalid}
 	}
 	err = os.Remove(filepath.Join(storage.rootDir, key[:4], key))
 	if err != nil {
