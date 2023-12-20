@@ -47,13 +47,6 @@ type FS interface {
 	// Mkdir creates a new directory with the specified name.
 	Mkdir(dir string, perm fs.FileMode) error
 
-	// Remove removes the named file or directory.
-	Remove(name string) error
-
-	// Rename renames (moves) oldname to newname. If newname already exists and
-	// is not a directory, Rename replaces it.
-	Rename(oldname, newname string) error
-
 	// For RemoteFS, WalkDir should fetch the file contents as well.
 	WalkDir(dir string, fn WalkDirFunc) error
 
@@ -65,15 +58,22 @@ type FS interface {
 	// ReadDirBeforeModTime.
 	ScanDir(dir string, fn ScanDirFunc) error
 
+	// Remove removes the named file or directory.
+	Remove(name string) error
+
+	// Rename renames (moves) oldname to newname. If newname already exists and
+	// is not a directory, Rename replaces it.
+	Rename(oldname, newname string) error
+
 	// ScanDirAfterName(dir string, fn fs.WalkDirFunc, name string, limit int) error
 	// ScanDirBeforeName(dir string, fn fs.WalkDirFunc, name string, limit int) error
 	// ScanDirAfterModTime(dir string, fn fs.WalkDirFunc, modTime time.Time, limit int) error
 	// ScanDirBeforeModTime(dir string, fn fs.WalkDirFunc, modTime time.Time, limit int) error
 }
 
-type WalkDirFunc = func(path string, d fs.DirEntry, err error) error
+type WalkDirFunc = func(filePath string, d fs.DirEntry, err error) error
 
-type ScanDirFunc = func(d fs.DirEntry) error // fs.SkipAll and fs.SkipDir will terminate iteration immediately.
+type ScanDirFunc = func(d fs.DirEntry) error
 
 // LocalFS represents a filesystem rooted on a local directory.
 type LocalFS struct {
@@ -269,46 +269,6 @@ func (fsys *LocalFS) MkdirAll(dir string, _ fs.FileMode) error {
 	return os.MkdirAll(filepath.Join(fsys.rootDir, dir), 0755)
 }
 
-func (fsys *LocalFS) Remove(name string) error {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return err
-	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return &fs.PathError{Op: "remove", Path: name, Err: fs.ErrInvalid}
-	}
-	name = filepath.FromSlash(name)
-	return os.Remove(filepath.Join(fsys.rootDir, name))
-}
-
-func (fsys *LocalFS) RemoveAll(name string) error {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return err
-	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return &fs.PathError{Op: "removeall", Path: name, Err: fs.ErrInvalid}
-	}
-	name = filepath.FromSlash(name)
-	return os.RemoveAll(filepath.Join(fsys.rootDir, name))
-}
-
-func (fsys *LocalFS) Rename(oldname, newname string) error {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return err
-	}
-	if !fs.ValidPath(oldname) || strings.Contains(oldname, "\\") {
-		return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrInvalid}
-	}
-	if !fs.ValidPath(newname) || strings.Contains(newname, "\\") {
-		return &fs.PathError{Op: "rename", Path: newname, Err: fs.ErrInvalid}
-	}
-	oldname = filepath.FromSlash(oldname)
-	newname = filepath.FromSlash(newname)
-	return os.Rename(filepath.Join(fsys.rootDir, oldname), filepath.Join(fsys.rootDir, newname))
-}
-
 func (fsys *LocalFS) WalkDir(dir string, fn WalkDirFunc) error {
 	err := fsys.ctx.Err()
 	if err != nil {
@@ -359,6 +319,46 @@ func (fsys *LocalFS) ScanDir(dir string, fn ScanDirFunc) error {
 		}
 	}
 	return nil
+}
+
+func (fsys *LocalFS) Remove(name string) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return &fs.PathError{Op: "remove", Path: name, Err: fs.ErrInvalid}
+	}
+	name = filepath.FromSlash(name)
+	return os.Remove(filepath.Join(fsys.rootDir, name))
+}
+
+func (fsys *LocalFS) RemoveAll(name string) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return &fs.PathError{Op: "removeall", Path: name, Err: fs.ErrInvalid}
+	}
+	name = filepath.FromSlash(name)
+	return os.RemoveAll(filepath.Join(fsys.rootDir, name))
+}
+
+func (fsys *LocalFS) Rename(oldname, newname string) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(oldname) || strings.Contains(oldname, "\\") {
+		return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrInvalid}
+	}
+	if !fs.ValidPath(newname) || strings.Contains(newname, "\\") {
+		return &fs.PathError{Op: "rename", Path: newname, Err: fs.ErrInvalid}
+	}
+	oldname = filepath.FromSlash(oldname)
+	newname = filepath.FromSlash(newname)
+	return os.Rename(filepath.Join(fsys.rootDir, oldname), filepath.Join(fsys.rootDir, newname))
 }
 
 type RemoteFS struct {
@@ -479,10 +479,6 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	return &file, nil
 }
 
-// NOTE: For RemoteFiles type asserted from an fs.DirEntry, if you call Read()
-// you must call Close() when you are done. If you never call Read() you don't
-// have to call Close(), if you do you must account for the case where Close()
-// returns fs.ErrClosed.
 type RemoteFile struct {
 	ctx        context.Context
 	storage    Storage
@@ -922,18 +918,18 @@ func (fsys *RemoteFS) MkdirAll(dir string, _ fs.FileMode) error {
 	if dir == "." {
 		return nil
 	}
-	conn, err := fsys.db.Conn(fsys.ctx)
+	tx, err := fsys.db.BeginTx(fsys.ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer tx.Rollback()
 
 	// Insert the top level directory (no parent), ignoring duplicates.
 	modTime := time.Now().UTC().Truncate(time.Second)
 	segments := strings.Split(dir, "/")
 	switch fsys.dialect {
 	case "sqlite", "postgres":
-		_, err := sq.Exec(fsys.ctx, conn, sq.Query{
+		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.dialect,
 			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
 				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})" +
@@ -949,7 +945,7 @@ func (fsys *RemoteFS) MkdirAll(dir string, _ fs.FileMode) error {
 			return err
 		}
 	case "mysql":
-		_, err := sq.Exec(fsys.ctx, conn, sq.Query{
+		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.dialect,
 			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
 				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})" +
@@ -973,7 +969,7 @@ func (fsys *RemoteFS) MkdirAll(dir string, _ fs.FileMode) error {
 		var preparedExec *sq.PreparedExec
 		switch fsys.dialect {
 		case "sqlite", "postgres":
-			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
+			preparedExec, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
 				Dialect: fsys.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
 					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})" +
@@ -990,7 +986,7 @@ func (fsys *RemoteFS) MkdirAll(dir string, _ fs.FileMode) error {
 				return err
 			}
 		case "mysql":
-			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
+			preparedExec, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
 				Dialect: fsys.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
 					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})" +
@@ -1024,6 +1020,14 @@ func (fsys *RemoteFS) MkdirAll(dir string, _ fs.FileMode) error {
 				return err
 			}
 		}
+		err = preparedExec.Close()
+		if err != nil {
+			return err
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
 	}
 	return nil
 }
