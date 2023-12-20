@@ -1167,6 +1167,46 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 }
 
 func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
+	return fsys.scanDir(dir, fn,
+		sq.Expr(""),
+		sq.Expr("ORDER BY file_path"),
+		sq.Expr(""),
+	)
+}
+
+func (fsys *RemoteFS) ScanDirAfterName(dir string, fn ScanDirFunc, name string, limit int) error {
+	return fsys.scanDir(dir, fn,
+		sq.Expr("AND file_path >= {}", path.Join(dir, name)),
+		sq.Expr("ORDER BY file_path"),
+		sq.Expr("LIMIT {}", limit),
+	)
+}
+
+func (fsys *RemoteFS) ScanDirBeforeName(dir string, fn ScanDirFunc, name string, limit int) error {
+	return fsys.scanDir(dir, fn,
+		sq.Expr("AND file_path <= {}", path.Join(dir, name)),
+		sq.Expr("ORDER BY file_path DESC"),
+		sq.Expr("LIMIT {}", limit),
+	)
+}
+
+func (fsys *RemoteFS) ScanDirAfterModTime(dir string, fn ScanDirFunc, modTime time.Time, limit int) error {
+	return fsys.scanDir(dir, fn,
+		sq.Expr("AND mod_time >= {}", modTime),
+		sq.Expr("ORDER BY mod_time"),
+		sq.Expr("LIMIT {}", limit),
+	)
+}
+
+func (fsys *RemoteFS) ScanDirBeforeModTime(dir string, fn ScanDirFunc, modTime time.Time, limit int) error {
+	return fsys.scanDir(dir, fn,
+		sq.Expr("AND mod_time <= {}", modTime),
+		sq.Expr("ORDER BY mod_time DESC"),
+		sq.Expr("LIMIT {}", limit),
+	)
+}
+
+func (fsys *RemoteFS) scanDir(dir string, fn ScanDirFunc, condition, order, limit sq.Expression) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
@@ -1178,7 +1218,12 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 	if dir == "." {
 		cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
-			Format:  "SELECT {*} FROM files WHERE parent_id IS NULL ORDER BY file_path",
+			Format:  "SELECT {*} FROM files WHERE parent_id IS NULL {condition} {order} {limit}",
+			Values: []any{
+				sq.Param("condition", condition),
+				sq.Param("order", order),
+				sq.Param("limit", limit),
+			},
 		}, func(row *sq.Row) (file RemoteFile) {
 			file.ctx = fsys.ctx
 			file.storage = fsys.storage
@@ -1219,9 +1264,12 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 
 	cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
 		Dialect: fsys.dialect,
-		Format:  "SELECT {*} FROM files WHERE file_path = {dir} OR parent_id = (SELECT file_id FROM files WHERE file_path = {dir}) ORDER BY file_path",
+		Format:  "SELECT {*} FROM files WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {dir}) {condition} {order} {limit}",
 		Values: []any{
 			sq.StringParam("dir", dir),
+			sq.Param("condition", condition),
+			sq.Param("order", order),
+			sq.Param("limit", limit),
 		},
 	}, func(row *sq.Row) (file RemoteFile) {
 		file.ctx = fsys.ctx
@@ -1245,18 +1293,10 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 		return err
 	}
 	defer cursor.Close()
-	dirExists := false
 	for cursor.Next() {
 		file, err := cursor.Result()
 		if err != nil {
 			return err
-		}
-		if file.filePath == dir {
-			if !file.isDir {
-				return &fs.PathError{Op: "scandir", Path: dir, Err: syscall.ENOTDIR}
-			}
-			dirExists = true
-			continue
 		}
 		err = fn(&file)
 		if err != nil {
@@ -1265,9 +1305,6 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 			}
 			return err
 		}
-	}
-	if !dirExists {
-		return &fs.PathError{Op: "scandir", Path: dir, Err: fs.ErrNotExist}
 	}
 	return cursor.Close()
 }
@@ -1527,7 +1564,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	}
 	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.dialect,
-		Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime}{updateTextOrData} WHERE file_path = {oldname}",
+		Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} {updateTextOrData} WHERE file_path = {oldname}",
 		Values: []any{
 			sq.StringParam("newname", newname),
 			sq.Param("modTime", modTime),
