@@ -47,15 +47,8 @@ type FS interface {
 	// Mkdir creates a new directory with the specified name.
 	Mkdir(dir string, perm fs.FileMode) error
 
-	// For RemoteFS, WalkDir should fetch the file contents as well.
 	WalkDir(dir string, fn WalkDirFunc) error
 
-	// Extensions: ScanDirAfterName, ScanDirBeforeName, ScanDirAfterModTime, ScanDirBeforeModTime
-	// For RemoteFS, ReadDir should fetch the file contents as well.
-	// Nevertheless, if the file contents aren't fetched on ReadDir we can
-	// still fetch it using FS.Open(). This specialization is not needed for
-	// ReadDirAfterName, ReadDirBeforeName, ReadDirAfterModTime,
-	// ReadDirBeforeModTime.
 	ScanDir(dir string, fn ScanDirFunc) error
 
 	// Remove removes the named file or directory.
