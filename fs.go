@@ -464,7 +464,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 			}},
 		})
 		file.modTime = row.Time("mod_time")
-		b := row.Bytes("COALESCE(text, data)")
+		b := row.Bytes(bufPool.Get().(*bytes.Buffer).Bytes(), "COALESCE(text, data)")
 		if textExtensions[path.Ext(file.filePath)] {
 			file.buf = bytes.NewBuffer(b)
 		}
@@ -521,6 +521,7 @@ func (file *RemoteFile) Close() error {
 		if file.buf == nil {
 			return fs.ErrClosed
 		}
+		bufPool.Put(file.buf)
 		file.buf = nil
 		return nil
 	}
@@ -1370,7 +1371,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 				}},
 			})
 			file.modTime = row.Time("mod_time")
-			b := row.Bytes("COALESCE(text, data)")
+		b := row.Bytes(bufPool.Get().(*bytes.Buffer).Bytes(), "COALESCE(text, data)")
 			if textExtensions[path.Ext(file.filePath)] {
 				file.buf = bytes.NewBuffer(b)
 			}
@@ -1431,7 +1432,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 			}},
 		})
 		file.modTime = row.Time("mod_time")
-		b := row.Bytes("COALESCE(text, data)")
+		b := row.Bytes(bufPool.Get().(*bytes.Buffer).Bytes(), "COALESCE(text, data)")
 		if textExtensions[path.Ext(file.filePath)] {
 			file.buf = bytes.NewBuffer(b)
 		}
@@ -1497,7 +1498,7 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 				}},
 			})
 			file.modTime = row.Time("mod_time")
-			b := row.Bytes("COALESCE(text, data)")
+		b := row.Bytes(bufPool.Get().(*bytes.Buffer).Bytes(), "COALESCE(text, data)")
 			if textExtensions[path.Ext(file.filePath)] {
 				file.buf = bytes.NewBuffer(b)
 			}
@@ -1543,7 +1544,7 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 			}},
 		})
 		file.modTime = row.Time("mod_time")
-		b := row.Bytes("COALESCE(text, data)")
+		b := row.Bytes(bufPool.Get().(*bytes.Buffer).Bytes(), "COALESCE(text, data)")
 		if textExtensions[path.Ext(file.filePath)] {
 			file.buf = bytes.NewBuffer(b)
 		}

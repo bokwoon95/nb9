@@ -2,7 +2,6 @@ package sq
 
 import (
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -39,6 +38,8 @@ func (row *Row) Scan(destPtr any, format string, values ...any) {
 			row.scanDest = append(row.scanDest, &sql.NullString{})
 		case *time.Time, *sql.NullTime:
 			row.scanDest = append(row.scanDest, &sql.NullTime{})
+		case *[]byte:
+			row.scanDest = append(row.scanDest, &sql.RawBytes{})
 		default:
 			if reflect.TypeOf(destPtr).Kind() != reflect.Ptr {
 				panic(fmt.Errorf(callsite(1)+"cannot pass in non pointer value (%#v) as destPtr", destPtr))
@@ -90,6 +91,13 @@ func (row *Row) Scan(destPtr any, format string, values ...any) {
 	case *sql.NullTime:
 		scanDest := row.scanDest[row.index].(*sql.NullTime)
 		*destPtr = *scanDest
+	case *[]byte:
+		scanDest := row.scanDest[row.index].(*sql.RawBytes)
+		if cap(*destPtr) < len(*scanDest) {
+			*destPtr = make([]byte, len(*scanDest))
+		}
+		*destPtr = (*destPtr)[:len(*scanDest)]
+		copy(*destPtr, *scanDest)
 	default:
 		destValue := reflect.ValueOf(destPtr).Elem()
 		srcValue := reflect.ValueOf(row.scanDest[row.index]).Elem()
@@ -98,21 +106,21 @@ func (row *Row) Scan(destPtr any, format string, values ...any) {
 }
 
 // Bytes returns the []byte value of the expression.
-func (row *Row) Bytes(format string, values ...any) []byte {
+func (row *Row) Bytes(b []byte, format string, values ...any) []byte {
 	if row.sqlRows == nil {
 		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
-		row.scanDest = append(row.scanDest, &nullBytes{dialect: row.dialect})
+		row.scanDest = append(row.scanDest, &sql.RawBytes{})
 		return nil
 	}
 	defer func() {
 		row.index++
 	}()
-	scanDest := row.scanDest[row.index].(*nullBytes)
-	var b []byte
-	if scanDest.valid {
-		b = make([]byte, len(scanDest.bytes))
-		copy(b, scanDest.bytes)
+	scanDest := row.scanDest[row.index].(*sql.RawBytes)
+	if cap(b) < len(*scanDest) {
+		b = make([]byte, len(*scanDest))
 	}
+	b = b[:len(*scanDest)]
+	copy(b, *scanDest)
 	return b
 }
 
@@ -232,7 +240,7 @@ func (row *Row) UUID(destPtr any, format string, values ...any) {
 			}
 		}
 		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
-		row.scanDest = append(row.scanDest, &nullBytes{dialect: row.dialect, displayType: displayTypeUUID})
+		row.scanDest = append(row.scanDest, &[]byte{})
 		return
 	}
 	defer func() {
@@ -240,14 +248,14 @@ func (row *Row) UUID(destPtr any, format string, values ...any) {
 	}()
 	var err error
 	var uuid [16]byte
-	scanDest := row.scanDest[row.index].(*nullBytes)
-	if scanDest.valid {
-		if len(scanDest.bytes) == 16 {
-			copy(uuid[:], scanDest.bytes)
+	scanDest := row.scanDest[row.index].(*[]byte)
+	if *scanDest != nil {
+		if len(*scanDest) == 16 {
+			copy(uuid[:], *scanDest)
 		} else {
-			uuid, err = googleuuid.ParseBytes(scanDest.bytes)
+			uuid, err = googleuuid.ParseBytes(*scanDest)
 			if err != nil {
-				panic(fmt.Errorf(callsite(1)+"parsing %q as UUID string: %w", string(scanDest.bytes), err))
+				panic(fmt.Errorf(callsite(1)+"parsing %q as UUID string: %w", string(*scanDest), err))
 			}
 		}
 	}
@@ -267,66 +275,4 @@ func callsite(skip int) string {
 		return ""
 	}
 	return filepath.Base(file) + ":" + strconv.Itoa(line) + ": "
-}
-
-type displayType int8
-
-const (
-	displayTypeBinary displayType = iota
-	displayTypeString
-	displayTypeUUID
-)
-
-// TODO: since we're not logging, we can remove this and scan into a *[]byte
-// instead.
-//
-// nullBytes is used in place of scanning into *[]byte. We use *nullBytes
-// instead of *[]byte because of the displayType field, which determines how to
-// render the value to the user. This is important for logging the query
-// results, because UUIDs/JSON/Arrays are all scanned into bytes but we don't
-// want to display them as bytes (we need to convert them to UUID/JSON/Array
-// strings instead).
-type nullBytes struct {
-	bytes       []byte
-	dialect     string
-	displayType displayType
-	valid       bool
-}
-
-func (n *nullBytes) Scan(value any) error {
-	if value == nil {
-		n.bytes, n.valid = nil, false
-		return nil
-	}
-	n.valid = true
-	switch value := value.(type) {
-	case string:
-		n.bytes = []byte(value)
-	case []byte:
-		n.bytes = value
-	default:
-		return fmt.Errorf("unable to convert %#v to bytes", value)
-	}
-	return nil
-}
-
-func (n *nullBytes) Value() (driver.Value, error) {
-	if !n.valid {
-		return nil, nil
-	}
-	switch n.displayType {
-	case displayTypeString:
-		return string(n.bytes), nil
-	case displayTypeUUID:
-		if n.dialect != "postgres" {
-			return n.bytes, nil
-		}
-		var uuid [16]byte
-		var buf [36]byte
-		copy(uuid[:], n.bytes)
-		googleuuid.EncodeHex(buf[:], uuid)
-		return string(buf[:]), nil
-	default:
-		return n.bytes, nil
-	}
 }
