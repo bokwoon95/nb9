@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -393,8 +394,10 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		Values: []any{
 			sq.StringParam("name", name),
 		},
-	}, func(row *sq.Row) (file RemoteFile) {
-		file.ctx = fsys.ctx
+	}, func(row *sq.Row) *RemoteFile {
+		file := &RemoteFile{
+			ctx: fsys.ctx,
+		}
 		row.UUID(&file.fileID, "file_id")
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
@@ -416,7 +419,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		}
 		return nil, err
 	}
-	return &file, nil
+	return file, nil
 }
 
 func (fsys *RemoteFS) Open(name string) (fs.File, error) {
@@ -436,9 +439,11 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		Values: []any{
 			sq.StringParam("name", name),
 		},
-	}, func(row *sq.Row) (file RemoteFile) {
-		file.ctx = fsys.ctx
-		file.storage = fsys.storage
+	}, func(row *sq.Row) *RemoteFile {
+		file := &RemoteFile{
+			ctx:     fsys.ctx,
+			storage: fsys.storage,
+		}
 		row.UUID(&file.fileID, "file_id")
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
@@ -461,7 +466,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		}
 		return nil, err
 	}
-	return &file, nil
+	return file, nil
 }
 
 func getBuffer(row *sq.Row, format string, values ...any) *bytes.Buffer {
@@ -488,6 +493,7 @@ type RemoteFile struct {
 	modTime    time.Time
 	buf        *bytes.Buffer
 	readCloser io.ReadCloser
+	numClones  *atomic.Int32
 }
 
 func (file *RemoteFile) Read(p []byte) (n int, err error) {
@@ -1050,9 +1056,11 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 		cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
 			Dialect: fsys.dialect,
 			Format:  "SELECT {*} FROM files ORDER BY file_path",
-		}, func(row *sq.Row) (file RemoteFile) {
-			file.ctx = fsys.ctx
-			file.storage = fsys.storage
+		}, func(row *sq.Row) *RemoteFile {
+			file := &RemoteFile{
+				ctx:     fsys.ctx,
+				storage: fsys.storage,
+			}
 			row.UUID(&file.fileID, "file_id")
 			row.UUID(&file.parentID, "parent_id")
 			file.filePath = row.String("file_path")
@@ -1082,7 +1090,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 			if skipDir != "" && strings.HasPrefix(file.filePath, skipDir) {
 				continue
 			}
-			err = fn(file.filePath, &file, nil)
+			err = fn(file.filePath, file, nil)
 			if err != nil {
 				if err == fs.SkipAll {
 					return nil
@@ -1108,9 +1116,11 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 			sq.StringParam("root", dir),
 			sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(dir)+"/%"),
 		},
-	}, func(row *sq.Row) (file RemoteFile) {
-		file.ctx = fsys.ctx
-		file.storage = fsys.storage
+	}, func(row *sq.Row) *RemoteFile {
+		file := &RemoteFile{
+			ctx:     fsys.ctx,
+			storage: fsys.storage,
+		}
 		row.UUID(&file.fileID, "file_id")
 		row.UUID(&file.parentID, "parent_id")
 		file.filePath = row.String("file_path")
@@ -1140,7 +1150,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 		if file.isDir && skipDir != "" && (file.filePath == strings.TrimSuffix(skipDir, "/") || strings.HasPrefix(file.filePath, skipDir)) {
 			continue
 		}
-		err = fn(file.filePath, &file, nil)
+		err = fn(file.filePath, file, nil)
 		if err != nil {
 			if err == fs.SkipAll {
 				return nil
@@ -1217,9 +1227,11 @@ func (fsys *RemoteFS) scanDir(dir string, fn ScanDirFunc, condition, order, limi
 				sq.Param("order", order),
 				sq.Param("limit", limit),
 			},
-		}, func(row *sq.Row) (file RemoteFile) {
-			file.ctx = fsys.ctx
-			file.storage = fsys.storage
+		}, func(row *sq.Row) *RemoteFile {
+			file := &RemoteFile{
+				ctx:     fsys.ctx,
+				storage: fsys.storage,
+			}
 			row.UUID(&file.fileID, "file_id")
 			file.filePath = row.String("file_path")
 			file.isDir = row.Bool("is_dir")
@@ -1244,7 +1256,7 @@ func (fsys *RemoteFS) scanDir(dir string, fn ScanDirFunc, condition, order, limi
 			if err != nil {
 				return err
 			}
-			err = fn(&file)
+			err = fn(file)
 			if err != nil {
 				if err == fs.SkipAll || err == fs.SkipDir {
 					return nil
@@ -1264,9 +1276,11 @@ func (fsys *RemoteFS) scanDir(dir string, fn ScanDirFunc, condition, order, limi
 			sq.Param("order", order),
 			sq.Param("limit", limit),
 		},
-	}, func(row *sq.Row) (file RemoteFile) {
-		file.ctx = fsys.ctx
-		file.storage = fsys.storage
+	}, func(row *sq.Row) *RemoteFile {
+		file := &RemoteFile{
+			ctx:     fsys.ctx,
+			storage: fsys.storage,
+		}
 		row.UUID(&file.fileID, "file_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
@@ -1291,7 +1305,7 @@ func (fsys *RemoteFS) scanDir(dir string, fn ScanDirFunc, condition, order, limi
 		if err != nil {
 			return err
 		}
-		err = fn(&file)
+		err = fn(file)
 		if err != nil {
 			if err == fs.SkipAll || err == fs.SkipDir {
 				return nil
