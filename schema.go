@@ -18,20 +18,20 @@ var schemaBytes []byte
 func Automigrate(dialect string, db *sql.DB) error {
 	var rawSchema struct {
 		Tables []struct {
-			Table      string
-			PrimaryKey []string
+			Table      string   `toml:"table"`
+			PrimaryKey []string `toml:"primarykey"`
 			Columns    []struct {
-				Column     string
-				Type       map[string]string
+				Column     string            `toml:"column"`
+				Type       map[string]string `toml:"type"`
+				Index      bool              `toml:"index"`
+				Primarykey bool              `toml:"primarykey"`
+				Unique     bool              `toml:"unique"`
+				NotNull    bool              `toml:"notnull"`
 				References struct {
-					Table  string
-					Column string
-				}
-				Index      bool
-				Primarykey bool
-				Unique     bool
-				Notnull    bool
-			}
+					Table  string `toml:"table"`
+					Column string `toml:"column"`
+				} `toml:"references"`
+			} `toml:"columns"`
 		}
 	}
 	decoder := toml.NewDecoder(bytes.NewReader(schemaBytes))
@@ -72,7 +72,7 @@ func Automigrate(dialect string, db *sql.DB) error {
 				ColumnType:   columnType,
 				IsPrimaryKey: rawColumn.Primarykey,
 				IsUnique:     rawColumn.Unique,
-				IsNotNull:    rawColumn.Notnull,
+				IsNotNull:    rawColumn.NotNull,
 			})
 			if rawColumn.Primarykey {
 				cache.AddOrUpdateConstraint(table, ddl.Constraint{

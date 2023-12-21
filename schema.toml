@@ -11,8 +11,8 @@ primarykey = true
 [[tables.columns]]
 column = "parent_id"
 type = { default = "BINARY(16)", postgres = "UUID" }
-references = { table = "files", column = "file_id" }
 index = true
+references = { table = "files", column = "file_id" }
 
 [[tables.columns]]
 column = "file_path"
@@ -75,9 +75,9 @@ primarykey = true
 [[tables.columns]]
 column = "username"
 type = { default = "VARCHAR(500)" }
-references = { table = "site", column = "site_name" }
 unique = true
 notnull = true
+references = { table = "site", column = "site_name" }
 
 [[tables.columns]]
 column = "email"
@@ -139,8 +139,8 @@ references = { table = "site", column = "site_id" }
 [[tables.columns]]
 column = "user_id"
 type = { default = "BINARY(16)", postgres = "UUID" }
-references = { table = "users", column = "user_id" }
 index = true
+references = { table = "users", column = "user_id" }
 
 ## site_user ##
 
@@ -156,8 +156,8 @@ references = { table = "site", column = "site_id" }
 [[tables.columns]]
 column = "user_id"
 type = { default = "BINARY(16)", postgres = "UUID" }
-references = { table = "user", column = "user_id" }
 index = true
+references = { table = "user", column = "user_id" }
 
 ## session ##
 
@@ -196,5 +196,5 @@ primarykey = true
 [[tables.columns]]
 column = "user_id"
 type = { default = "BINARY(16)", postgres = "UUID" }
-references = { table = "user", column = "user_id" }
 index = true
+references = { table = "user", column = "user_id" }
