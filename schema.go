@@ -13,7 +13,7 @@ import (
 )
 
 //go:embed schema.toml
-var schemaTOML []byte
+var schemaBytes []byte
 
 func Automigrate(dialect string, db *sql.DB) error {
 	var rawSchema struct {
@@ -34,7 +34,7 @@ func Automigrate(dialect string, db *sql.DB) error {
 			}
 		}
 	}
-	decoder := toml.NewDecoder(bytes.NewReader(schemaTOML))
+	decoder := toml.NewDecoder(bytes.NewReader(schemaBytes))
 	decoder.DisallowUnknownFields()
 	err := decoder.Decode(&rawSchema)
 	if err != nil {
