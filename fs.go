@@ -47,9 +47,9 @@ type FS interface {
 	// Mkdir creates a new directory with the specified name.
 	Mkdir(dir string, perm fs.FileMode) error
 
-	WalkDir(dir string, fn WalkDirFunc) error
+	WalkDirFiles(dir string, fn func(filePath string, file fs.File, err error) error) error
 
-	ScanDir(dir string, fn ScanDirFunc) error
+	ScanDir(dir string, fn func(fs.DirEntry) error) error
 
 	// Remove removes the named file or directory.
 	Remove(name string) error
@@ -58,10 +58,6 @@ type FS interface {
 	// is not a directory, Rename replaces it.
 	Rename(oldname, newname string) error
 }
-
-type WalkDirFunc = func(filePath string, dirEntry fs.DirEntry, err error) error
-
-type ScanDirFunc = func(fs.DirEntry) error
 
 // LocalFS represents a filesystem rooted on a local directory.
 type LocalFS struct {
@@ -257,7 +253,7 @@ func (fsys *LocalFS) MkdirAll(dir string, _ fs.FileMode) error {
 	return os.MkdirAll(filepath.Join(fsys.rootDir, dir), 0755)
 }
 
-func (fsys *LocalFS) WalkDir(dir string, fn WalkDirFunc) error {
+func (fsys *LocalFS) WalkDirFiles(dir string, fn func(filePath string, file fs.File, err error) error) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
@@ -265,10 +261,19 @@ func (fsys *LocalFS) WalkDir(dir string, fn WalkDirFunc) error {
 	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
 		return &fs.PathError{Op: "walkdir", Path: dir, Err: fs.ErrInvalid}
 	}
-	return fs.WalkDir(os.DirFS(fsys.rootDir), dir, fn)
+	return fs.WalkDir(os.DirFS(fsys.rootDir), dir, func(filePath string, dirEntry fs.DirEntry, err error) error {
+		if err != nil {
+			return fn(filePath, nil, err)
+		}
+		file, err := os.Open(filePath)
+		if err != nil {
+			return err
+		}
+		return fn(filePath, file, nil)
+	})
 }
 
-func (fsys *LocalFS) ScanDir(dir string, fn ScanDirFunc) error {
+func (fsys *LocalFS) ScanDir(dir string, fn func(fs.DirEntry) error) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
@@ -525,7 +530,7 @@ func (file *RemoteFile) Close() error {
 			return fs.ErrClosed
 		}
 		file.mu.Lock()
-		if *file.numClones == 0 {
+		if *file.numClones <= 0 {
 			bufPool.Put(file.buf)
 		} else {
 			*file.numClones--
@@ -1063,7 +1068,7 @@ func (fsys *RemoteFS) MkdirAll(dir string, _ fs.FileMode) error {
 	return nil
 }
 
-func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
+func (fsys *RemoteFS) WalkDirFiles(dir string, fn func(filePath string, file fs.File, err error) error) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
@@ -1085,8 +1090,10 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 			Format:  "SELECT {*} FROM files ORDER BY file_path",
 		}, func(row *sq.Row) *RemoteFile {
 			file := &RemoteFile{
-				ctx:     fsys.ctx,
-				storage: fsys.storage,
+				ctx:       fsys.ctx,
+				storage:   fsys.storage,
+				numClones: new(int),
+				mu:        &sync.Mutex{},
 			}
 			row.UUID(&file.fileID, "file_id")
 			row.UUID(&file.parentID, "parent_id")
@@ -1145,8 +1152,10 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 		},
 	}, func(row *sq.Row) *RemoteFile {
 		file := &RemoteFile{
-			ctx:     fsys.ctx,
-			storage: fsys.storage,
+			ctx:       fsys.ctx,
+			storage:   fsys.storage,
+			numClones: new(int),
+			mu:        &sync.Mutex{},
 		}
 		row.UUID(&file.fileID, "file_id")
 		row.UUID(&file.parentID, "parent_id")
@@ -1196,7 +1205,7 @@ func (fsys *RemoteFS) WalkDir(dir string, fn WalkDirFunc) error {
 	return cursor.Close()
 }
 
-func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
+func (fsys *RemoteFS) ScanDir(dir string, fn func(fs.DirEntry) error) error {
 	return fsys.scanDir(dir, fn,
 		sq.Expr(""),
 		sq.Expr("ORDER BY file_path"),
@@ -1204,7 +1213,7 @@ func (fsys *RemoteFS) ScanDir(dir string, fn ScanDirFunc) error {
 	)
 }
 
-func (fsys *RemoteFS) ScanDirAfterName(dir string, fn ScanDirFunc, name string, limit int) error {
+func (fsys *RemoteFS) ScanDirAfterName(dir string, fn func(fs.DirEntry) error, name string, limit int) error {
 	return fsys.scanDir(dir, fn,
 		sq.Expr("AND file_path >= {}", path.Join(dir, name)),
 		sq.Expr("ORDER BY file_path"),
@@ -1212,7 +1221,7 @@ func (fsys *RemoteFS) ScanDirAfterName(dir string, fn ScanDirFunc, name string, 
 	)
 }
 
-func (fsys *RemoteFS) ScanDirBeforeName(dir string, fn ScanDirFunc, name string, limit int) error {
+func (fsys *RemoteFS) ScanDirBeforeName(dir string, fn func(fs.DirEntry) error, name string, limit int) error {
 	return fsys.scanDir(dir, fn,
 		sq.Expr("AND file_path <= {}", path.Join(dir, name)),
 		sq.Expr("ORDER BY file_path DESC"),
@@ -1220,7 +1229,7 @@ func (fsys *RemoteFS) ScanDirBeforeName(dir string, fn ScanDirFunc, name string,
 	)
 }
 
-func (fsys *RemoteFS) ScanDirAfterModTime(dir string, fn ScanDirFunc, modTime time.Time, limit int) error {
+func (fsys *RemoteFS) ScanDirAfterModTime(dir string, fn func(fs.DirEntry) error, modTime time.Time, limit int) error {
 	return fsys.scanDir(dir, fn,
 		sq.Expr("AND mod_time >= {}", modTime),
 		sq.Expr("ORDER BY mod_time"),
@@ -1228,7 +1237,7 @@ func (fsys *RemoteFS) ScanDirAfterModTime(dir string, fn ScanDirFunc, modTime ti
 	)
 }
 
-func (fsys *RemoteFS) ScanDirBeforeModTime(dir string, fn ScanDirFunc, modTime time.Time, limit int) error {
+func (fsys *RemoteFS) ScanDirBeforeModTime(dir string, fn func(fs.DirEntry) error, modTime time.Time, limit int) error {
 	return fsys.scanDir(dir, fn,
 		sq.Expr("AND mod_time <= {}", modTime),
 		sq.Expr("ORDER BY mod_time DESC"),
@@ -1236,7 +1245,7 @@ func (fsys *RemoteFS) ScanDirBeforeModTime(dir string, fn ScanDirFunc, modTime t
 	)
 }
 
-func (fsys *RemoteFS) scanDir(dir string, fn ScanDirFunc, condition, order, limit sq.Expression) error {
+func (fsys *RemoteFS) scanDir(dir string, fn func(fs.DirEntry) error, condition, order, limit sq.Expression) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err

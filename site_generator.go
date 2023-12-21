@@ -118,6 +118,9 @@ func NewSiteGenerator(config SiteGeneratorConfig) (*SiteGenerator, error) {
 		gzipGeneratedContent: config.GzipGeneratedContent,
 	}
 	err := siteGen.fsys.ScanDir(path.Join(siteGen.sitePrefix, "posts"), func(dirEntry fs.DirEntry) error {
+		if closer, ok := dirEntry.(io.Closer); ok {
+			defer closer.Close()
+		}
 		if dirEntry.IsDir() {
 			siteGen.site.Categories = append(siteGen.site.Categories, dirEntry.Name())
 		}
@@ -198,6 +201,9 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 		g2, ctx2 := errgroup.WithContext(ctx1)
 		markdownMu := sync.Mutex{}
 		err := siteGen.fsys.WithContext(ctx2).ScanDir(outputDir, func(dirEntry fs.DirEntry) error {
+			if closer, ok := dirEntry.(io.Closer); ok {
+				defer closer.Close()
+			}
 			if dirEntry.IsDir() {
 				return nil
 			}
