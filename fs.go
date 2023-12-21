@@ -1907,3 +1907,140 @@ func isFulltextIndexed(filePath string) bool {
 	}
 	return false
 }
+
+func MkdirAll(fsys FS, name string, perm fs.FileMode) error {
+	// If the filesystem supports MkdirAll(), we can call that instead and
+	// return.
+	if fsys, ok := fsys.(interface {
+		MkdirAll(name string, perm fs.FileMode) error
+	}); ok {
+		return fsys.MkdirAll(name, perm)
+	}
+	fileInfo, err := fs.Stat(fsys, name)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if fileInfo != nil {
+		if fileInfo.IsDir() {
+			return nil
+		}
+		return &fs.PathError{Op: "mkdirall", Path: name, Err: syscall.ENOTDIR}
+	}
+
+	isPathSeparator := func(char byte) bool {
+		return char == '/' || char == '\\'
+	}
+
+	fixRootDirectory := func(p string) string {
+		if runtime.GOOS != "windows" {
+			return p
+		}
+		if len(p) == len(`\\?\c:`) {
+			if isPathSeparator(p[0]) && isPathSeparator(p[1]) && p[2] == '?' && isPathSeparator(p[3]) && p[5] == ':' {
+				return p + `\`
+			}
+		}
+		return p
+	}
+
+	// Slow path: make sure parent exists and then call Mkdir for path.
+	i := len(name)
+	for i > 0 && isPathSeparator(name[i-1]) { // Skip trailing path separator.
+		i--
+	}
+	j := i
+	for j > 0 && !isPathSeparator(name[j-1]) { // Scan backward over element.
+		j--
+	}
+
+	if j > 1 {
+		// Create parent.
+		err = MkdirAll(fsys, fixRootDirectory(name[:j-1]), perm)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Parent now exists; invoke Mkdir and use its result.
+	err = fsys.Mkdir(name, perm)
+	if err != nil {
+		// I don't know why this is sometimes needed, but it is.
+		if errors.Is(err, fs.ErrExist) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// RemoveAll removes the root item from the FS (whether it is a file or a
+// directory).
+func RemoveAll(fsys FS, root string) error {
+	type Item struct {
+		Path             string // relative to root
+		IsFile           bool   // whether item is file or directory
+		MarkedForRemoval bool   // if true, remove item unconditionally
+	}
+	// If the filesystem supports RemoveAll(), we can call that instead and
+	// return.
+	if fsys, ok := fsys.(interface{ RemoveAll(name string) error }); ok {
+		return fsys.RemoveAll(root)
+	}
+	fileInfo, err := fs.Stat(fsys, root)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	// If root is a file, we can remove it immediately and return.
+	if !fileInfo.IsDir() {
+		return fsys.Remove(root)
+	}
+	var item Item
+	var items []Item
+	err = fsys.ScanDir(root, func(dirEntry fs.DirEntry) error {
+		items = append(items, Item{
+			Path:   dirEntry.Name(),
+			IsFile: !dirEntry.IsDir(),
+		})
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	// If root is an empty directory, we can remove it immediately and return.
+	if len(items) == 0 {
+		return fsys.Remove(root)
+	}
+	// Otherwise, we need to recursively delete its child items one by one.
+	for len(items) > 0 {
+		// Pop item from stack.
+		item, items = items[len(items)-1], items[:len(items)-1]
+		// If item has been marked for removal or it is a file, we can remove
+		// it immediately.
+		if item.MarkedForRemoval || item.IsFile {
+			err = fsys.Remove(path.Join(root, item.Path))
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		// Mark directory item for removal and put it back in the stack (when
+		// we get back to it, its child items would already have been removed).
+		item.MarkedForRemoval = true
+		items = append(items, item)
+		// Push directory item's child items onto the stack.
+		err = fsys.ScanDir(path.Join(root, item.Path), func(dirEntry fs.DirEntry) error {
+			items = append(items, Item{
+				Path:   filepath.Join(item.Path, dirEntry.Name()),
+				IsFile: !dirEntry.IsDir(),
+			})
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
