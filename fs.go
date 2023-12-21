@@ -47,9 +47,11 @@ type FS interface {
 	// Mkdir creates a new directory with the specified name.
 	Mkdir(dir string, perm fs.FileMode) error
 
-	WalkDirFiles(dir string, fn func(filePath string, file fs.File, err error) error) error
-
 	ScanDir(dir string, fn func(fs.DirEntry) error) error
+
+	ScanDirFiles(dir string, fn func(fs.File) error) error
+
+	WalkDirFiles(dir string, fn func(filePath string, file fs.File, err error) error) error
 
 	// Remove removes the named file or directory.
 	Remove(name string) error
@@ -253,26 +255,6 @@ func (fsys *LocalFS) MkdirAll(dir string, _ fs.FileMode) error {
 	return os.MkdirAll(filepath.Join(fsys.rootDir, dir), 0755)
 }
 
-func (fsys *LocalFS) WalkDirFiles(dir string, fn func(filePath string, file fs.File, err error) error) error {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return err
-	}
-	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
-		return &fs.PathError{Op: "walkdir", Path: dir, Err: fs.ErrInvalid}
-	}
-	return fs.WalkDir(os.DirFS(fsys.rootDir), dir, func(filePath string, dirEntry fs.DirEntry, err error) error {
-		if err != nil {
-			return fn(filePath, nil, err)
-		}
-		file, err := os.Open(filePath)
-		if err != nil {
-			return err
-		}
-		return fn(filePath, file, nil)
-	})
-}
-
 func (fsys *LocalFS) ScanDir(dir string, fn func(fs.DirEntry) error) error {
 	err := fsys.ctx.Err()
 	if err != nil {
@@ -312,6 +294,71 @@ func (fsys *LocalFS) ScanDir(dir string, fn func(fs.DirEntry) error) error {
 		}
 	}
 	return nil
+}
+
+func (fsys *LocalFS) ScanDirFiles(dir string, fn func(fs.File) error) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "scandirfiles", Path: dir, Err: fs.ErrInvalid}
+	}
+	file, err := os.Open(filepath.Join(fsys.rootDir, dir))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if !fileInfo.IsDir() {
+		return &fs.PathError{Op: "scandirfiles", Path: dir, Err: syscall.ENOTDIR}
+	}
+	for {
+		dirEntries, err := file.ReadDir(1000)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		for _, dirEntry := range dirEntries {
+			file, err := os.Open(filepath.Join(fsys.rootDir, dir, dirEntry.Name()))
+			if err != nil {
+				return err
+			}
+			err = fn(file)
+			if err == fs.SkipDir || err == fs.SkipAll {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (fsys *LocalFS) WalkDirFiles(dir string, fn func(filePath string, file fs.File, err error) error) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "walkdirfiles", Path: dir, Err: fs.ErrInvalid}
+	}
+	return fs.WalkDir(os.DirFS(fsys.rootDir), dir, func(filePath string, dirEntry fs.DirEntry, err error) error {
+		if err != nil {
+			return fn(filePath, nil, err)
+		}
+		file, err := os.Open(filePath)
+		if err != nil {
+			return err
+		}
+		return fn(filePath, file, nil)
+	})
 }
 
 func (fsys *LocalFS) Remove(name string) error {
@@ -1068,13 +1115,258 @@ func (fsys *RemoteFS) MkdirAll(dir string, _ fs.FileMode) error {
 	return nil
 }
 
+func (fsys *RemoteFS) ScanDirFiles(dir string, fn func(fs.File) error) error {
+	if dir == "." {
+		cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "SELECT {*} FROM files WHERE parent_id IS NULL",
+		}, func(row *sq.Row) *RemoteFile {
+			file := &RemoteFile{
+				ctx:     fsys.ctx,
+				storage: fsys.storage,
+			}
+			row.UUID(&file.fileID, "file_id")
+			file.filePath = row.String("file_path")
+			file.isDir = row.Bool("is_dir")
+			file.numFiles = row.Int64("num_files")
+			file.size = row.Int64("{}", sq.DialectExpression{
+				Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+				Cases: []sq.DialectCase{{
+					Dialect: "sqlite",
+					Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+				}},
+			})
+			file.modTime = row.Time("mod_time")
+			file.buf = getBuffer(row, "COALESCE(text, data)")
+			return file
+		})
+		if err != nil {
+			return err
+		}
+		defer cursor.Close()
+		for cursor.Next() {
+			file, err := cursor.Result()
+			if err != nil {
+				return err
+			}
+			err = fn(file)
+			if err != nil {
+				if err == fs.SkipAll || err == fs.SkipDir {
+					return nil
+				}
+				return err
+			}
+		}
+		return cursor.Close()
+	}
+
+	cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {dir})",
+		Values: []any{
+			sq.StringParam("dir", dir),
+		},
+	}, func(row *sq.Row) *RemoteFile {
+		file := &RemoteFile{
+			ctx:     fsys.ctx,
+			storage: fsys.storage,
+		}
+		row.UUID(&file.fileID, "file_id")
+		file.filePath = row.String("file_path")
+		file.isDir = row.Bool("is_dir")
+		file.numFiles = row.Int64("num_files")
+		file.size = row.Int64("{}", sq.DialectExpression{
+			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Cases: []sq.DialectCase{{
+				Dialect: "sqlite",
+				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+			}},
+		})
+		file.modTime = row.Time("mod_time")
+		file.buf = getBuffer(row, "COALESCE(text, data)")
+		return file
+	})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close()
+	for cursor.Next() {
+		file, err := cursor.Result()
+		if err != nil {
+			return err
+		}
+		err = fn(file)
+		if err != nil {
+			if err == fs.SkipAll || err == fs.SkipDir {
+				return nil
+			}
+			return err
+		}
+	}
+	return cursor.Close()
+}
+
+func (fsys *RemoteFS) ScanDir(dir string, fn func(fs.DirEntry) error) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "scandir", Path: dir, Err: fs.ErrInvalid}
+	}
+	return fsys.scanDir(dir, fn, sq.Expr(""), sq.Expr("ORDER BY file_path"), sq.Expr(""))
+}
+
+func (fsys *RemoteFS) ScanDirAfterName(dir string, fn func(fs.DirEntry) error, name string, limit int) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "scandiraftername", Path: dir, Err: fs.ErrInvalid}
+	}
+	return fsys.scanDir(dir, fn, sq.Expr("AND file_path >= {}", path.Join(dir, name)), sq.Expr("ORDER BY file_path"), sq.Expr("LIMIT {}", limit))
+}
+
+func (fsys *RemoteFS) ScanDirBeforeName(dir string, fn func(fs.DirEntry) error, name string, limit int) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "scandirbeforename", Path: dir, Err: fs.ErrInvalid}
+	}
+	return fsys.scanDir(dir, fn, sq.Expr("AND file_path <= {}", path.Join(dir, name)), sq.Expr("ORDER BY file_path DESC"), sq.Expr("LIMIT {}", limit))
+}
+
+func (fsys *RemoteFS) ScanDirAfterModTime(dir string, fn func(fs.DirEntry) error, modTime time.Time, limit int) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "scandiraftermodtime", Path: dir, Err: fs.ErrInvalid}
+	}
+	return fsys.scanDir(dir, fn, sq.Expr("AND mod_time >= {}", modTime), sq.Expr("ORDER BY mod_time"), sq.Expr("LIMIT {}", limit))
+}
+
+func (fsys *RemoteFS) ScanDirBeforeModTime(dir string, fn func(fs.DirEntry) error, modTime time.Time, limit int) error {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
+		return &fs.PathError{Op: "scandirbeforemodtime", Path: dir, Err: fs.ErrInvalid}
+	}
+	return fsys.scanDir(dir, fn, sq.Expr("AND mod_time <= {}", modTime), sq.Expr("ORDER BY mod_time DESC"), sq.Expr("LIMIT {}", limit))
+}
+
+func (fsys *RemoteFS) scanDir(dir string, fn func(fs.DirEntry) error, condition, order, limit sq.Expression) error {
+	if dir == "." {
+		cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "SELECT {*} FROM files WHERE parent_id IS NULL {condition} {order} {limit}",
+			Values: []any{
+				sq.Param("condition", condition),
+				sq.Param("order", order),
+				sq.Param("limit", limit),
+			},
+		}, func(row *sq.Row) *RemoteFile {
+			file := &RemoteFile{
+				ctx:     fsys.ctx,
+				storage: fsys.storage,
+			}
+			row.UUID(&file.fileID, "file_id")
+			file.filePath = row.String("file_path")
+			file.isDir = row.Bool("is_dir")
+			file.numFiles = row.Int64("num_files")
+			file.size = row.Int64("{}", sq.DialectExpression{
+				Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+				Cases: []sq.DialectCase{{
+					Dialect: "sqlite",
+					Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+				}},
+			})
+			file.modTime = row.Time("mod_time")
+			file.buf = getBuffer(row, "COALESCE(text, data)")
+			return file
+		})
+		if err != nil {
+			return err
+		}
+		defer cursor.Close()
+		for cursor.Next() {
+			file, err := cursor.Result()
+			if err != nil {
+				return err
+			}
+			err = fn(file)
+			if err != nil {
+				if err == fs.SkipAll || err == fs.SkipDir {
+					return nil
+				}
+				return err
+			}
+		}
+		return cursor.Close()
+	}
+
+	cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
+		Dialect: fsys.dialect,
+		Format:  "SELECT {*} FROM files WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {dir}) {condition} {order} {limit}",
+		Values: []any{
+			sq.StringParam("dir", dir),
+			sq.Param("condition", condition),
+			sq.Param("order", order),
+			sq.Param("limit", limit),
+		},
+	}, func(row *sq.Row) *RemoteFile {
+		file := &RemoteFile{
+			ctx:     fsys.ctx,
+			storage: fsys.storage,
+		}
+		row.UUID(&file.fileID, "file_id")
+		file.filePath = row.String("file_path")
+		file.isDir = row.Bool("is_dir")
+		file.numFiles = row.Int64("num_files")
+		file.size = row.Int64("{}", sq.DialectExpression{
+			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Cases: []sq.DialectCase{{
+				Dialect: "sqlite",
+				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+			}},
+		})
+		file.modTime = row.Time("mod_time")
+		file.buf = getBuffer(row, "COALESCE(text, data)")
+		return file
+	})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close()
+	for cursor.Next() {
+		file, err := cursor.Result()
+		if err != nil {
+			return err
+		}
+		err = fn(file)
+		if err != nil {
+			if err == fs.SkipAll || err == fs.SkipDir {
+				return nil
+			}
+			return err
+		}
+	}
+	return cursor.Close()
+}
+
 func (fsys *RemoteFS) WalkDirFiles(dir string, fn func(filePath string, file fs.File, err error) error) error {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
 	}
 	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
-		return &fs.PathError{Op: "walkdir", Path: dir, Err: fs.ErrInvalid}
+		return &fs.PathError{Op: "walkdirfiles", Path: dir, Err: fs.ErrInvalid}
 	}
 
 	if dir == "." {
@@ -1198,153 +1490,6 @@ func (fsys *RemoteFS) WalkDirFiles(dir string, fn func(filePath string, file fs.
 					skipDir = path.Dir(file.filePath) + "/"
 				}
 				continue
-			}
-			return err
-		}
-	}
-	return cursor.Close()
-}
-
-func (fsys *RemoteFS) ScanDir(dir string, fn func(fs.DirEntry) error) error {
-	return fsys.scanDir(dir, fn,
-		sq.Expr(""),
-		sq.Expr("ORDER BY file_path"),
-		sq.Expr(""),
-	)
-}
-
-func (fsys *RemoteFS) ScanDirAfterName(dir string, fn func(fs.DirEntry) error, name string, limit int) error {
-	return fsys.scanDir(dir, fn,
-		sq.Expr("AND file_path >= {}", path.Join(dir, name)),
-		sq.Expr("ORDER BY file_path"),
-		sq.Expr("LIMIT {}", limit),
-	)
-}
-
-func (fsys *RemoteFS) ScanDirBeforeName(dir string, fn func(fs.DirEntry) error, name string, limit int) error {
-	return fsys.scanDir(dir, fn,
-		sq.Expr("AND file_path <= {}", path.Join(dir, name)),
-		sq.Expr("ORDER BY file_path DESC"),
-		sq.Expr("LIMIT {}", limit),
-	)
-}
-
-func (fsys *RemoteFS) ScanDirAfterModTime(dir string, fn func(fs.DirEntry) error, modTime time.Time, limit int) error {
-	return fsys.scanDir(dir, fn,
-		sq.Expr("AND mod_time >= {}", modTime),
-		sq.Expr("ORDER BY mod_time"),
-		sq.Expr("LIMIT {}", limit),
-	)
-}
-
-func (fsys *RemoteFS) ScanDirBeforeModTime(dir string, fn func(fs.DirEntry) error, modTime time.Time, limit int) error {
-	return fsys.scanDir(dir, fn,
-		sq.Expr("AND mod_time <= {}", modTime),
-		sq.Expr("ORDER BY mod_time DESC"),
-		sq.Expr("LIMIT {}", limit),
-	)
-}
-
-func (fsys *RemoteFS) scanDir(dir string, fn func(fs.DirEntry) error, condition, order, limit sq.Expression) error {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return err
-	}
-	if !fs.ValidPath(dir) || strings.Contains(dir, "\\") {
-		return &fs.PathError{Op: "scandir", Path: dir, Err: fs.ErrInvalid}
-	}
-
-	if dir == "." {
-		cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
-			Dialect: fsys.dialect,
-			Format:  "SELECT {*} FROM files WHERE parent_id IS NULL {condition} {order} {limit}",
-			Values: []any{
-				sq.Param("condition", condition),
-				sq.Param("order", order),
-				sq.Param("limit", limit),
-			},
-		}, func(row *sq.Row) *RemoteFile {
-			file := &RemoteFile{
-				ctx:     fsys.ctx,
-				storage: fsys.storage,
-			}
-			row.UUID(&file.fileID, "file_id")
-			file.filePath = row.String("file_path")
-			file.isDir = row.Bool("is_dir")
-			file.numFiles = row.Int64("num_files")
-			file.size = row.Int64("{}", sq.DialectExpression{
-				Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
-				Cases: []sq.DialectCase{{
-					Dialect: "sqlite",
-					Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
-				}},
-			})
-			file.modTime = row.Time("mod_time")
-			file.buf = getBuffer(row, "COALESCE(text, data)")
-			return file
-		})
-		if err != nil {
-			return err
-		}
-		defer cursor.Close()
-		for cursor.Next() {
-			file, err := cursor.Result()
-			if err != nil {
-				return err
-			}
-			err = fn(file)
-			if err != nil {
-				if err == fs.SkipAll || err == fs.SkipDir {
-					return nil
-				}
-				return err
-			}
-		}
-		return cursor.Close()
-	}
-
-	cursor, err := sq.FetchCursor(fsys.ctx, fsys.db, sq.Query{
-		Dialect: fsys.dialect,
-		Format:  "SELECT {*} FROM files WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {dir}) {condition} {order} {limit}",
-		Values: []any{
-			sq.StringParam("dir", dir),
-			sq.Param("condition", condition),
-			sq.Param("order", order),
-			sq.Param("limit", limit),
-		},
-	}, func(row *sq.Row) *RemoteFile {
-		file := &RemoteFile{
-			ctx:     fsys.ctx,
-			storage: fsys.storage,
-		}
-		row.UUID(&file.fileID, "file_id")
-		file.filePath = row.String("file_path")
-		file.isDir = row.Bool("is_dir")
-		file.numFiles = row.Int64("num_files")
-		file.size = row.Int64("{}", sq.DialectExpression{
-			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
-			Cases: []sq.DialectCase{{
-				Dialect: "sqlite",
-				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
-			}},
-		})
-		file.modTime = row.Time("mod_time")
-		file.buf = getBuffer(row, "COALESCE(text, data)")
-		return file
-	})
-	if err != nil {
-		return err
-	}
-	defer cursor.Close()
-	for cursor.Next() {
-		file, err := cursor.Result()
-		if err != nil {
-			return err
-		}
-		err = fn(file)
-		if err != nil {
-			if err == fs.SkipAll || err == fs.SkipDir {
-				return nil
 			}
 			return err
 		}
