@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
@@ -39,8 +40,7 @@ type SiteGenerator struct {
 	postListErr          error
 	postListOnce         sync.Once
 	gzipGeneratedContent bool
-	// TODO: eventually make these configurable
-	postsPerPage map[string]int // default 100
+	postsPerPage         map[string]int // default 100
 }
 
 type SiteGeneratorConfig struct {
@@ -106,11 +106,35 @@ func NewSiteGenerator(config SiteGeneratorConfig) (*SiteGenerator, error) {
 		templateInProgress:   make(map[string]chan struct{}),
 		gzipGeneratedContent: config.GzipGeneratedContent,
 	}
-	siteGen.fsys.ScanDir(path.Join(siteGen.sitePrefix, "posts"), func(dirEntry fs.DirEntry) error {
+	err := siteGen.fsys.ScanDir(path.Join(siteGen.sitePrefix, "posts"), func(dirEntry fs.DirEntry) error {
 		if dirEntry.IsDir() {
 			siteGen.site.Categories = append(siteGen.site.Categories, dirEntry.Name())
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	return siteGen, nil
+}
+
+type Page struct {
+	Parent string
+	Name   string
+	Title  string
+}
+
+type Image struct {
+	Parent string
+	Name   string
+}
+
+type PageData struct {
+	Site             Site
+	Parent           string
+	Name             string
+	ChildPages       []Page
+	Markdown         map[string]template.HTML
+	Images           []Image
+	ModificationTime time.Time
 }
