@@ -197,14 +197,16 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	g1.Go(func() error {
 		g2, ctx2 := errgroup.WithContext(ctx1)
 		markdownMu := sync.Mutex{}
-		err := siteGen.fsys.WithContext(ctx2).ScanDir(outputDir, func(dirEntry fs.DirEntry) error {
-			if closer, ok := dirEntry.(io.Closer); ok {
-				defer closer.Close()
+		err := siteGen.fsys.WithContext(ctx2).ScanDirFiles(outputDir, func(file fs.File) error {
+			defer file.Close()
+			fileInfo, err := file.Stat()
+			if err != nil {
+				return err
 			}
-			if dirEntry.IsDir() {
+			if fileInfo.IsDir() {
 				return nil
 			}
-			name := dirEntry.Name()
+			name := fileInfo.Name()
 			fileType := fileTypes[path.Ext(name)]
 			if strings.HasPrefix(fileType.ContentType, "image") {
 				pageData.Images = append(pageData.Images, Image{
@@ -216,15 +218,9 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 			if strings.HasPrefix(fileType.ContentType, "text/markdown") {
 				g2.Go(func() error {
 					var source []byte
-					if file, ok := dirEntry.(*RemoteFile); ok {
-						defer file.Close()
+					if file, ok := file.(*RemoteFile); ok {
 						source = file.buf.Bytes()
 					} else {
-						file, err := siteGen.fsys.Open(path.Join(outputDir, name))
-						if err != nil {
-							return err
-						}
-						defer file.Close()
 						buf := bufPool.Get().(*bytes.Buffer)
 						buf.Reset()
 						defer bufPool.Put(buf)
@@ -254,8 +250,20 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 		return g2.Wait()
 	})
 	g1.Go(func() error {
-		// TODO:
 		g2, ctx2 := errgroup.WithContext(ctx1)
+		dir := path.Join(siteGen.sitePrefix, "pages", strings.TrimSuffix(name, ext))
+		// TODO: Use a bufio.Reader to get the title directive e.g. <!-- #title This is the title -->
+		// TODO: Do this in a goroutine, e.g.
+		err := siteGen.fsys.WithContext(ctx2).ScanDirFiles(dir, func(file fs.File) error {
+			fileInfo, err := file.Stat()
+			if err != nil {
+				return err
+			}
+			if !strings.HasSuffix(fileInfo.Name(), ".html") {
+				return nil
+			}
+			return nil
+		})
 		dirFiles, err := ReadDirFiles(siteGen.fsys.WithContext(ctx2), path.Join(siteGen.sitePrefix, "pages", strings.TrimSuffix(name, ext)))
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
