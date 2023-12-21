@@ -1,8 +1,9 @@
 schema.go
 fs.go
+init.go
+error.go
 notebrew.go
 site_generator.go
-error.go
 folder.go
 file.go
 

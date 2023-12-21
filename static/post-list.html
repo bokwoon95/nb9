@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang='{{ $.Site.Lang }}'>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<link rel='icon' href='{{ $.Site.Favicon }}'>
+<style>
+html { max-width: 70ch; padding: 3em 1em; margin: auto; line-height: 1.75; font-size: 1.25em; background-color: #fafafa; }
+p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
+</style>
+<title>{{ if $.Category }}{{ $.Category }}{{ else }}posts{{ end }}</title>
+<div>
+  <a href='/'>{{ $.Site.Title }}</a>
+  &boxv; <a href='/posts/' class='{{ if eq $.Category "" }}b{{ end }}'>posts</a>
+  {{- range $category := $.Site.Categories }}
+  &boxv; <a href='/posts/{{ $category }}/' class='{{ if eq $.Category $category }}b{{ end }}'>{{ $category }}</a>
+  {{- end }}
+</div>
+<hr>
+<h1>{{ if $.Category }}{{ $.Category }}{{ else }}posts{{ end }}</h1>
+{{- if $.PostList }}
+<ul>
+  {{- range $post := $.PostList }}
+  <li style='margin: 1rem 0;'>
+    <div>
+      <span style='font-weight: bold;'>{{ $post.Title }}</span>
+      <span style='margin-left: 0.5rem; font-size: 0.875rem; color: #555555;'>{{ $post.CreationTime.Format "2006-01-02" }}</span>
+    </div>
+    <div title='{{ $post.Preview }}' style='margin: 0.25rem 0; font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>
+      {{ $post.Preview }}
+    </div>
+    <div><a href='{{ $post.Name }}/'>read more</a></div>
+  </li>
+  {{- end }}
+</ul>
+  {{- if ne $.Pagination.First $.Pagination.Last }}
+  <div>
+    {{- if ne $.Pagination.Current $.Pagination.First }}
+    <a href='{{ $.Pagination.First }}/' class='mr1'>first</a>
+    {{- end }}
+    {{- if $.Pagination.Previous }}
+    <a href='{{ $.Pagination.Previous }}/' class='mr1'>prev</a>
+    {{- end }}
+    {{- range $number := $.Pagination.Numbers }}
+    <a href='{{ $number }}/' class='mr1{{ if eq $number $.Pagination.Current }} b{{ end }}'>{{ $number }}</a>
+    {{- end }}
+    {{- if $.Pagination.Next }}
+    <a href='{{ $.Pagination.Next }}/' class='mr1'>next</a>
+    {{- end }}
+    {{- if ne $.Pagination.Current $.Pagination.Last }}
+    <a href='{{ $.Pagination.Last }}/' class='mr1'>last</a>
+    {{- end }}
+  </div>
+  {{- end }}
+{{- else }}
+<p>No posts</p>
+{{- end }}
