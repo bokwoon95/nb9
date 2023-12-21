@@ -17,7 +17,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -493,7 +492,8 @@ type RemoteFile struct {
 	modTime    time.Time
 	buf        *bytes.Buffer
 	readCloser io.ReadCloser
-	numClones  *atomic.Int32
+	numClones  *int
+	mu         *sync.Mutex
 }
 
 func (file *RemoteFile) Read(p []byte) (n int, err error) {
@@ -524,7 +524,13 @@ func (file *RemoteFile) Close() error {
 		if file.buf == nil {
 			return fs.ErrClosed
 		}
-		bufPool.Put(file.buf)
+		file.mu.Lock()
+		if *file.numClones == 0 {
+			bufPool.Put(file.buf)
+		} else {
+			*file.numClones--
+		}
+		file.mu.Unlock()
 		file.buf = nil
 		return nil
 	}
@@ -537,6 +543,27 @@ func (file *RemoteFile) Close() error {
 	}
 	file.readCloser = nil
 	return nil
+}
+
+func (file *RemoteFile) Clone() *RemoteFile {
+	file.mu.Lock()
+	clone := &RemoteFile{
+		ctx:       file.ctx,
+		storage:   file.storage,
+		fileID:    file.fileID,
+		parentID:  file.parentID,
+		filePath:  file.filePath,
+		isDir:     file.isDir,
+		numFiles:  file.numFiles,
+		size:      file.size,
+		modTime:   file.modTime,
+		buf:       bytes.NewBuffer(file.buf.Bytes()),
+		numClones: file.numClones,
+		mu:        file.mu,
+	}
+	*clone.numClones++
+	file.mu.Unlock()
+	return clone
 }
 
 func (file *RemoteFile) Name() string {
