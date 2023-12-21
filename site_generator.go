@@ -251,6 +251,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 		return g2.Wait()
 	})
 	g1.Go(func() error {
+		// TODO:
 		g2, ctx2 := errgroup.WithContext(ctx1)
 		dirFiles, err := ReadDirFiles(siteGen.fsys.WithContext(ctx2), path.Join(siteGen.sitePrefix, "pages", strings.TrimSuffix(name, ext)))
 		if err != nil {
