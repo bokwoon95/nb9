@@ -172,6 +172,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	if name != "index.html" {
 		urlPath = strings.TrimSuffix(name, path.Ext(name))
 	}
+	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	pageData := PageData{
 		Site:   siteGen.site,
 		Parent: path.Dir(urlPath),
@@ -182,33 +183,36 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	if pageData.Parent == "." {
 		pageData.Parent = ""
 	}
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return err
-	}
-	if fileInfo.IsDir() {
-		return fmt.Errorf("%s is a folder", name)
-	}
-	var b strings.Builder
-	b.Grow(int(fileInfo.Size()))
-	_, err = io.Copy(&b, file)
-	if err != nil {
-		return err
-	}
-	err = file.Close()
-	if err != nil {
-		return err
-	}
-	pageData.ModificationTime = fileInfo.ModTime()
+	g1, ctx1 := errgroup.WithContext(ctx)
 
 	// Prepare the page template.
-	tmpl, err := siteGen.parseTemplate(ctx, path.Base(name), b.String(), nil)
-	if err != nil {
-		return err
-	}
+	var tmpl *template.Template
+	g1.Go(func() error {
+		fileInfo, err := file.Stat()
+		if err != nil {
+			return err
+		}
+		if fileInfo.IsDir() {
+			return fmt.Errorf("%s is a folder", name)
+		}
+		var b strings.Builder
+		b.Grow(int(fileInfo.Size()))
+		_, err = io.Copy(&b, file)
+		if err != nil {
+			return err
+		}
+		err = file.Close()
+		if err != nil {
+			return err
+		}
+		pageData.ModificationTime = fileInfo.ModTime()
+		tmpl, err = siteGen.parseTemplate(ctx, path.Base(name), b.String(), nil)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
-	g1, ctx1 := errgroup.WithContext(ctx)
-	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	g1.Go(func() error {
 		g2, ctx2 := errgroup.WithContext(ctx1)
 		markdownMu := sync.Mutex{}
@@ -310,6 +314,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 		}
 		return g2.Wait()
 	})
+
 	g1.Go(func() error {
 		pageDir := path.Join(siteGen.sitePrefix, "pages", urlPath)
 		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
@@ -319,7 +324,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {pageDir})" +
 					" AND NOT is_dir" +
-					" AND file_path LIKE '%.html'"+
+					" AND file_path LIKE '%.html'" +
 					" ORDER BY file_path",
 			}, func(row *sq.Row) Page {
 				page := Page{
@@ -423,7 +428,8 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 		}
 		return nil
 	})
-	err = g1.Wait()
+
+	err := g1.Wait()
 	if err != nil {
 		return err
 	}
