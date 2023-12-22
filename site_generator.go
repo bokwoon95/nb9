@@ -208,7 +208,6 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	}
 
 	g1, ctx1 := errgroup.WithContext(ctx)
-	// TODO: need to MkdirAll?
 	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	g1.Go(func() error {
 		g2, ctx2 := errgroup.WithContext(ctx1)
@@ -314,7 +313,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	g1.Go(func() error {
 		pageDir := path.Join(siteGen.sitePrefix, "pages", urlPath)
 		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-			pageData.ChildPages, err = sq.FetchAll(ctx1, remoteFS.db, sq.Query{
+			childPages, err := sq.FetchAll(ctx1, remoteFS.db, sq.Query{
 				Dialect: remoteFS.dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
@@ -352,6 +351,10 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 				page.Title = strings.TrimSpace(line[:n])
 				return page
 			})
+			if err != nil {
+				return err
+			}
+			pageData.ChildPages = childPages
 		} else {
 			dirEntries, err := siteGen.fsys.WithContext(ctx1).ReadDir(pageDir)
 			if err != nil {
