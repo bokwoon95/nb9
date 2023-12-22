@@ -91,7 +91,7 @@ func init() {
 		" script-src 'self' 'unsafe-hashes' " + baselineJSHash + " " + folderJSHash + " https://hcaptcha.com https://*.hcaptcha.com;" +
 		" connect-src 'self' https://hcaptcha.com https://*.hcaptcha.com;" +
 		" img-src 'self' data:;" +
-		" style-src 'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com;" +
+		" style-src 'self' 'unsafe-inline' " + stylesCSSHash + " https://hcaptcha.com https://*.hcaptcha.com;" +
 		" base-uri 'self';" +
 		" form-action 'self';" +
 		" manifest-src 'self';" +
