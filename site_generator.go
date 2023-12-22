@@ -1,6 +1,7 @@
 package nb9
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -207,6 +208,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	}
 
 	g1, ctx1 := errgroup.WithContext(ctx)
+	// TODO: need to MkdirAll?
 	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	g1.Go(func() error {
 		g2, ctx2 := errgroup.WithContext(ctx1)
@@ -286,6 +288,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 						if err != nil {
 							return err
 						}
+						defer file.Close()
 						buf := bufPool.Get().(*bytes.Buffer)
 						buf.Reset()
 						defer bufPool.Put(buf)
@@ -309,11 +312,113 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 		return g2.Wait()
 	})
 	g1.Go(func() error {
-		g2, ctx2 := errgroup.WithContext(ctx1)
-		dir := path.Join(siteGen.sitePrefix, "pages", parent)
-		// TODO: walk dir and fill in the child pages Parent Name Title (use SQL to get the substring before the first newline)
-		// TODO: Use a bufio.Reader to get the title directive e.g. <!-- #title This is the title -->
-		return g2.Wait()
+		pageDir := path.Join(siteGen.sitePrefix, "pages", urlPath)
+		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+			pageData.ChildPages, err = sq.FetchAll(ctx1, remoteFS.db, sq.Query{
+				Dialect: remoteFS.dialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {pageDir})" +
+					" AND NOT is_dir" +
+					" AND file_path LIKE '%.html'"+
+					" ORDER BY file_path",
+			}, func(row *sq.Row) Page {
+				page := Page{
+					Parent: urlPath,
+					Name:   path.Base(row.String("file_path")),
+				}
+				line := strings.TrimSpace(row.String("{}", sq.DialectExpression{
+					Default: sq.Expr("substr(text, 1, instr(text, char(10))-1)"),
+					Cases: []sq.DialectCase{{
+						Dialect: "postgres",
+						Result:  sq.Expr("split_part(text, chr(10), 1)"),
+					}, {
+						Dialect: "mysql",
+						Result:  sq.Expr("substring_index(text, char(10), 1)"),
+					}},
+				}))
+				if !strings.HasPrefix(line, "<!--") {
+					return page
+				}
+				line = strings.TrimSpace(strings.TrimPrefix(line, "<!--"))
+				if !strings.HasPrefix(line, "#title") {
+					return page
+				}
+				line = strings.TrimSpace(strings.TrimPrefix(line, "#title"))
+				n := strings.Index(line, "-->")
+				if n < 0 {
+					return page
+				}
+				page.Title = strings.TrimSpace(line[:n])
+				return page
+			})
+		} else {
+			dirEntries, err := siteGen.fsys.WithContext(ctx1).ReadDir(pageDir)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					return nil
+				}
+				return err
+			}
+			pageData.ChildPages = make([]Page, len(dirEntries))
+			g2, ctx2 := errgroup.WithContext(ctx1)
+			for i, dirEntry := range dirEntries {
+				i, dirEntry := i, dirEntry
+				g2.Go(func() error {
+					if dirEntry.IsDir() || !strings.HasSuffix(dirEntry.Name(), ".html") {
+						return nil
+					}
+					pageData.ChildPages[i].Parent = urlPath
+					pageData.ChildPages[i].Name = dirEntry.Name()
+					file, err := siteGen.fsys.WithContext(ctx2).Open(path.Join(pageDir, name))
+					if err != nil {
+						return err
+					}
+					defer file.Close()
+					reader := readerPool.Get().(*bufio.Reader)
+					reader.Reset(file)
+					defer readerPool.Put(reader)
+					done := false
+					for !done {
+						line, err := reader.ReadSlice('\n')
+						if err != nil {
+							if err != io.EOF {
+								return err
+							}
+							done = true
+						}
+						line = bytes.TrimSpace(line)
+						if !bytes.HasPrefix(line, []byte("<!--")) {
+							break
+						}
+						line = bytes.TrimSpace(bytes.TrimPrefix(line, []byte("<!--")))
+						if !bytes.HasPrefix(line, []byte("#title")) {
+							break
+						}
+						line = bytes.TrimSpace(bytes.TrimPrefix(line, []byte("#title")))
+						n := bytes.Index(line, []byte("-->"))
+						if n < 0 {
+							break
+						}
+						pageData.ChildPages[i].Title = string(bytes.TrimSpace(line[:n]))
+					}
+					return nil
+				})
+			}
+			err = g2.Wait()
+			if err != nil {
+				return err
+			}
+			n := 0
+			for _, childPage := range pageData.ChildPages {
+				if childPage != (Page{}) {
+					pageData.ChildPages[n] = childPage
+					n++
+				}
+			}
+			pageData.ChildPages = pageData.ChildPages[:n]
+		}
+		return nil
 	})
 	err = g1.Wait()
 	if err != nil {
