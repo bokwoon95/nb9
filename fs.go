@@ -409,7 +409,7 @@ func (fileInfo *RemoteFileInfo) ModTime() time.Time { return fileInfo.modTime }
 
 func (fileInfo *RemoteFileInfo) IsDir() bool { return fileInfo.isDir }
 
-func (fileInfo *RemoteFileInfo) Sys() any { return fileInfo }
+func (fileInfo *RemoteFileInfo) Sys() any { return nil }
 
 func (fileInfo *RemoteFileInfo) Type() fs.FileMode { return fileInfo.Mode().Type() }
 
