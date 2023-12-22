@@ -17,6 +17,7 @@ https://github.com/seanmonstar/warp/issues/209
 https://github.com/golang/go/blob/13d0af4e704bee164f873701e326048bdaf23933/src/net/http/server.go#L567
 TODO: when serving files, allocate a special case for handling *RemoteFile, as it allows us to potentially obtain the entirety of the file body without having to stream into an intermediate *bytes.Buffer.
 
+notebrew-config/
 notebrew-database.sqlite
 notebrew-files/
 notebrew-files.sqlite
