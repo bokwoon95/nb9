@@ -21,11 +21,8 @@ var rootFS fs.FS = embedFS
 var (
 	commonPasswordHashes         = make(map[string]struct{})
 	stylesCSS                    string
-	stylesCSSHash                string
 	baselineJS                   string
-	baselineJSHash               string
 	folderJS                     string
-	folderJSHash                 string
 	contentSecurityPolicy        string
 	contentSecurityPolicyCaptcha string
 )
@@ -63,7 +60,7 @@ func init() {
 	}
 	hash := sha256.Sum256(b)
 	stylesCSS = string(b)
-	stylesCSSHash = "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
+	stylesCSSHash := "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
 	// baseline.js
 	b, err = fs.ReadFile(rootFS, "static/baseline.js")
 	if err != nil {
@@ -71,7 +68,7 @@ func init() {
 	}
 	hash = sha256.Sum256(b)
 	baselineJS = string(b)
-	baselineJSHash = "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
+	baselineJSHash := "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
 	// folder.js
 	b, err = fs.ReadFile(rootFS, "static/folder.js")
 	if err != nil {
@@ -79,13 +76,13 @@ func init() {
 	}
 	hash = sha256.Sum256(b)
 	folderJS = string(b)
-	folderJSHash = "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
+	folderJSHash := "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
 	// contentSecurityPolicy
 	contentSecurityPolicy = "default-src 'none';" +
 		" script-src 'self' 'unsafe-hashes' " + baselineJSHash + " " + folderJSHash + ";" +
 		" connect-src 'self';" +
 		" img-src 'self' data:;" +
-		" style-src 'self' 'unsafe-inline';" +
+		" style-src 'self' 'unsafe-inline' " + stylesCSSHash + ";" +
 		" base-uri 'self';" +
 		" form-action 'self';" +
 		" manifest-src 'self';"
