@@ -1,7 +1,6 @@
 package nb9
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -168,11 +167,14 @@ type PageData struct {
 }
 
 func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, file fs.File) error {
-	ext := path.Ext(name)
+	var urlPath string
+	if name != "index.html" {
+		urlPath = strings.TrimSuffix(name, path.Ext(name))
+	}
 	pageData := PageData{
 		Site:   siteGen.site,
-		Parent: path.Dir(name),
-		Name:   strings.TrimSuffix(path.Base(name), ext),
+		Parent: path.Dir(urlPath),
+		Name:   path.Base(urlPath),
 	}
 	// path.Dir converts empty strings to ".", but we prefer an empty string so
 	// convert it back.
@@ -205,19 +207,13 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	}
 
 	g1, ctx1 := errgroup.WithContext(ctx)
-	parent := strings.TrimSuffix(name, ext)
-	var outputDir string
-	if name == "index.html" {
-		outputDir = path.Join(siteGen.sitePrefix, "output")
-	} else {
-		outputDir = path.Join(siteGen.sitePrefix, "output", strings.TrimSuffix(name, ext))
-	}
+	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	g1.Go(func() error {
 		g2, ctx2 := errgroup.WithContext(ctx1)
 		markdownMu := sync.Mutex{}
-		if fsys, ok := siteGen.fsys.(*RemoteFS); ok {
-			cursor, err := sq.FetchCursor(ctx2, fsys.db, sq.Query{
-				Dialect: fsys.dialect,
+		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+			cursor, err := sq.FetchCursor(ctx2, remoteFS.db, sq.Query{
+				Dialect: remoteFS.dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
@@ -253,7 +249,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 				}
 				switch path.Ext(file.info.filePath) {
 				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-					pageData.Images = append(pageData.Images, Image{Parent: parent, Name: name})
+					pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
 				case ".md":
 					g2.Go(func() error {
 						defer file.Close()
@@ -283,7 +279,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 				name := dirEntry.Name()
 				switch path.Ext(name) {
 				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-					pageData.Images = append(pageData.Images, Image{Parent: parent, Name: name})
+					pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
 				case ".md":
 					g2.Go(func() error {
 						file, err := siteGen.fsys.WithContext(ctx2).Open(path.Join(outputDir, name))
@@ -315,92 +311,8 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	g1.Go(func() error {
 		g2, ctx2 := errgroup.WithContext(ctx1)
 		dir := path.Join(siteGen.sitePrefix, "pages", parent)
+		// TODO: walk dir and fill in the child pages Parent Name Title (use SQL to get the substring before the first newline)
 		// TODO: Use a bufio.Reader to get the title directive e.g. <!-- #title This is the title -->
-		// TODO: Do this in a goroutine, e.g.
-		err := siteGen.fsys.WithContext(ctx2).ScanDirFiles(dir, func(file fs.File) error {
-			fileInfo, err := file.Stat()
-			if err != nil {
-				return err
-			}
-			if !strings.HasSuffix(fileInfo.Name(), ".html") {
-				return nil
-			}
-			return nil
-		})
-		dirFiles, err := ReadDirFiles(siteGen.fsys.WithContext(ctx2), path.Join(siteGen.sitePrefix, "pages", strings.TrimSuffix(name, ext)))
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil
-			}
-			return err
-		}
-		n := 0
-		for _, dirFile := range dirFiles {
-			if strings.HasSuffix(dirFile.Name(), ".html") {
-				dirFiles[n] = dirFile
-				n++
-			}
-		}
-		dirFiles = dirFiles[:n]
-		pageData.ChildPages = make([]Page, len(dirFiles))
-		for i, dirFile := range dirFiles {
-			i, dirFile := i, dirFile
-			g2.Go(func() error {
-				file, err := dirFile.Open()
-				if err != nil {
-					return err
-				}
-				defer file.Close()
-				reader := readerPool.Get().(*bufio.Reader)
-				reader.Reset(file)
-				defer readerPool.Put(reader)
-				buf := bufPool.Get().(*bytes.Buffer)
-				buf.Reset()
-				defer bufPool.Put(buf)
-				var done, found bool
-				for !done {
-					line, err := reader.ReadSlice('\n')
-					if err != nil {
-						if err != io.EOF {
-							return err
-						}
-						done = true
-					}
-					line = bytes.TrimSpace(line)
-					if !found {
-						i := bytes.Index(line, []byte("<title>"))
-						if i > 0 {
-							found = true
-							// If we find </title> on the same line, we can
-							// break immediately.
-							j := bytes.Index(line, []byte("</title>"))
-							if j > 0 {
-								buf.Write(line[i+len("<title>") : j])
-								break
-							}
-							buf.Write(line[i+len("<title>"):])
-						}
-					} else {
-						// Otherwise we keep writing subsequent lines whole
-						// until we find </title>.
-						i := bytes.Index(line, []byte("</title>"))
-						if i > 0 {
-							buf.WriteByte(' ')
-							buf.Write(line[:i])
-							break
-						}
-						buf.WriteByte(' ')
-						buf.Write(line)
-					}
-				}
-				pageData.ChildPages[i] = Page{
-					Parent: strings.TrimSuffix(name, ext),
-					Name:   dirFile.Name(),
-					Title:  buf.String(),
-				}
-				return nil
-			})
-		}
 		return g2.Wait()
 	})
 	err = g1.Wait()
@@ -414,7 +326,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 		if !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
-		err := MkdirAll(siteGen.fsys.WithContext(ctx), outputDir, 0755)
+		err := siteGen.fsys.WithContext(ctx).MkdirAll(outputDir, 0755)
 		if err != nil {
 			return err
 		}
