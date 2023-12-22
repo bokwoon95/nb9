@@ -93,18 +93,6 @@ func (fsys *LocalFS) WithContext(ctx context.Context) FS {
 	}
 }
 
-func (fsys *LocalFS) Stat(name string) (fs.FileInfo, error) {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return nil, err
-	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
-	}
-	name = filepath.FromSlash(name)
-	return os.Stat(filepath.Join(fsys.rootDir, name))
-}
-
 func (fsys *LocalFS) Open(name string) (fs.File, error) {
 	err := fsys.ctx.Err()
 	if err != nil {
@@ -334,80 +322,6 @@ func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
 	}
 }
 
-func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
-	err := fsys.ctx.Err()
-	if err != nil {
-		return nil, err
-	}
-	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
-	}
-	if name == "." {
-		return &RemoteFileInfo{filePath: ".", isDir: true}, nil
-	}
-	file, err := sq.FetchOne(fsys.ctx, fsys.db, sq.Query{
-		Dialect: fsys.dialect,
-		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
-		Values: []any{
-			sq.StringParam("name", name),
-		},
-	}, func(row *sq.Row) *RemoteFileInfo {
-		fileInfo := &RemoteFileInfo{}
-		row.UUID(&fileInfo.fileID, "file_id")
-		row.UUID(&fileInfo.parentID, "parent_id")
-		fileInfo.filePath = row.String("file_path")
-		fileInfo.isDir = row.Bool("is_dir")
-		fileInfo.numFiles = row.Int64("num_files")
-		fileInfo.size = row.Int64("{}", sq.DialectExpression{
-			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
-			Cases: []sq.DialectCase{{
-				Dialect: "sqlite",
-				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
-			}},
-		})
-		fileInfo.modTime = row.Time("mod_time")
-		return fileInfo
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrNotExist}
-		}
-		return nil, err
-	}
-	return file, nil
-}
-
-type RemoteFileInfo struct {
-	fileID   [16]byte
-	parentID [16]byte
-	filePath string
-	isDir    bool
-	numFiles int64
-	size     int64
-	modTime  time.Time
-}
-
-func (fileInfo *RemoteFileInfo) Name() string { return path.Base(fileInfo.filePath) }
-
-func (fileInfo *RemoteFileInfo) Size() int64 { return fileInfo.size }
-
-func (fileInfo *RemoteFileInfo) ModTime() time.Time { return fileInfo.modTime }
-
-func (fileInfo *RemoteFileInfo) IsDir() bool { return fileInfo.isDir }
-
-func (fileInfo *RemoteFileInfo) Sys() any { return fileInfo }
-
-func (fileInfo *RemoteFileInfo) Type() fs.FileMode { return fileInfo.Mode().Type() }
-
-func (fileInfo *RemoteFileInfo) Info() (fs.FileInfo, error) { return fileInfo, nil }
-
-func (fileInfo *RemoteFileInfo) Mode() fs.FileMode {
-	if fileInfo.isDir {
-		return fs.ModeDir
-	}
-	return 0
-}
-
 func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	err := fsys.ctx.Err()
 	if err != nil {
@@ -475,6 +389,37 @@ func getBuffer(row *sq.Row, format string, values ...any) *bytes.Buffer {
 		return nil
 	}
 	return bytes.NewBuffer(b)
+}
+
+type RemoteFileInfo struct {
+	fileID   [16]byte
+	parentID [16]byte
+	filePath string
+	isDir    bool
+	numFiles int64
+	size     int64
+	modTime  time.Time
+}
+
+func (fileInfo *RemoteFileInfo) Name() string { return path.Base(fileInfo.filePath) }
+
+func (fileInfo *RemoteFileInfo) Size() int64 { return fileInfo.size }
+
+func (fileInfo *RemoteFileInfo) ModTime() time.Time { return fileInfo.modTime }
+
+func (fileInfo *RemoteFileInfo) IsDir() bool { return fileInfo.isDir }
+
+func (fileInfo *RemoteFileInfo) Sys() any { return fileInfo }
+
+func (fileInfo *RemoteFileInfo) Type() fs.FileMode { return fileInfo.Mode().Type() }
+
+func (fileInfo *RemoteFileInfo) Info() (fs.FileInfo, error) { return fileInfo, nil }
+
+func (fileInfo *RemoteFileInfo) Mode() fs.FileMode {
+	if fileInfo.isDir {
+		return fs.ModeDir
+	}
+	return 0
 }
 
 type RemoteFile struct {
