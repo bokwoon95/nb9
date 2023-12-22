@@ -20,6 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/bokwoon95/nb9/sq"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting"
 	"github.com/yuin/goldmark/extension"
@@ -117,14 +118,30 @@ func NewSiteGenerator(config SiteGeneratorConfig) (*SiteGenerator, error) {
 		templateInProgress:   make(map[string]chan struct{}),
 		gzipGeneratedContent: config.GzipGeneratedContent,
 	}
-	err := siteGen.fsys.ScanDir(path.Join(siteGen.sitePrefix, "posts"), func(dirEntry fs.DirEntry) error {
-		if dirEntry.IsDir() {
-			siteGen.site.Categories = append(siteGen.site.Categories, dirEntry.Name())
+	if fsys, ok := siteGen.fsys.(*RemoteFS); ok {
+		categories, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
+			Dialect: fsys.dialect,
+			Format:  "SELECT {*} FROM files WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {postsDir}) AND is_dir ORDER BY file_path",
+			Values: []any{
+				sq.StringParam("postsDir", path.Join(siteGen.sitePrefix, "posts")),
+			},
+		}, func(row *sq.Row) string {
+			return path.Base(row.String("file_path"))
+		})
+		if err != nil {
+			return nil, err
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		siteGen.site.Categories = categories
+	} else {
+		dirEntries, err := siteGen.fsys.ReadDir(path.Join(siteGen.sitePrefix, "posts"))
+		if err != nil {
+			return nil, err
+		}
+		for _, dirEntry := range dirEntries {
+			if dirEntry.IsDir() {
+				siteGen.site.Categories = append(siteGen.site.Categories, dirEntry.Name())
+			}
+		}
 	}
 	return siteGen, nil
 }
@@ -188,6 +205,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	}
 
 	g1, ctx1 := errgroup.WithContext(ctx)
+	parent := strings.TrimSuffix(name, ext)
 	var outputDir string
 	if name == "index.html" {
 		outputDir = path.Join(siteGen.sitePrefix, "output")
@@ -197,30 +215,79 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	g1.Go(func() error {
 		g2, ctx2 := errgroup.WithContext(ctx1)
 		markdownMu := sync.Mutex{}
-		err := siteGen.fsys.WithContext(ctx2).ScanDirFiles(outputDir, func(file fs.File) error {
-			defer file.Close()
-			fileInfo, err := file.Stat()
+		if fsys, ok := siteGen.fsys.(*RemoteFS); ok {
+			cursor, err := sq.FetchCursor(ctx2, fsys.db, sq.Query{
+				Dialect: fsys.dialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
+					" AND (file_path LIKE '%.jpeg'" +
+					" OR file_path LIKE '%.jpg'" +
+					" OR file_path LIKE '%.png'" +
+					" OR file_path LIKE '%.webp'" +
+					" OR file_path LIKE '%.gif'" +
+					" OR file_path LIKE '%.md'" +
+					") " +
+					" ORDER BY file_path",
+				Values: []any{
+					sq.StringParam("outputDir", outputDir),
+				},
+			}, func(row *sq.Row) *RemoteFile {
+				file := &RemoteFile{
+					ctx: ctx2,
+				}
+				file.info.filePath = row.String("file_path")
+				file.buf = getBuffer(row, "CASE WHEN file_path LIKE '%.md' THEN COALESCE(text, data) ELSE NULL END")
+				return file
+			})
 			if err != nil {
 				return err
 			}
-			if fileInfo.IsDir() {
-				return nil
+			defer cursor.Close()
+			for cursor.Next() {
+				file, err := cursor.Result()
+				if err != nil {
+					return err
+				}
+				switch path.Ext(file.info.filePath) {
+				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+					pageData.Images = append(pageData.Images, Image{Parent: parent, Name: name})
+				case ".md":
+					g2.Go(func() error {
+						defer file.Close()
+						var b strings.Builder
+						err = siteGen.markdown.Convert(file.buf.Bytes(), &b)
+						if err != nil {
+							return err
+						}
+						markdownMu.Lock()
+						pageData.Markdown[name] = template.HTML(b.String())
+						markdownMu.Unlock()
+						return nil
+					})
+				}
 			}
-			name := fileInfo.Name()
-			fileType := fileTypes[path.Ext(name)]
-			if strings.HasPrefix(fileType.ContentType, "image") {
-				pageData.Images = append(pageData.Images, Image{
-					Parent: strings.TrimSuffix(name, ext),
-					Name:   name,
-				})
-				return nil
+			err = cursor.Close()
+			if err != nil {
+				return err
 			}
-			if strings.HasPrefix(fileType.ContentType, "text/markdown") {
-				g2.Go(func() error {
-					var source []byte
-					if file, ok := file.(*RemoteFile); ok {
-						source = file.buf.Bytes()
-					} else {
+		} else {
+			dirEntries, err := siteGen.fsys.WithContext(ctx2).ReadDir(outputDir)
+			if err != nil {
+				return err
+			}
+			for _, dirEntry := range dirEntries {
+				dirEntry := dirEntry
+				name := dirEntry.Name()
+				switch path.Ext(name) {
+				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+					pageData.Images = append(pageData.Images, Image{Parent: parent, Name: name})
+				case ".md":
+					g2.Go(func() error {
+						file, err := siteGen.fsys.WithContext(ctx2).Open(path.Join(outputDir, name))
+						if err != nil {
+							return err
+						}
 						buf := bufPool.Get().(*bytes.Buffer)
 						buf.Reset()
 						defer bufPool.Put(buf)
@@ -228,30 +295,24 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 						if err != nil {
 							return err
 						}
-						source = buf.Bytes()
-					}
-					var b strings.Builder
-					err = siteGen.markdown.Convert(source, &b)
-					if err != nil {
-						return err
-					}
-					markdownMu.Lock()
-					pageData.Markdown[name] = template.HTML(b.String())
-					markdownMu.Unlock()
-					return nil
-				})
-				return nil
+						var b strings.Builder
+						err = siteGen.markdown.Convert(buf.Bytes(), &b)
+						if err != nil {
+							return err
+						}
+						markdownMu.Lock()
+						pageData.Markdown[name] = template.HTML(b.String())
+						markdownMu.Unlock()
+						return nil
+					})
+				}
 			}
-			return nil
-		})
-		if err != nil {
-			return err
 		}
 		return g2.Wait()
 	})
 	g1.Go(func() error {
 		g2, ctx2 := errgroup.WithContext(ctx1)
-		dir := path.Join(siteGen.sitePrefix, "pages", strings.TrimSuffix(name, ext))
+		dir := path.Join(siteGen.sitePrefix, "pages", parent)
 		// TODO: Use a bufio.Reader to get the title directive e.g. <!-- #title This is the title -->
 		// TODO: Do this in a goroutine, e.g.
 		err := siteGen.fsys.WithContext(ctx2).ScanDirFiles(dir, func(file fs.File) error {

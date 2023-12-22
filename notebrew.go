@@ -476,3 +476,5 @@ var fileTypes = map[string]FileType{
 	".json":  {Ext: ".json", ContentType: "application/json", IsGzippable: true},
 	".xml":   {Ext: ".xml", ContentType: "application/xml", IsGzippable: true},
 }
+
+// jpeg jpg png webp gif
