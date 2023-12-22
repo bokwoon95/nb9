@@ -240,7 +240,7 @@ func (row *Row) UUID(destPtr any, format string, values ...any) {
 			}
 		}
 		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
-		row.scanDest = append(row.scanDest, &[]byte{})
+		row.scanDest = append(row.scanDest, &sql.RawBytes{})
 		return
 	}
 	defer func() {
@@ -248,7 +248,7 @@ func (row *Row) UUID(destPtr any, format string, values ...any) {
 	}()
 	var err error
 	var uuid [16]byte
-	scanDest := row.scanDest[row.index].(*[]byte)
+	scanDest := row.scanDest[row.index].(*sql.RawBytes)
 	if *scanDest != nil {
 		if len(*scanDest) == 16 {
 			copy(uuid[:], *scanDest)
