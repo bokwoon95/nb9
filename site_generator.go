@@ -221,7 +221,9 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
-					" AND (file_path LIKE '%.jpeg'" +
+					" AND NOT is_dir" +
+					" AND (" +
+					"file_path LIKE '%.jpeg'" +
 					" OR file_path LIKE '%.jpg'" +
 					" OR file_path LIKE '%.png'" +
 					" OR file_path LIKE '%.webp'" +
