@@ -1,0 +1,47 @@
+## files ##
+
+[[tables]]
+table = "files"
+
+  [[tables.columns]]
+  column = "file_id"
+  type = { default = "BINARY(16)", postgres = "UUID" }
+  primarykey = true
+
+  [[tables.columns]]
+  column = "parent_id"
+  type = { default = "BINARY(16)", postgres = "UUID" }
+  index = true
+  references = { table = "files", column = "file_id" }
+
+  [[tables.columns]]
+  column = "file_path"
+  type = { default = "VARCHAR(500)" }
+  unique = true
+  notnull = true
+
+  [[tables.columns]]
+  column = "is_dir"
+  type = { default = "BOOLEAN" }
+  notnull = true
+
+  [[tables.columns]]
+  column = "num_files"
+  type = { default = "INT" }
+
+  [[tables.columns]]
+  column = "text"
+  type = { default = "TEXT", mysql = "MEDIUMTEXT" }
+
+  [[tables.columns]]
+  column = "data"
+  type = { default = "BLOB", postgres = "BYTEA", mysql = "MEDIUMBLOB" }
+
+  [[tables.columns]]
+  column = "size"
+  type = { default = "INT" }
+
+  [[tables.columns]]
+  column = "mod_time"
+  type = { default = "DATETIME", postgres = "TIMESTAMPTZ" }
+  index = true

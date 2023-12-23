@@ -6,6 +6,9 @@ notebrew.go
 site_generator.go
 folder.go
 file.go
+...
+serve_http.go
+notebrew/main.go
 
 TODO: FS should include MkdirAll and RemoveAll and ReadDir and exclude all the fancy file iteration methods WalkDir and ScanDir.
     - We will handwrite an optimized versions of GeneratePage/GeneratePost/GeneratePostList for RemoteFS by type asserting an FS into *RemoteFS and using its internal db directly to execute the most efficient WalkDir/ScanDir possible.

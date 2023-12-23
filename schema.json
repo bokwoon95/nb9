@@ -1,0 +1,160 @@
+{
+  "tables": [
+    {
+      "table": "site",
+      "columns": [
+        {
+          "column": "site_id",
+          "type": { "default": "BINARY(16)", "postgres": "UUID" },
+          "primarykey": true
+        },
+        {
+          "column": "site_name",
+          "type": { "default": "VARCHAR(500)" },
+          "unique": true,
+          "notnull": true
+        }
+      ]
+    },
+    {
+      "table": "users",
+      "columns": [
+        {
+          "column": "user_id",
+          "type": { "default": "BINARY(16)", "postgres": "UUID" },
+          "primarykey": true
+        },
+        {
+          "column": "username",
+          "type": { "default": "VARCHAR(500)" },
+          "unique": true,
+          "notnull": true,
+          "references": { "table": "site", "column": "site_name" }
+        },
+        {
+          "column": "email",
+          "type": { "default": "VARCHAR(500)" },
+          "unique": true,
+          "notnull": true
+        },
+        {
+          "column": "password_hash",
+          "type": { "default": "VARCHAR(500)" }
+        },
+        {
+          "column": "reset_token_hash",
+          "type": { "default": "BINARY(40)", "postgres": "BYTEA" },
+          "unique": true
+        },
+        {
+          "column": "failed_logins",
+          "type": { "default": "INT" }
+        },
+        {
+          "column": "site_limit",
+          "type": { "default": "INT" }
+        },
+        {
+          "column": "storage_limit",
+          "type": { "default": "INT" }
+        },
+        {
+          "column": "storage_used",
+          "type": { "default": "INT" }
+        }
+      ]
+    },
+    {
+      "table": "ip_login",
+      "columns": [
+        {
+          "column": "ip",
+          "type": { "default": "VARCHAR(500)" },
+          "primarykey": true
+        },
+        {
+          "column": "failed_logins",
+          "type": { "default": "INT" },
+          "notnull": true
+        }
+      ]
+    },
+    {
+      "table": "site_owner",
+      "columns": [
+        {
+          "column": "site_id",
+          "type": { "default": "BINARY(16)", "postgres": "UUID" },
+          "primarykey": true,
+          "references": { "table": "site", "column": "site_id" }
+        },
+        {
+          "column": "user_id",
+          "type": { "default": "BINARY(16)", "postgres": "UUID" },
+          "index": true,
+          "references": {
+            "table": "users",
+            "column": "user_id"
+          }
+        }
+      ]
+    },
+    {
+      "table": "site_user",
+      "primarykey": [ "site_id", "user_id" ],
+      "columns": [
+        {
+          "column": "site_id",
+          "type": { "default": "BINARY(16)", "postgres": "UUID" },
+          "references": { "table": "site", "column": "site_id" }
+        },
+        {
+          "column": "user_id",
+          "type": { "default": "BINARY(16)", "postgres": "UUID" },
+          "index": true,
+          "references": { "table": "user", "column": "user_id" }
+        }
+      ]
+    },
+    {
+      "table": "session",
+      "columns": [
+        {
+          "column": "session_token_hash",
+          "type": { "default": "BINARY(40)", "postgres": "BYTEA" },
+          "primarykey": true
+        },
+        {
+          "column": "data",
+          "type": { "default": "JSON", "postgres": "JSONB" }
+        }
+      ]
+    },
+    {
+      "table": "signup",
+      "columns": [
+        {
+          "column": "signup_token_hash",
+          "type": { "default": "BINARY(40)", "postgres": "BYTEA" },
+          "primarykey": true
+        }
+      ]
+    },
+    {
+      "table": "authentication",
+      "columns": [
+        {
+          "column": "authentication_token_hash",
+          "type": { "default": "BINARY(40)", "postgres": "BYTEA" },
+          "primarykey": true
+        },
+        {
+          "column": "user_id",
+          "type": { "default": "BINARY(16)", "postgres": "UUID" },
+          "index": true,
+          "references": { "table": "user", "column": "user_id" }
+        }
+      ]
+    }
+  ]
+}

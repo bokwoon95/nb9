@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"html/template"
 	"io"
 	"log/slog"
 	"net"
@@ -23,7 +24,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"text/template"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -477,4 +477,20 @@ var fileTypes = map[string]FileType{
 	".xml":   {Ext: ".xml", ContentType: "application/xml", IsGzippable: true},
 }
 
-// jpeg jpg png webp gif
+func (nbrew *Notebrew) contentURL(sitePrefix string) string {
+	if strings.Contains(sitePrefix, ".") {
+		return "https://" + sitePrefix
+	}
+	// NOTE: if we're proxying localhost to the outside world, our domain *is
+	// not* localhost. It is whichever domain we are hosting the CMS on.
+	if nbrew.Domain == "localhost" || strings.HasPrefix(nbrew.Domain, "localhost:") {
+		if sitePrefix != "" {
+			return "http://" + strings.TrimPrefix(sitePrefix, "@") + "." + nbrew.Domain
+		}
+		return "http://" + nbrew.Domain
+	}
+	if sitePrefix != "" {
+		return "https://" + strings.TrimPrefix(sitePrefix, "@") + "." + nbrew.ContentDomain
+	}
+	return "https://" + nbrew.ContentDomain
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "table": "files",
+    "columns": [
+      {
+        "column": "file_id",
+        "type": { "default": "BINARY(16)", "postgres": "UUID" },
+        "primarykey": true
+      },
+      {
+        "column": "parent_id",
+        "type": { "default": "BINARY(16)", "postgres": "UUID" },
+        "index": true,
+        "references": { "table": "files", "column": "file_id" }
+      },
+      {
+        "column": "file_path",
+        "type": { "default": "VARCHAR(500)" },
+        "unique": true,
+        "notnull": true
+      },
+      {
+        "column": "file_path",
+        "type": { "default": "VARCHAR(500)" },
+        "unique": true,
+        "notnull": true
+      }
+    ]
+  }
+]
