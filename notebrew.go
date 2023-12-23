@@ -204,11 +204,7 @@ func (nbrew *Notebrew) clearSession(w http.ResponseWriter, r *http.Request, name
 		},
 	})
 	if err != nil {
-		logger, ok := r.Context().Value(loggerKey).(*slog.Logger)
-		if !ok {
-			logger = slog.Default()
-		}
-		logger.Error(err.Error())
+		getLogger(r.Context()).Error(err.Error())
 	}
 }
 

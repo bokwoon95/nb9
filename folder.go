@@ -312,7 +312,6 @@ func (nbrew *Notebrew) folder(w http.ResponseWriter, r *http.Request, username, 
 		internalServerError(w, r, err)
 		return
 	}
-	// https://cdn.{{ $.ContentDomain }}/{{ join $.SitePrefix $.Parent $.Name }}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
 	executeTemplate(w, r, fileInfo.ModTime(), tmpl, &response)
 }
