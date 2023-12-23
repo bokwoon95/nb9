@@ -394,6 +394,8 @@ var hashPool = sync.Pool{
 	},
 }
 
+// TODO: we can remove usage of bytesPool by using bufPool instead to get a
+// buffer and its underlying byte slice.
 var bytesPool = sync.Pool{
 	New: func() any {
 		b := make([]byte, 0, 64)
