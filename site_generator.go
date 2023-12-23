@@ -118,9 +118,9 @@ func NewSiteGenerator(config SiteGeneratorConfig) (*SiteGenerator, error) {
 		templateInProgress:   make(map[string]chan struct{}),
 		gzipGeneratedContent: config.GzipGeneratedContent,
 	}
-	if fsys, ok := siteGen.fsys.(*RemoteFS); ok {
-		categories, err := sq.FetchAll(fsys.ctx, fsys.db, sq.Query{
-			Dialect: fsys.dialect,
+	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+		categories, err := sq.FetchAll(remoteFS.ctx, remoteFS.db, sq.Query{
+			Dialect: remoteFS.dialect,
 			Format:  "SELECT {*} FROM files WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {postsDir}) AND is_dir ORDER BY file_path",
 			Values: []any{
 				sq.StringParam("postsDir", path.Join(siteGen.sitePrefix, "posts")),
