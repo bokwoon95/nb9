@@ -172,6 +172,7 @@ type PageData struct {
 // GeneratePostList(files)
 // TODO: figure out how to make GeneratePage and GeneratePost/GeneratePostList
 // workable using a single walk of the directory.
+// GeneratePage(ctx context.Context, text string, pageData PageData) // Parent and Name *must* be filled in.
 func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, file fs.File) error {
 	var urlPath string
 	if name != "index.html" {
@@ -257,6 +258,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 				if err != nil {
 					return err
 				}
+				name := path.Base(file.info.filePath)
 				switch path.Ext(file.info.filePath) {
 				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
 					pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
