@@ -246,7 +246,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 					ctx: ctx2,
 				}
 				file.info.filePath = row.String("file_path")
-				file.buf = getBuffer(row, "CASE WHEN file_path LIKE '%.md' THEN COALESCE(text, data) ELSE NULL END")
+				file.buf = getBuffer(row, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
 				return file
 			})
 			if err != nil {
