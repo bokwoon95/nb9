@@ -487,6 +487,9 @@ func serveFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) 
 		return
 	}
 
+	// TODO: we can skip buffering the bytes if it's an *os.File which can be
+	// rewinded. And if it's a *RemoteFile of type text, we already have the
+	// bytes in memory and can hash that directly.
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
