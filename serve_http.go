@@ -98,11 +98,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Host == nbrew.Domain && head == "users" {
 		switch tail {
 		case "signup":
-			nbrew.signup(w, r, ip)
+			// nbrew.signup(w, r, ip)
 		case "login":
-			nbrew.login(w, r, ip)
+			// nbrew.login(w, r, ip)
 		case "logout":
-			nbrew.logout(w, r, ip)
+			// nbrew.logout(w, r, ip)
 		case "resetpassword":
 		default:
 			notFound(w, r)
@@ -140,7 +140,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				notAuthenticated(w, r)
 				return
 			}
-			result, err := sq.FetchOneContext(r.Context(), nbrew.DB, sq.CustomQuery{
+			result, err := sq.FetchOne(r.Context(), nbrew.DB, sq.Query{
 				Dialect: nbrew.Dialect,
 				Format: "SELECT {*}" +
 					" FROM authentication" +
