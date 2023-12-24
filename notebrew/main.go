@@ -149,7 +149,7 @@ func main() {
 		if len(b) > 0 {
 			var databaseConfig struct {
 				Dialect  string            `json:"dialect,omitempty"`
-				Filepath string            `json:"filepath,omitempty"`
+				Filepath string            `json:"filepath,omitempty"` // Must end in .sqlite for it to be treated as a file, otherwise it will be treated as a directory to store notebrew-database.sqlite in.
 				User     string            `json:"user,omitempty"`
 				Password string            `json:"password,omitempty"`
 				Host     string            `json:"host,omitempty"`
