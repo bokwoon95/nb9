@@ -453,6 +453,7 @@ func main() {
 			default:
 				return fmt.Errorf("unknown command %s", command)
 			}
+			return nil
 		}
 
 		server, err := NewServer(nbrew, configfolder, addr)
