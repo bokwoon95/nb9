@@ -18,15 +18,17 @@ import (
 	"time"
 
 	"github.com/bokwoon95/nb9/sq"
+	"golang.org/x/crypto/blake2b"
 )
 
 func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	scheme := "https://"
+	if nbrew.Domain == "localhost" || strings.HasPrefix(nbrew.Domain, "localhost:") {
+		scheme = "http://"
+	}
+
 	// Redirect the www subdomain to the bare domain.
 	if r.Host == "www."+nbrew.Domain {
-		scheme := "https://"
-		if nbrew.Domain == "localhost" || strings.HasPrefix(nbrew.Domain, "localhost:") {
-			scheme = "http://"
-		}
 		http.Redirect(w, r, scheme+nbrew.Domain+r.URL.RequestURI(), http.StatusMovedPermanently)
 		return
 	}
@@ -49,10 +51,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logger := *nbrew.Logger.Load()
 	if logger == nil {
 		logger = slog.Default()
-	}
-	scheme := "https://"
-	if r.TLS == nil {
-		scheme = "http://"
 	}
 	ip := nbrew.realClientIP(r)
 	logger = logger.With(
@@ -247,7 +245,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// If we reach here, we are serving pregenerated site content. Only GET
+	// If we reach here, we are serving generated site content. Only GET
 	// requests are allowed.
 	if r.Method != "GET" {
 		http.Error(w, "405 Method Not Allowed", http.StatusMethodNotAllowed)
@@ -276,19 +274,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-			// TODO: if we don't set CORS on the www subdomain, can't users
-			// just bypass the CORS restrictions on the cdn subdomain by
-			// visiting the www subdomain instead? Another thing, do we really
-			// want the public to be able to embed our resources on their web
-			// pages? Is it possible to whitelist the CDN server in ConfigFS
-			// such that we only Access-Control-Allow-Origin if the person
-			// knocking on the www subdomain is the CDN service? Think this
-			// through (needs more testing).
-			if subdomain == "cdn" {
-				w.Header().Set("Access-Control-Allow-Origin", "*")
-				w.Header().Set("Access-Control-Allow-Methods", "GET")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			}
 		default:
 			sitePrefix = "@" + subdomain
 		}
@@ -316,7 +301,8 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// reader worth its salt can handle an incorrect Content-Type so
 			// I'll rather use an incorrect Content-Type and force Safari to
 			// render the atom feed in plain text than prevent the feed from
-			// being viewed in the browser for the sake of "technical purity".
+			// being viewed in the browser just because I used the "technically
+			// correct" application/atom+xml.
 			fileType.ContentType = "application/xml; charset=utf-8"
 			fileType.IsGzippable = true
 		} else {
@@ -451,16 +437,13 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		isGzipped = true
 	}
 
-	b := bytesPool.Get().(*[]byte)
-	*b = (*b)[:0]
-	defer bytesPool.Put(b)
-
+	var b [blake2b.Size256]byte
 	if isGzipped {
 		w.Header().Set("Content-Encoding", "gzip")
 	}
 	w.Header().Set("Content-Type", fileType.ContentType)
 	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(*b))+`"`)
+	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
 	http.ServeContent(w, r, "", modTime, bytes.NewReader(buf.Bytes()))
 }
 
@@ -545,6 +528,8 @@ func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefi
 	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
 }
 
+// NOTE: matchWildcard is copied from github.com/caddyserver/certmagic
+//
 // matchWildcard returns true if subject (a candidate DNS name)
 // matches wildcard (a reference DNS name), mostly according to
 // RFC 6125-compliant wildcard rules. See also RFC 2818 which
@@ -553,9 +538,11 @@ func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefi
 // external DNS names that happen to look like IP addresses.
 // It uses DNS wildcard matching logic and is case-insensitive.
 // https://tools.ietf.org/html/rfc2818#section-3.1
-//
-// NOTE: matchWildcard is copied from github.com/caddyserver/certmagic
 func matchWildcard(subject, wildcard string) bool {
+	// TODO: I'm pretty sure we can reduce allocations by avoiding
+	// strings.ToLower and use strings.EqualFold instead. Not sure what the
+	// rest of the code is doing though, if you do optimize this function make
+	// sure to also test it.
 	subject, wildcard = strings.ToLower(subject), strings.ToLower(wildcard)
 	if subject == wildcard {
 		return true

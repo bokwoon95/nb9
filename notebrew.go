@@ -394,15 +394,6 @@ var hashPool = sync.Pool{
 	},
 }
 
-// TODO: we can remove usage of bytesPool by using bufPool instead to get a
-// buffer and its underlying byte slice.
-var bytesPool = sync.Pool{
-	New: func() any {
-		b := make([]byte, 0, 64)
-		return &b
-	},
-}
-
 var readerPool = sync.Pool{
 	New: func() any {
 		return bufio.NewReaderSize(nil, 512)
@@ -436,14 +427,11 @@ func executeTemplate(w http.ResponseWriter, r *http.Request, modtime time.Time, 
 		return
 	}
 
-	b := bytesPool.Get().(*[]byte)
-	*b = (*b)[:0]
-	defer bytesPool.Put(b)
-
+	var b [blake2b.Size256]byte
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Encoding", "gzip")
 	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(*b))+`"`)
+	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
 	http.ServeContent(w, r, "", modtime, bytes.NewReader(buf.Bytes()))
 }
 

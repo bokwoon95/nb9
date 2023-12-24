@@ -12,10 +12,13 @@ import (
 	"io/fs"
 	"mime"
 	"net/http"
+	"os"
 	"path"
 	"slices"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/blake2b"
 )
 
 func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, fileInfo fs.FileInfo) {
@@ -488,53 +491,79 @@ func serveFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) 
 		return
 	}
 
-	// TODO: we can skip buffering the bytes if it's an *os.File which can be
-	// rewinded. And if it's a *RemoteFile of type text, we already have the
-	// bytes in memory and can hash that directly.
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer bufPool.Put(buf)
+	if !fileType.IsGzippable {
+		hasher := hashPool.Get().(hash.Hash)
+		hasher.Reset()
+		defer hashPool.Put(hasher)
+		if file, ok := file.(*os.File); ok {
+			_, err := io.Copy(hasher, file)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			_, err = file.Seek(0, io.SeekStart)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			var b [blake2b.Size256]byte
+			if _, ok := w.Header()["Content-Type"]; !ok {
+				w.Header().Set("Content-Type", fileType.ContentType)
+			}
+			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+			http.ServeContent(w, r, "", fileInfo.ModTime(), file)
+			return
+		}
+		if file, ok := file.(*RemoteFile); ok {
+			if textExtensions[path.Ext(name)] {
+				_, err := hasher.Write(file.buf.Bytes())
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				var b [blake2b.Size256]byte
+				if _, ok := w.Header()["Content-Type"]; !ok {
+					w.Header().Set("Content-Type", fileType.ContentType)
+				}
+				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(file.buf.Bytes()))
+				return
+			}
+		}
+	}
 
 	hasher := hashPool.Get().(hash.Hash)
 	hasher.Reset()
 	defer hashPool.Put(hasher)
 
-	multiWriter := io.MultiWriter(buf, hasher)
-	if !fileType.IsGzippable {
-		_, err = io.Copy(multiWriter, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-	} else {
-		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-		gzipWriter.Reset(multiWriter)
-		defer gzipWriterPool.Put(gzipWriter)
-		_, err = io.Copy(gzipWriter, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		err = gzipWriter.Close()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	multiWriter := io.MultiWriter(hasher, buf)
+	gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
+	gzipWriter.Reset(multiWriter)
+	defer gzipWriterPool.Put(gzipWriter)
+	_, err = io.Copy(gzipWriter, file)
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
 	}
-
-	b := bytesPool.Get().(*[]byte)
-	*b = (*b)[:0]
-	defer bytesPool.Put(b)
-
+	err = gzipWriter.Close()
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	var b [blake2b.Size256]byte
 	if _, ok := w.Header()["Content-Type"]; !ok {
 		w.Header().Set("Content-Type", fileType.ContentType)
 	}
-	if fileType.IsGzippable {
-		w.Header().Set("Content-Encoding", "gzip")
-	}
-	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(*b))+`"`)
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
 	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
 }
