@@ -319,10 +319,12 @@ func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, stora
 
 func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
 	return &RemoteFS{
-		ctx:     ctx,
-		db:      fsys.db,
-		dialect: fsys.dialect,
-		storage: fsys.storage,
+		ctx:          ctx,
+		db:           fsys.db,
+		dialect:      fsys.dialect,
+		storage:      fsys.storage,
+		adminDB:      fsys.adminDB,
+		adminDialect: fsys.adminDialect,
 	}
 }
 
