@@ -58,9 +58,7 @@ var (
 // - dynamic public: allowsignup.txt, 503.html
 
 func main() {
-	// Wrap everything in an anonymous function so we can call os.Exit while
-	// still allowing all deferred functions to complete.
-	//
+	// Wrap main in anonymous function to honor deferred calls.
 	// https://stackoverflow.com/questions/27629380/how-to-exit-a-go-program-honoring-deferred-calls
 	err := func() error {
 		homeDir, err := os.UserHomeDir()
