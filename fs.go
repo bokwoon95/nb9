@@ -301,6 +301,16 @@ func (fsys *LocalFS) Rename(oldname, newname string) error {
 	return os.Rename(filepath.Join(fsys.rootDir, oldname), filepath.Join(fsys.rootDir, newname))
 }
 
+// TODO: use this RemoteFSConfig.
+type RemoteFSConfig struct {
+	FilesDB        *sql.DB
+	FilesDialect   string
+	FilesErrorCode func(error) string
+	Storage        Storage
+	AdminDB        *sql.DB
+	AdminDialect   string
+}
+
 // TODO: rename db and dialect to filesDB and filesDialect. adminDB and
 // adminDialect become just db and dialect.
 type RemoteFS struct {
