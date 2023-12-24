@@ -477,25 +477,27 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If the file is a ReadSeeker and we don't have to gzip it, we can
 	// calculate its hash as-is, rewind it, then serve it as-is (no need to
 	// buffer it in memory).
-	if file, ok := file.(io.ReadSeeker); ok && !fileType.IsGzippable {
-		_, err := io.Copy(hasher, file)
-		if err != nil {
-			logger.Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+	if !fileType.IsGzippable {
+		if file, ok := file.(io.ReadSeeker); ok {
+			_, err := io.Copy(hasher, file)
+			if err != nil {
+				logger.Error(err.Error())
+				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			_, err = file.Seek(0, io.SeekStart)
+			if err != nil {
+				logger.Error(err.Error())
+				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			var b [blake2b.Size256]byte
+			w.Header().Set("Content-Type", fileType.ContentType)
+			w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+			http.ServeContent(w, r, "", fileInfo.ModTime(), file)
 			return
 		}
-		_, err = file.Seek(0, io.SeekStart)
-		if err != nil {
-			logger.Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		var b [blake2b.Size256]byte
-		w.Header().Set("Content-Type", fileType.ContentType)
-		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-		w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-		http.ServeContent(w, r, "", fileInfo.ModTime(), file)
-		return
 	}
 
 	// If the file is too big, stream it out to the user instead of
@@ -517,7 +519,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer bufPool.Put(buf)
 
 	multiWriter := io.MultiWriter(buf, hasher)
-	if fileType.IsGzippable {
+	if !fileType.IsGzippable {
 		_, err := io.Copy(multiWriter, file)
 		if err != nil {
 			logger.Error(err.Error())
