@@ -450,6 +450,7 @@ func main() {
 			command, args := args[0], args[1:]
 			_ = args
 			switch command {
+			case "":
 			default:
 				return fmt.Errorf("unknown command %s", command)
 			}
