@@ -341,7 +341,7 @@ func main() {
 						Credentials:  aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(s3Config.AccessKeyID, s3Config.SecretAccessKey, "")),
 					}),
 					Bucket: s3Config.Bucket,
-				})
+				}, "", nil)
 			} else {
 				b, err = os.ReadFile(filepath.Join(configfolder, "objectsfolder.txt"))
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -361,7 +361,7 @@ func main() {
 						return err
 					}
 				}
-				nbrew.FS = nb9.NewRemoteFS(nbrew.Dialect, nbrew.DB, nbrew.ErrorCode, nb9.NewFileStorage(objectsfolder, os.TempDir()))
+				nbrew.FS = nb9.NewRemoteFS(nbrew.Dialect, nbrew.DB, nbrew.ErrorCode, nb9.NewFileStorage(objectsfolder, os.TempDir()), "", nil)
 			}
 		} else {
 			filesfolder = filepath.Clean(filesfolder)
