@@ -296,20 +296,24 @@ func (fsys *LocalFS) Rename(oldname, newname string) error {
 }
 
 type RemoteFS struct {
-	ctx       context.Context
-	db        *sql.DB
-	dialect   string
-	errorCode func(error) string
-	storage   Storage
+	ctx          context.Context
+	db           *sql.DB
+	dialect      string
+	errorCode    func(error) string
+	storage      Storage
+	adminDB      *sql.DB
+	adminDialect string
 }
 
-func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, storage Storage) *RemoteFS {
+func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, storage Storage, adminDialect string, adminDB *sql.DB) *RemoteFS {
 	return &RemoteFS{
-		ctx:       context.Background(),
-		db:        db,
-		dialect:   dialect,
-		errorCode: errorCode,
-		storage:   storage,
+		ctx:          context.Background(),
+		db:           db,
+		dialect:      dialect,
+		errorCode:    errorCode,
+		storage:      storage,
+		adminDB:      adminDB,
+		adminDialect: adminDialect,
 	}
 }
 
