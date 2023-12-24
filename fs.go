@@ -305,6 +305,7 @@ type RemoteFS struct {
 	adminDialect string
 }
 
+// TODO: think of a better way to handle configuring this.
 func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, storage Storage, adminDialect string, adminDB *sql.DB) *RemoteFS {
 	return &RemoteFS{
 		ctx:          context.Background(),
