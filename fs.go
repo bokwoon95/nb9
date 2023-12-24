@@ -77,6 +77,12 @@ type LocalFS struct {
 	tempDir string
 }
 
+// TODO: use this config struct in the constructor.
+type LocalFSConfig struct {
+	RootDir string
+	TempDir string
+}
+
 func NewLocalFS(rootDir, tempDir string) *LocalFS {
 	return &LocalFS{
 		ctx:     context.Background(),
