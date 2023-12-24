@@ -474,8 +474,8 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	hasher.Reset()
 	defer hashPool.Put(hasher)
 
-	// If it is a ReadSeeker and we don't have to gzip it, we can calculate its
-	// hash as-is, rewind it, then serve it as-is.
+	// If file is a ReadSeeker and we don't have to gzip it, we can calculate
+	// its hash as-is, rewind it, then serve it as-is.
 	if file, ok := file.(io.ReadSeeker); ok && !fileType.IsGzippable {
 		_, err := io.Copy(hasher, file)
 		if err != nil {
