@@ -15,6 +15,8 @@ import (
 //go:embed schema.toml
 var schemaBytes []byte
 
+// TODO: func init() that populates a Catalog, catalog.go/catalog.json/nb9.Catalog
+
 func Automigrate(dialect string, db *sql.DB) error {
 	var rawSchema struct {
 		Tables []struct {
