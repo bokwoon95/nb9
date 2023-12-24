@@ -23,12 +23,13 @@ import (
 func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Redirect the www subdomain to the bare domain.
 	if r.Host == "www."+nbrew.Domain {
-		// TODO: set scheme to https:// instead and switch to http:// if localhost
+		var scheme string
 		if nbrew.Domain == "localhost" || strings.HasPrefix(nbrew.Domain, "localhost:") {
-			http.Redirect(w, r, "http://"+nbrew.Domain+r.URL.RequestURI(), http.StatusMovedPermanently)
-			return
+			scheme = "http://"
+		} else {
+			scheme = "https://"
 		}
-		http.Redirect(w, r, "https://"+nbrew.Domain+r.URL.RequestURI(), http.StatusMovedPermanently)
+		http.Redirect(w, r, scheme+nbrew.Domain+r.URL.RequestURI(), http.StatusMovedPermanently)
 		return
 	}
 
