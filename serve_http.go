@@ -253,7 +253,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Figure out the sitePrefix of the site we have to serve.
 	var sitePrefix string
-	if matchWildcard(r.Host, "*."+nbrew.ContentDomain) {
+	if MatchWildcard(r.Host, "*."+nbrew.ContentDomain) {
 		subdomain := strings.TrimSuffix(r.Host, "."+nbrew.ContentDomain)
 		switch subdomain {
 		case "cdn", "www":
@@ -634,9 +634,9 @@ func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefi
 	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
 }
 
-// NOTE: matchWildcard is copied from github.com/caddyserver/certmagic
+// NOTE: MatchWildcard is copied from github.com/caddyserver/certmagic
 //
-// matchWildcard returns true if subject (a candidate DNS name)
+// MatchWildcard returns true if subject (a candidate DNS name)
 // matches wildcard (a reference DNS name), mostly according to
 // RFC 6125-compliant wildcard rules. See also RFC 2818 which
 // states that IP addresses must match exactly, but this function
@@ -644,7 +644,7 @@ func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefi
 // external DNS names that happen to look like IP addresses.
 // It uses DNS wildcard matching logic and is case-insensitive.
 // https://tools.ietf.org/html/rfc2818#section-3.1
-func matchWildcard(subject, wildcard string) bool {
+func MatchWildcard(subject, wildcard string) bool {
 	// TODO: I'm pretty sure we can reduce allocations by avoiding
 	// strings.ToLower and use strings.EqualFold instead. Not sure what the
 	// rest of the code is doing though, if you do optimize this function make
