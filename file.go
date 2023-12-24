@@ -491,10 +491,11 @@ func serveFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) 
 		return
 	}
 
+	hasher := hashPool.Get().(hash.Hash)
+	hasher.Reset()
+	defer hashPool.Put(hasher)
+
 	if !fileType.IsGzippable {
-		hasher := hashPool.Get().(hash.Hash)
-		hasher.Reset()
-		defer hashPool.Put(hasher)
 		if file, ok := file.(*os.File); ok {
 			_, err := io.Copy(hasher, file)
 			if err != nil {
@@ -517,53 +518,58 @@ func serveFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) 
 			return
 		}
 		if file, ok := file.(*RemoteFile); ok {
-			if textExtensions[path.Ext(name)] {
-				_, err := hasher.Write(file.buf.Bytes())
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				var b [blake2b.Size256]byte
-				if _, ok := w.Header()["Content-Type"]; !ok {
-					w.Header().Set("Content-Type", fileType.ContentType)
-				}
-				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(file.buf.Bytes()))
+			_, err := hasher.Write(file.buf.Bytes())
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
 				return
 			}
+			var b [blake2b.Size256]byte
+			if _, ok := w.Header()["Content-Type"]; !ok {
+				w.Header().Set("Content-Type", fileType.ContentType)
+			}
+			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+			http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(file.buf.Bytes()))
+			return
 		}
 	}
-
-	hasher := hashPool.Get().(hash.Hash)
-	hasher.Reset()
-	defer hashPool.Put(hasher)
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
 
 	multiWriter := io.MultiWriter(hasher, buf)
-	gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-	gzipWriter.Reset(multiWriter)
-	defer gzipWriterPool.Put(gzipWriter)
-	_, err = io.Copy(gzipWriter, file)
-	if err != nil {
-		getLogger(r.Context()).Error(err.Error())
-		internalServerError(w, r, err)
-		return
-	}
-	err = gzipWriter.Close()
-	if err != nil {
-		getLogger(r.Context()).Error(err.Error())
-		internalServerError(w, r, err)
-		return
+	if fileType.IsGzippable {
+		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
+		gzipWriter.Reset(multiWriter)
+		defer gzipWriterPool.Put(gzipWriter)
+		_, err = io.Copy(gzipWriter, file)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		err = gzipWriter.Close()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+	} else {
+		_, err = io.Copy(multiWriter, file)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
 	}
 	var b [blake2b.Size256]byte
 	if _, ok := w.Header()["Content-Type"]; !ok {
 		w.Header().Set("Content-Type", fileType.ContentType)
 	}
-	w.Header().Set("Content-Encoding", "gzip")
+	if fileType.IsGzippable {
+		w.Header().Set("Content-Encoding", "gzip")
+	}
 	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
 	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
 }
