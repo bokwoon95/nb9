@@ -28,6 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bokwoon95/nb9"
+	"github.com/bokwoon95/sqddl/ddl"
 	"github.com/fsnotify/fsnotify"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgconn"
@@ -166,7 +167,6 @@ func main() {
 		}
 		b = bytes.TrimSpace(b)
 		if len(b) > 0 {
-			// database.json, files.json {"filepath":""}
 			var databaseConfig DatabaseConfig
 			decoder := json.NewDecoder(bytes.NewReader(b))
 			decoder.DisallowUnknownFields()
@@ -194,6 +194,18 @@ func main() {
 				err = nbrew.DB.Ping()
 				if err != nil {
 					return fmt.Errorf("%s: sqlite: ping %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
+				}
+				automigrateCmd := &ddl.AutomigrateCmd{
+					DB:             nbrew.DB,
+					Dialect:        nbrew.Dialect,
+					DestCatalog:    nb9.Catalog(nbrew.Dialect),
+					DropObjects:    true, // TODO: turn this off when we go live.
+					AcceptWarnings: true,
+					Stderr:         io.Discard,
+				}
+				err = automigrateCmd.Run()
+				if err != nil {
+					return err
 				}
 			case "postgres":
 				values := make(url.Values)
@@ -232,6 +244,18 @@ func main() {
 						return pgErr.Code
 					}
 					return ""
+				}
+				automigrateCmd := &ddl.AutomigrateCmd{
+					DB:             nbrew.DB,
+					Dialect:        nbrew.Dialect,
+					DestCatalog:    nb9.Catalog(nbrew.Dialect),
+					DropObjects:    true, // TODO: turn this off when we go live.
+					AcceptWarnings: true,
+					Stderr:         io.Discard,
+				}
+				err = automigrateCmd.Run()
+				if err != nil {
+					return err
 				}
 			case "mysql":
 				values := make(url.Values)
@@ -275,6 +299,18 @@ func main() {
 						return strconv.FormatUint(uint64(mysqlErr.Number), 10)
 					}
 					return ""
+				}
+				automigrateCmd := &ddl.AutomigrateCmd{
+					DB:             nbrew.DB,
+					Dialect:        nbrew.Dialect,
+					DestCatalog:    nb9.Catalog(nbrew.Dialect),
+					DropObjects:    true, // TODO: turn this off when we go live.
+					AcceptWarnings: true,
+					Stderr:         io.Discard,
+				}
+				err = automigrateCmd.Run()
+				if err != nil {
+					return err
 				}
 			default:
 				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "database.json"), databaseConfig.Dialect)
@@ -321,7 +357,10 @@ func main() {
 					return err
 				}
 			}
-			nbrew.FS = nb9.NewLocalFS(filesConfig.Filepath, os.TempDir())
+			nbrew.FS = nb9.NewLocalFS(nb9.LocalFSConfig{
+				RootDir: filesConfig.Filepath,
+				TempDir: os.TempDir(),
+			})
 		case "sqlite":
 			if filesConfig.Filepath == "" {
 				filesConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-files.sqlite")

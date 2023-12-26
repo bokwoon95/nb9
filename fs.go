@@ -61,6 +61,14 @@ type FS interface {
 	Rename(oldname, newname string) error
 }
 
+type LocalFSConfig struct {
+	// RootDir is the root directory of the LocalFS.
+	RootDir string
+
+	// TempDir is the temp directory of the LocalFS.
+	TempDir string
+}
+
 // LocalFS represents a filesystem rooted on a local directory.
 type LocalFS struct {
 	// ctx provides the context of all operations called on the LocalFS.
@@ -77,17 +85,11 @@ type LocalFS struct {
 	tempDir string
 }
 
-// TODO: use this config struct in the constructor.
-type LocalFSConfig struct {
-	RootDir string
-	TempDir string
-}
-
-func NewLocalFS(rootDir, tempDir string) *LocalFS {
+func NewLocalFS(config LocalFSConfig) *LocalFS {
 	return &LocalFS{
 		ctx:     context.Background(),
-		rootDir: filepath.FromSlash(rootDir),
-		tempDir: filepath.FromSlash(tempDir),
+		rootDir: filepath.FromSlash(config.RootDir),
+		tempDir: filepath.FromSlash(config.TempDir),
 	}
 }
 
@@ -301,7 +303,6 @@ func (fsys *LocalFS) Rename(oldname, newname string) error {
 	return os.Rename(filepath.Join(fsys.rootDir, oldname), filepath.Join(fsys.rootDir, newname))
 }
 
-// TODO: use this RemoteFSConfig.
 type RemoteFSConfig struct {
 	FilesDB        *sql.DB
 	FilesDialect   string
@@ -311,8 +312,6 @@ type RemoteFSConfig struct {
 	AdminDialect   string
 }
 
-// TODO: rename db and dialect to filesDB and filesDialect. adminDB and
-// adminDialect become just db and dialect.
 type RemoteFS struct {
 	ctx            context.Context
 	filesDB        *sql.DB
@@ -323,14 +322,15 @@ type RemoteFS struct {
 	adminDialect   string
 }
 
-// TODO: think of a better way to handle configuring this.
-func NewRemoteFS(dialect string, db *sql.DB, errorCode func(error) string, storage Storage) *RemoteFS {
+func NewRemoteFS(config RemoteFSConfig) *RemoteFS {
 	return &RemoteFS{
 		ctx:            context.Background(),
-		filesDB:        db,
-		filesDialect:   dialect,
-		filesErrorCode: errorCode,
-		storage:        storage,
+		filesDB:        config.FilesDB,
+		filesDialect:   config.FilesDialect,
+		filesErrorCode: config.FilesErrorCode,
+		storage:        config.Storage,
+		adminDB:        config.AdminDB,
+		adminDialect:   config.AdminDialect,
 	}
 }
 
