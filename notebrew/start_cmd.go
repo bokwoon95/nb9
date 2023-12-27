@@ -219,6 +219,9 @@ func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, er
 			if !fileInfo.IsDir() {
 				return fmt.Errorf("%q is not a directory", name)
 			}
+			// TODO: Remove DB check. Check only the filesystem, it should be
+			// possible to serve static files only by turning off the main DB
+			// (but keeping the files DB).
 			if nbrew.DB == nil {
 				return fmt.Errorf("database is nil")
 			}
