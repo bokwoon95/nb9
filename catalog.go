@@ -33,6 +33,9 @@ var rawTables []struct {
 	} `json:"columns"`
 }
 
+// TODO: I am not satisfied with this design. I need better names to represent
+// the FilesDB and AdminDB. FilesDB makes sense but idk what to call AdminDB,
+// which sounds super weird.
 func init() {
 	decoder := json.NewDecoder(bytes.NewReader(catalogBytes))
 	decoder.DisallowUnknownFields()

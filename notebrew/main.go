@@ -565,7 +565,7 @@ func main() {
 			}
 		}
 
-		reloadOnChange := map[string]func(nbrew *nb9.Notebrew, configfolder string) error{
+		reloadableFiles := map[string]func(nbrew *nb9.Notebrew, configfolder string) error{
 			"gzipgeneratedcontent.txt": func(nbrew *nb9.Notebrew, configfolder string) error {
 				b, err := os.ReadFile(filepath.Join(configfolder, "gzipgeneratedcontent.txt"))
 				if err != nil {
@@ -579,8 +579,8 @@ func main() {
 				return nil
 			},
 		}
-		for name, reload := range reloadOnChange {
-			err := reload(nbrew, configDir)
+		for name, reloadFunc := range reloadableFiles {
+			err := reloadFunc(nbrew, configDir)
 			if err != nil {
 				return fmt.Errorf("%s: %w", filepath.Join(configDir, name), err)
 			}
@@ -609,8 +609,8 @@ func main() {
 					timer.Reset(500 * time.Millisecond)
 				case <-timer.C:
 					timestamp := time.Now().UTC().Format("2006-01-02 15:04:05Z")
-					for name, reload := range reloadOnChange {
-						err := reload(nbrew, configDir)
+					for name, reloadFunc := range reloadableFiles {
+						err := reloadFunc(nbrew, configDir)
 						if err != nil {
 							fmt.Printf("%s: reloading %s: %s", timestamp, filepath.Join(configDir, name), err)
 						}
