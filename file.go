@@ -447,7 +447,11 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, te
 	var tmpl *template.Template
 	g1, ctx1 := errgroup.WithContext(ctx)
 	g1.Go(func() error {
-		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, path.Base(pageData.Name), text, nil)
+		name := pageData.Name
+		if name == "" {
+			name = "index.html"
+		}
+		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, name, text, nil)
 		if err != nil {
 			return err
 		}
