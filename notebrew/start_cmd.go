@@ -148,22 +148,22 @@ func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, er
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w", filepath.Join(configfolder, "certmagic.txt"), err)
 	}
-	certfolder := string(bytes.TrimSpace(b))
-	if certfolder == "" {
-		certfolder = filepath.Join(configfolder, "certmagic")
-		err := os.MkdirAll(certfolder, 0755)
+	certmagicDir := string(bytes.TrimSpace(b))
+	if certmagicDir == "" {
+		certmagicDir = filepath.Join(configfolder, "certmagic")
+		err := os.MkdirAll(certmagicDir, 0755)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		certfolder = filepath.Clean(certfolder)
-		_, err := os.Stat(certfolder)
+		certmagicDir = filepath.Clean(certmagicDir)
+		_, err := os.Stat(certmagicDir)
 		if err != nil {
 			return nil, err
 		}
 	}
 	certStorage := &certmagic.FileStorage{
-		Path: certfolder,
+		Path: certmagicDir,
 	}
 
 	// staticCertConfig manages the certificate for the main domain, content domain
