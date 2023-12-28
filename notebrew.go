@@ -54,15 +54,15 @@ type Notebrew struct {
 	// implementation is provided, UsersErrorCode should return an empty string.
 	UsersErrorCode func(error) string
 
-	// NOTE: it is the domain the server is serving for. The current server may
-	// be serving on localhost, but feeding into a reverse proxy that is the
-	// actual IP that the domain's DNS entry points to.
+	// NOTE: CMS domain.
+	// TODO: should we rename this to CMSDomain? cmsdomain.txt? The benefit is
+	// that anyone who reads is understands the significance of this domain.
+	// The downside is that asking non-technical users to fill in a
+	// cmsdomain.txt is fucking weird. But we can circumvent it by asking them
+	// to use notebrew config instead of manually filling in cmsdomain.txt.
 	Domain string // localhost:6444, example.com
 
-	// NOTE: it is the domain that the server's content is hosted on. It is
-	// completely detached from the current machine's Domain, it is possible to
-	// run notebrew in localhost mode but still generate files that reference
-	// the actual domain being served by GitHub pages or something.
+	// NOTE: Content domain.
 	ContentDomain string // localhost:6444, example.com
 
 	Proxies map[netip.Addr]struct{} // TODO: fill it in in main
