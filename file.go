@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -408,327 +409,9 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		head, tail, _ := strings.Cut(filePath, "/")
 		switch head {
 		case "pages":
-			urlPath := tail
-			if urlPath != "index.html" {
-				urlPath = strings.TrimSuffix(urlPath, path.Ext(urlPath))
-			}
-			outputDir := path.Join(sitePrefix, "output", urlPath)
-			pageData := PageData{
-				Site: Site{
-					Title:   "", // TODO: read site config.
-					Favicon: "", // TODO: read site config.
-					Lang:    "", // TODO: read site config.
-				},
-				Parent: path.Dir(urlPath),
-				Name:   path.Base(urlPath),
-			}
-			if pageData.Parent == "." {
-				pageData.Parent = ""
-			}
-			var tmpl *template.Template
-			g1, ctx1 := errgroup.WithContext(r.Context())
-			g1.Go(func() error {
-				tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, path.Base(pageData.Name), response.Content, nil)
-				if err != nil {
-					return err
-				}
-				return nil
-			})
-			g1.Go(func() error {
-				codeStyle := "dracula" // TODO: read site config.
-				markdownMu := sync.Mutex{}
-				markdown := goldmark.New(
-					goldmark.WithParserOptions(parser.WithAttribute()),
-					goldmark.WithExtensions(
-						extension.Table,
-						highlighting.NewHighlighting(highlighting.WithStyle(codeStyle)),
-					),
-					goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-				)
-				if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-					cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
-						Dialect: remoteFS.filesDialect,
-						Format: "SELECT {*}" +
-							" FROM files" +
-							" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
-							" AND NOT is_dir" +
-							" AND (" +
-							"file_path LIKE '%.jpeg'" +
-							" OR file_path LIKE '%.jpg'" +
-							" OR file_path LIKE '%.png'" +
-							" OR file_path LIKE '%.webp'" +
-							" OR file_path LIKE '%.gif'" +
-							" OR file_path LIKE '%.md'" +
-							") " +
-							" ORDER BY file_path",
-						Values: []any{
-							sq.StringParam("outputDir", outputDir),
-						},
-					}, func(row *sq.Row) *RemoteFile {
-						file := &RemoteFile{
-							ctx: ctx1,
-						}
-						file.info.filePath = row.String("file_path")
-						file.buf = getBuffer(row, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
-						return file
-					})
-					if err != nil {
-						return err
-					}
-					defer cursor.Close()
-					g2, ctx2 := errgroup.WithContext(ctx1)
-					for cursor.Next() {
-						file, err := cursor.Result()
-						if err != nil {
-							return err
-						}
-						name := path.Base(file.info.filePath)
-						switch path.Ext(file.info.filePath) {
-						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-							pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
-						case ".md":
-							g2.Go(func() error {
-								err := ctx2.Err()
-								if err != nil {
-									return err
-								}
-								defer file.Close()
-								var b strings.Builder
-								err = markdown.Convert(file.buf.Bytes(), &b)
-								if err != nil {
-									return err
-								}
-								markdownMu.Lock()
-								pageData.Markdown[name] = template.HTML(b.String())
-								markdownMu.Unlock()
-								return nil
-							})
-						}
-					}
-					err = cursor.Close()
-					if err != nil {
-						return err
-					}
-					err = g2.Wait()
-					if err != nil {
-						return err
-					}
-				} else {
-					dirEntries, err := nbrew.FS.WithContext(ctx1).ReadDir(outputDir)
-					if err != nil {
-						return err
-					}
-					g2, ctx2 := errgroup.WithContext(ctx1)
-					for _, dirEntry := range dirEntries {
-						dirEntry := dirEntry
-						name := dirEntry.Name()
-						switch path.Ext(name) {
-						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-							pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
-						case ".md":
-							g2.Go(func() error {
-								file, err := nbrew.FS.WithContext(ctx2).Open(path.Join(outputDir, name))
-								if err != nil {
-									return err
-								}
-								defer file.Close()
-								buf := bufPool.Get().(*bytes.Buffer)
-								buf.Reset()
-								defer bufPool.Put(buf)
-								_, err = buf.ReadFrom(file)
-								if err != nil {
-									return err
-								}
-								var b strings.Builder
-								err = markdown.Convert(buf.Bytes(), &b)
-								if err != nil {
-									return err
-								}
-								markdownMu.Lock()
-								pageData.Markdown[name] = template.HTML(b.String())
-								markdownMu.Unlock()
-								return nil
-							})
-						}
-					}
-					err = g2.Wait()
-					if err != nil {
-						return err
-					}
-				}
-				return nil
-			})
-			g1.Go(func() error {
-				pageDir := path.Join(sitePrefix, "pages", urlPath)
-				if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-					pageData.ChildPages, err = sq.FetchAll(ctx1, remoteFS.filesDB, sq.Query{
-						Dialect: remoteFS.filesDialect,
-						Format: "SELECT {*}" +
-							" FROM files" +
-							" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {pageDir})" +
-							" AND NOT is_dir" +
-							" AND file_path LIKE '%.html'" +
-							" ORDER BY file_path",
-					}, func(row *sq.Row) Page {
-						page := Page{
-							Parent: urlPath,
-							Name:   path.Base(row.String("file_path")),
-						}
-						line := strings.TrimSpace(row.String("{}", sq.DialectExpression{
-							Default: sq.Expr("substr(text, 1, instr(text, char(10))-1)"),
-							Cases: []sq.DialectCase{{
-								Dialect: "postgres",
-								Result:  sq.Expr("split_part(text, chr(10), 1)"),
-							}, {
-								Dialect: "mysql",
-								Result:  sq.Expr("substring_index(text, char(10), 1)"),
-							}},
-						}))
-						if !strings.HasPrefix(line, "<!--") {
-							return page
-						}
-						line = strings.TrimSpace(strings.TrimPrefix(line, "<!--"))
-						if !strings.HasPrefix(line, "#title") {
-							return page
-						}
-						line = strings.TrimSpace(strings.TrimPrefix(line, "#title"))
-						n := strings.Index(line, "-->")
-						if n < 0 {
-							return page
-						}
-						page.Title = strings.TrimSpace(line[:n])
-						return page
-					})
-					if err != nil {
-						return err
-					}
-				} else {
-					dirEntries, err := nbrew.FS.WithContext(ctx1).ReadDir(pageDir)
-					if err != nil {
-						if errors.Is(err, fs.ErrNotExist) {
-							return nil
-						}
-						return err
-					}
-					pageData.ChildPages = make([]Page, len(dirEntries))
-					g2, ctx2 := errgroup.WithContext(ctx1)
-					for i, dirEntry := range dirEntries {
-						i, dirEntry := i, dirEntry
-						g2.Go(func() error {
-							name := dirEntry.Name()
-							if dirEntry.IsDir() || !strings.HasSuffix(name, ".html") {
-								return nil
-							}
-							pageData.ChildPages[i].Parent = urlPath
-							pageData.ChildPages[i].Name = name
-							file, err := nbrew.FS.WithContext(ctx2).Open(path.Join(pageDir, name))
-							if err != nil {
-								return err
-							}
-							defer file.Close()
-							reader := readerPool.Get().(*bufio.Reader)
-							reader.Reset(file)
-							defer readerPool.Put(reader)
-							done := false
-							for !done {
-								line, err := reader.ReadSlice('\n')
-								if err != nil {
-									if err != io.EOF {
-										return err
-									}
-									done = true
-								}
-								line = bytes.TrimSpace(line)
-								if !bytes.HasPrefix(line, []byte("<!--")) {
-									break
-								}
-								line = bytes.TrimSpace(bytes.TrimPrefix(line, []byte("<!--")))
-								if !bytes.HasPrefix(line, []byte("#title")) {
-									break
-								}
-								line = bytes.TrimSpace(bytes.TrimPrefix(line, []byte("#title")))
-								n := bytes.Index(line, []byte("-->"))
-								if n < 0 {
-									break
-								}
-								pageData.ChildPages[i].Title = string(bytes.TrimSpace(line[:n]))
-							}
-							return nil
-						})
-					}
-					err = g2.Wait()
-					if err != nil {
-						return err
-					}
-					n := 0
-					for _, childPage := range pageData.ChildPages {
-						if childPage != (Page{}) {
-							pageData.ChildPages[n] = childPage
-							n++
-						}
-					}
-					pageData.ChildPages = pageData.ChildPages[:n]
-				}
-				return nil
-			})
-			err := g1.Wait()
+			err := nbrew.generatePage(r.Context(), sitePrefix, tail, response.Content)
 			if err != nil {
-				// TODO: errors should be set as flash messages instead of
-				// being thrown out as Internal Server Error.
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			// Render the template contents into the output index.html.
-			writer, err := nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(outputDir, "index.html"), 0644)
-			if err != nil {
-				if !errors.Is(err, fs.ErrNotExist) {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				err := nbrew.FS.WithContext(r.Context()).MkdirAll(outputDir, 0755)
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				writer, err = nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(outputDir, "index.html"), 0644)
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-			}
-			defer writer.Close()
-			if nbrew.GzipGeneratedContent.Load() {
-				gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-				gzipWriter.Reset(writer)
-				defer gzipWriterPool.Put(gzipWriter)
-				err = tmpl.Execute(gzipWriter, &pageData)
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				err = gzipWriter.Close()
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-			} else {
-				// TODO: errors should be set as flash messages instead of
-				// being thrown out as Internal Server Error.
-				err = tmpl.Execute(writer, &pageData)
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-			}
-			err = writer.Close()
-			if err != nil {
+				// TODO: check if it's a template runtime error.
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
@@ -740,6 +423,317 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 	default:
 		methodNotAllowed(w, r)
 	}
+}
+
+func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, text string) error {
+	if urlPath != "index.html" {
+		urlPath = strings.TrimSuffix(urlPath, path.Ext(urlPath))
+	}
+	outputDir := path.Join(sitePrefix, "output", urlPath)
+	pageData := PageData{
+		Site: Site{
+			Title:   "", // TODO: read site config.
+			Favicon: "", // TODO: read site config.
+			Lang:    "", // TODO: read site config.
+		},
+		Parent: path.Dir(urlPath),
+		Name:   path.Base(urlPath),
+	}
+	if pageData.Parent == "." {
+		pageData.Parent = ""
+	}
+	var err error
+	var tmpl *template.Template
+	g1, ctx1 := errgroup.WithContext(ctx)
+	g1.Go(func() error {
+		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, path.Base(pageData.Name), text, nil)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	g1.Go(func() error {
+		codeStyle := "dracula" // TODO: read site config.
+		markdownMu := sync.Mutex{}
+		markdown := goldmark.New(
+			goldmark.WithParserOptions(parser.WithAttribute()),
+			goldmark.WithExtensions(
+				extension.Table,
+				highlighting.NewHighlighting(highlighting.WithStyle(codeStyle)),
+			),
+			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+		)
+		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+			cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
+					" AND NOT is_dir" +
+					" AND (" +
+					"file_path LIKE '%.jpeg'" +
+					" OR file_path LIKE '%.jpg'" +
+					" OR file_path LIKE '%.png'" +
+					" OR file_path LIKE '%.webp'" +
+					" OR file_path LIKE '%.gif'" +
+					" OR file_path LIKE '%.md'" +
+					") " +
+					" ORDER BY file_path",
+				Values: []any{
+					sq.StringParam("outputDir", outputDir),
+				},
+			}, func(row *sq.Row) *RemoteFile {
+				file := &RemoteFile{
+					ctx: ctx1,
+				}
+				file.info.filePath = row.String("file_path")
+				file.buf = getBuffer(row, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
+				return file
+			})
+			if err != nil {
+				return err
+			}
+			defer cursor.Close()
+			g2, ctx2 := errgroup.WithContext(ctx1)
+			for cursor.Next() {
+				file, err := cursor.Result()
+				if err != nil {
+					return err
+				}
+				name := path.Base(file.info.filePath)
+				switch path.Ext(file.info.filePath) {
+				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+					pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
+				case ".md":
+					g2.Go(func() error {
+						err := ctx2.Err()
+						if err != nil {
+							return err
+						}
+						defer file.Close()
+						var b strings.Builder
+						err = markdown.Convert(file.buf.Bytes(), &b)
+						if err != nil {
+							return err
+						}
+						markdownMu.Lock()
+						pageData.Markdown[name] = template.HTML(b.String())
+						markdownMu.Unlock()
+						return nil
+					})
+				}
+			}
+			err = cursor.Close()
+			if err != nil {
+				return err
+			}
+			err = g2.Wait()
+			if err != nil {
+				return err
+			}
+		} else {
+			dirEntries, err := nbrew.FS.WithContext(ctx1).ReadDir(outputDir)
+			if err != nil {
+				return err
+			}
+			g2, ctx2 := errgroup.WithContext(ctx1)
+			for _, dirEntry := range dirEntries {
+				dirEntry := dirEntry
+				name := dirEntry.Name()
+				switch path.Ext(name) {
+				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+					pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
+				case ".md":
+					g2.Go(func() error {
+						file, err := nbrew.FS.WithContext(ctx2).Open(path.Join(outputDir, name))
+						if err != nil {
+							return err
+						}
+						defer file.Close()
+						buf := bufPool.Get().(*bytes.Buffer)
+						buf.Reset()
+						defer bufPool.Put(buf)
+						_, err = buf.ReadFrom(file)
+						if err != nil {
+							return err
+						}
+						var b strings.Builder
+						err = markdown.Convert(buf.Bytes(), &b)
+						if err != nil {
+							return err
+						}
+						markdownMu.Lock()
+						pageData.Markdown[name] = template.HTML(b.String())
+						markdownMu.Unlock()
+						return nil
+					})
+				}
+			}
+			err = g2.Wait()
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	g1.Go(func() error {
+		pageDir := path.Join(sitePrefix, "pages", urlPath)
+		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+			pageData.ChildPages, err = sq.FetchAll(ctx1, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {pageDir})" +
+					" AND NOT is_dir" +
+					" AND file_path LIKE '%.html'" +
+					" ORDER BY file_path",
+			}, func(row *sq.Row) Page {
+				page := Page{
+					Parent: urlPath,
+					Name:   path.Base(row.String("file_path")),
+				}
+				line := strings.TrimSpace(row.String("{}", sq.DialectExpression{
+					Default: sq.Expr("substr(text, 1, instr(text, char(10))-1)"),
+					Cases: []sq.DialectCase{{
+						Dialect: "postgres",
+						Result:  sq.Expr("split_part(text, chr(10), 1)"),
+					}, {
+						Dialect: "mysql",
+						Result:  sq.Expr("substring_index(text, char(10), 1)"),
+					}},
+				}))
+				if !strings.HasPrefix(line, "<!--") {
+					return page
+				}
+				line = strings.TrimSpace(strings.TrimPrefix(line, "<!--"))
+				if !strings.HasPrefix(line, "#title") {
+					return page
+				}
+				line = strings.TrimSpace(strings.TrimPrefix(line, "#title"))
+				n := strings.Index(line, "-->")
+				if n < 0 {
+					return page
+				}
+				page.Title = strings.TrimSpace(line[:n])
+				return page
+			})
+			if err != nil {
+				return err
+			}
+		} else {
+			dirEntries, err := nbrew.FS.WithContext(ctx1).ReadDir(pageDir)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					return nil
+				}
+				return err
+			}
+			pageData.ChildPages = make([]Page, len(dirEntries))
+			g2, ctx2 := errgroup.WithContext(ctx1)
+			for i, dirEntry := range dirEntries {
+				i, dirEntry := i, dirEntry
+				g2.Go(func() error {
+					name := dirEntry.Name()
+					if dirEntry.IsDir() || !strings.HasSuffix(name, ".html") {
+						return nil
+					}
+					pageData.ChildPages[i].Parent = urlPath
+					pageData.ChildPages[i].Name = name
+					file, err := nbrew.FS.WithContext(ctx2).Open(path.Join(pageDir, name))
+					if err != nil {
+						return err
+					}
+					defer file.Close()
+					reader := readerPool.Get().(*bufio.Reader)
+					reader.Reset(file)
+					defer readerPool.Put(reader)
+					done := false
+					for !done {
+						line, err := reader.ReadSlice('\n')
+						if err != nil {
+							if err != io.EOF {
+								return err
+							}
+							done = true
+						}
+						line = bytes.TrimSpace(line)
+						if !bytes.HasPrefix(line, []byte("<!--")) {
+							break
+						}
+						line = bytes.TrimSpace(bytes.TrimPrefix(line, []byte("<!--")))
+						if !bytes.HasPrefix(line, []byte("#title")) {
+							break
+						}
+						line = bytes.TrimSpace(bytes.TrimPrefix(line, []byte("#title")))
+						n := bytes.Index(line, []byte("-->"))
+						if n < 0 {
+							break
+						}
+						pageData.ChildPages[i].Title = string(bytes.TrimSpace(line[:n]))
+					}
+					return nil
+				})
+			}
+			err = g2.Wait()
+			if err != nil {
+				return err
+			}
+			n := 0
+			for _, childPage := range pageData.ChildPages {
+				if childPage != (Page{}) {
+					pageData.ChildPages[n] = childPage
+					n++
+				}
+			}
+			pageData.ChildPages = pageData.ChildPages[:n]
+		}
+		return nil
+	})
+	err = g1.Wait()
+	if err != nil {
+		return err
+	}
+	// Render the template contents into the output index.html.
+	writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		err := nbrew.FS.WithContext(ctx).MkdirAll(outputDir, 0755)
+		if err != nil {
+			return err
+		}
+		writer, err = nbrew.FS.WithContext(ctx).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+		if err != nil {
+			return err
+		}
+	}
+	defer writer.Close()
+	if nbrew.GzipGeneratedContent.Load() {
+		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
+		gzipWriter.Reset(writer)
+		defer gzipWriterPool.Put(gzipWriter)
+		err = tmpl.Execute(gzipWriter, &pageData)
+		if err != nil {
+			// TODO: if template runtime error, set a flash message.
+			return err
+		}
+		err = gzipWriter.Close()
+		if err != nil {
+			return err
+		}
+	} else {
+		// TODO: if template runtime error, set a flash message.
+		err = tmpl.Execute(writer, &pageData)
+		if err != nil {
+			return err
+		}
+	}
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func serveFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) {
