@@ -30,7 +30,7 @@ import (
 type StartCmd struct {
 }
 
-func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, error) {
+func NewServer(nbrew *nb9.Notebrew, configDir, addr string) (*http.Server, error) {
 	if nbrew.Domain == "" {
 		return nil, fmt.Errorf("Domain cannot be empty")
 	}
@@ -49,9 +49,9 @@ func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, er
 	server.IdleTimeout = 120 * time.Second
 
 	var dns01Solver acmez.Solver
-	b, err := os.ReadFile(filepath.Join(configfolder, "dns.json"))
+	b, err := os.ReadFile(filepath.Join(configDir, "dns.json"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("%s: %w", filepath.Join(configfolder, "dns.json"), err)
+		return nil, fmt.Errorf("%s: %w", filepath.Join(configDir, "dns.json"), err)
 	}
 	b = bytes.TrimSpace(b)
 	if len(b) > 0 {
@@ -66,15 +66,15 @@ func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, er
 		decoder.DisallowUnknownFields()
 		err := decoder.Decode(&dnsConfig)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", filepath.Join(configfolder, "dns.json"), err)
+			return nil, fmt.Errorf("%s: %w", filepath.Join(configDir, "dns.json"), err)
 		}
 		switch dnsConfig.Provider {
 		case "namecheap":
 			if dnsConfig.Username == "" {
-				return nil, fmt.Errorf("%s: namecheap: missing username field", filepath.Join(configfolder, "dns.json"))
+				return nil, fmt.Errorf("%s: namecheap: missing username field", filepath.Join(configDir, "dns.json"))
 			}
 			if dnsConfig.APIKey == "" {
-				return nil, fmt.Errorf("%s: namecheap: missing apiKey field", filepath.Join(configfolder, "dns.json"))
+				return nil, fmt.Errorf("%s: namecheap: missing apiKey field", filepath.Join(configDir, "dns.json"))
 			}
 			resp, err := http.Get("https://ipv4.icanhazip.com")
 			if err != nil {
@@ -108,7 +108,7 @@ func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, er
 			}
 		case "cloudflare":
 			if dnsConfig.APIToken == "" {
-				return nil, fmt.Errorf("%s: cloudflare: missing apiToken field", filepath.Join(configfolder, "dns.json"))
+				return nil, fmt.Errorf("%s: cloudflare: missing apiToken field", filepath.Join(configDir, "dns.json"))
 			}
 			dns01Solver = &certmagic.DNS01Solver{
 				DNSProvider: &cloudflare.Provider{
@@ -117,10 +117,10 @@ func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, er
 			}
 		case "porkbun":
 			if dnsConfig.APIKey == "" {
-				return nil, fmt.Errorf("%s: porkbun: missing apiKey field", filepath.Join(configfolder, "dns.json"))
+				return nil, fmt.Errorf("%s: porkbun: missing apiKey field", filepath.Join(configDir, "dns.json"))
 			}
 			if dnsConfig.SecretKey == "" {
-				return nil, fmt.Errorf("%s: porkbun: missing secretKey field", filepath.Join(configfolder, "dns.json"))
+				return nil, fmt.Errorf("%s: porkbun: missing secretKey field", filepath.Join(configDir, "dns.json"))
 			}
 			dns01Solver = &certmagic.DNS01Solver{
 				DNSProvider: &porkbun.Provider{
@@ -130,7 +130,7 @@ func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, er
 			}
 		case "godaddy":
 			if dnsConfig.APIToken == "" {
-				return nil, fmt.Errorf("%s: godaddy: missing apiToken field", filepath.Join(configfolder, "dns.json"))
+				return nil, fmt.Errorf("%s: godaddy: missing apiToken field", filepath.Join(configDir, "dns.json"))
 			}
 			dns01Solver = &certmagic.DNS01Solver{
 				DNSProvider: &godaddy.Provider{
@@ -138,19 +138,19 @@ func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, er
 				},
 			}
 		case "":
-			return nil, fmt.Errorf("%s: missing provider field", filepath.Join(configfolder, "dns.json"))
+			return nil, fmt.Errorf("%s: missing provider field", filepath.Join(configDir, "dns.json"))
 		default:
-			return nil, fmt.Errorf("%s: unsupported provider %q (possible values: namecheap, cloudflare, porkbun, godaddy)", filepath.Join(configfolder, "dns.json"), dnsConfig.Provider)
+			return nil, fmt.Errorf("%s: unsupported provider %q (possible values: namecheap, cloudflare, porkbun, godaddy)", filepath.Join(configDir, "dns.json"), dnsConfig.Provider)
 		}
 	}
 
-	b, err = os.ReadFile(filepath.Join(configfolder, "certmagic.txt"))
+	b, err = os.ReadFile(filepath.Join(configDir, "certmagic.txt"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("%s: %w", filepath.Join(configfolder, "certmagic.txt"), err)
+		return nil, fmt.Errorf("%s: %w", filepath.Join(configDir, "certmagic.txt"), err)
 	}
 	certmagicDir := string(bytes.TrimSpace(b))
 	if certmagicDir == "" {
-		certmagicDir = filepath.Join(configfolder, "certmagic")
+		certmagicDir = filepath.Join(configDir, "certmagic")
 		err := os.MkdirAll(certmagicDir, 0755)
 		if err != nil {
 			return nil, err
