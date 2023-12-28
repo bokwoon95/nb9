@@ -8,9 +8,6 @@ import (
 	"github.com/bokwoon95/sqddl/ddl"
 )
 
-//go:embed tables.json
-var tablesJSON []byte
-
 type rawTable struct {
 	Table      string   `json:"table"`
 	PrimaryKey []string `json:"primarykey"`
@@ -28,9 +25,12 @@ type rawTable struct {
 	} `json:"columns"`
 }
 
-func UsersCatalog(dialect string) (*ddl.Catalog, error) {
+//go:embed files_catalog.json
+var filesCatalogBytes []byte
+
+func FilesCatalog(dialect string) (*ddl.Catalog, error) {
 	var rawTables []rawTable
-	decoder := json.NewDecoder(bytes.NewReader(tablesJSON))
+	decoder := json.NewDecoder(bytes.NewReader(filesCatalogBytes))
 	decoder.DisallowUnknownFields()
 	err := decoder.Decode(&rawTables)
 	if err != nil {
@@ -42,9 +42,6 @@ func UsersCatalog(dialect string) (*ddl.Catalog, error) {
 	cache := ddl.NewCatalogCache(catalog)
 	schema := cache.GetOrCreateSchema(catalog, "")
 	for _, rawTable := range rawTables {
-		if rawTable.Table == "files" {
-			continue
-		}
 		table := cache.GetOrCreateTable(schema, rawTable.Table)
 		if len(rawTable.PrimaryKey) != 0 {
 			cache.AddOrUpdateConstraint(table, ddl.Constraint{
@@ -104,9 +101,12 @@ func UsersCatalog(dialect string) (*ddl.Catalog, error) {
 	return catalog, nil
 }
 
-func FilesCatalog(dialect string) (*ddl.Catalog, error) {
+//go:embed users_catalog.json
+var usersCatalogBytes []byte
+
+func UsersCatalog(dialect string) (*ddl.Catalog, error) {
 	var rawTables []rawTable
-	decoder := json.NewDecoder(bytes.NewReader(tablesJSON))
+	decoder := json.NewDecoder(bytes.NewReader(usersCatalogBytes))
 	decoder.DisallowUnknownFields()
 	err := decoder.Decode(&rawTables)
 	if err != nil {
@@ -118,7 +118,7 @@ func FilesCatalog(dialect string) (*ddl.Catalog, error) {
 	cache := ddl.NewCatalogCache(catalog)
 	schema := cache.GetOrCreateSchema(catalog, "")
 	for _, rawTable := range rawTables {
-		if rawTable.Table != "files" {
+		if rawTable.Table == "files" {
 			continue
 		}
 		table := cache.GetOrCreateTable(schema, rawTable.Table)

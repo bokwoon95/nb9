@@ -53,7 +53,7 @@ var (
 )
 
 // static/dynamic private/public config:
-// - static private: database.json, dns.json, s3.json, smtp.json (excluded)
+// - static private: users.json, dns.json, s3.json, smtp.json (excluded)
 // - static public: files.txt domain.txt, contentdomain.txt, multisite.txt
 // - dynamic private: captcha.json
 // - dynamic public: allowsignup.txt, 503.html
@@ -169,9 +169,9 @@ func main() {
 			nbrew.ContentDomain = nbrew.Domain
 		}
 
-		b, err = os.ReadFile(filepath.Join(configDir, "database.json"))
+		b, err = os.ReadFile(filepath.Join(configDir, "users.json"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("%s: %w", filepath.Join(configDir, "database.json"), err)
+			return fmt.Errorf("%s: %w", filepath.Join(configDir, "users.json"), err)
 		}
 		b = bytes.TrimSpace(b)
 		if len(b) > 0 {
@@ -180,25 +180,25 @@ func main() {
 			decoder.DisallowUnknownFields()
 			err := decoder.Decode(&databaseConfig)
 			if err != nil {
-				return fmt.Errorf("%s: %w", filepath.Join(configDir, "database.json"), err)
+				return fmt.Errorf("%s: %w", filepath.Join(configDir, "users.json"), err)
 			}
 			var dataSourceName string
 			switch databaseConfig.Dialect {
 			case "":
-				return fmt.Errorf("%s: missing dialect field", filepath.Join(configDir, "database.json"))
+				return fmt.Errorf("%s: missing dialect field", filepath.Join(configDir, "users.json"))
 			case "sqlite":
 				if databaseConfig.Filepath == "" {
-					databaseConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-database.sqlite")
+					databaseConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-users.db")
 				}
 				databaseConfig.Filepath, err = filepath.Abs(databaseConfig.Filepath)
 				if err != nil {
-					return fmt.Errorf("%s: sqlite: %w", filepath.Join(configDir, "database.json"), err)
+					return fmt.Errorf("%s: sqlite: %w", filepath.Join(configDir, "users.json"), err)
 				}
 				dataSourceName = databaseConfig.Filepath + "?" + sqliteQueryString(databaseConfig.Params)
 				nbrew.UsersDialect = "sqlite"
 				nbrew.UsersDB, err = sql.Open(sqliteDriverName, dataSourceName)
 				if err != nil {
-					return fmt.Errorf("%s: sqlite: open %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
+					return fmt.Errorf("%s: sqlite: open %s: %w", filepath.Join(configDir, "users.json"), dataSourceName, err)
 				}
 				nbrew.UsersErrorCode = sqliteErrorCode
 			case "postgres":
@@ -226,7 +226,7 @@ func main() {
 				nbrew.UsersDialect = "postgres"
 				nbrew.UsersDB, err = sql.Open("pgx", dataSourceName)
 				if err != nil {
-					return fmt.Errorf("%s: postgres: open %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
+					return fmt.Errorf("%s: postgres: open %s: %w", filepath.Join(configDir, "users.json"), dataSourceName, err)
 				}
 				nbrew.UsersErrorCode = func(err error) string {
 					var pgErr *pgconn.PgError
@@ -273,11 +273,11 @@ func main() {
 					return ""
 				}
 			default:
-				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "database.json"), databaseConfig.Dialect)
+				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "users.json"), databaseConfig.Dialect)
 			}
 			err = nbrew.UsersDB.Ping()
 			if err != nil {
-				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "database.json"), nbrew.UsersDialect, dataSourceName, err)
+				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "users.json"), nbrew.UsersDialect, dataSourceName, err)
 			}
 			usersCatalog, err := nb9.UsersCatalog(nbrew.UsersDialect)
 			if err != nil {
@@ -343,7 +343,7 @@ func main() {
 			switch filesConfig.Dialect {
 			case "sqlite":
 				if filesConfig.Filepath == "" {
-					filesConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-files.sqlite")
+					filesConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-files.db")
 				}
 				filesConfig.Filepath, err = filepath.Abs(filesConfig.Filepath)
 				if err != nil {
@@ -428,11 +428,11 @@ func main() {
 					return ""
 				}
 			default:
-				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "database.json"), filesConfig.Dialect)
+				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "users.json"), filesConfig.Dialect)
 			}
 			err = filesDB.Ping()
 			if err != nil {
-				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "database.json"), filesDialect, dataSourceName, err)
+				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "users.json"), filesDialect, dataSourceName, err)
 			}
 			filesCatalog, err := nb9.FilesCatalog(filesDialect)
 			if err != nil {
