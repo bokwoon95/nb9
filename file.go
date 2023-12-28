@@ -711,7 +711,8 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, tail, text 
 	}
 	// NOTE: because writer.Close() is unaware of any template execution
 	// errors, a faulty template will successfully write out to the index.html
-	// file but in a partial state right up til where the error occurs.
+	// file but in a partial state right up til where the error occurs. Maybe
+	// that's for the best.
 	defer writer.Close()
 	if nbrew.GzipGeneratedContent.Load() {
 		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
