@@ -396,46 +396,25 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			return
 		}
 
-		// TODO: generate the page or the post here, using parseTemplate.
-		// head, tail, _ := strings.Cut(filePath, "/")
-		// switch head {
-		// case "pages":
-		// 	siteGen, err := NewSiteGenerator(SiteGeneratorConfig{
-		// 		ContentDomain:        nbrew.ContentDomain,
-		// 		FS:                   nbrew.FS,
-		// 		SitePrefix:           sitePrefix,
-		// 		GzipGeneratedContent: nbrew.GzipGeneratedContent.Load(),
-		// 	})
-		// 	if err != nil {
-		// 		getLogger(r.Context()).Error(err.Error())
-		// 		internalServerError(w, r, err)
-		// 		return
-		// 	}
-		// 	err = siteGen.GeneratePage(r.Context(), tail)
-		// 	if err != nil {
-		// 		getLogger(r.Context()).Error(err.Error())
-		// 		internalServerError(w, r, err)
-		// 		return
-		// 	}
-		// case "posts":
-		// 	siteGen, err := NewSiteGenerator(SiteGeneratorConfig{
-		// 		ContentDomain:        nbrew.ContentDomain,
-		// 		FS:                   nbrew.FS,
-		// 		SitePrefix:           sitePrefix,
-		// 		GzipGeneratedContent: nbrew.GzipGeneratedContent.Load(),
-		// 	})
-		// 	if err != nil {
-		// 		getLogger(r.Context()).Error(err.Error())
-		// 		internalServerError(w, r, err)
-		// 		return
-		// 	}
-		// 	err = siteGen.GeneratePost(r.Context(), tail)
-		// 	if err != nil {
-		// 		getLogger(r.Context()).Error(err.Error())
-		// 		internalServerError(w, r, err)
-		// 		return
-		// 	}
-		// }
+		head, tail, _ := strings.Cut(filePath, "/")
+		switch head {
+		case "pages":
+			urlPath := tail
+			if urlPath == "index.html" {
+				urlPath = strings.TrimSuffix(urlPath, path.Ext(urlPath))
+			}
+			outputDir := path.Join(sitePrefix, "output", urlPath)
+			pageData := PageData{
+				Site: Site{
+					Title:   "", // TODO: read site config.
+					Favicon: "", // TODO: read site config.
+					Lang:    "", // TODO: read site config.
+				},
+				Parent: path.Dir(urlPath),
+				Name:   path.Base(urlPath),
+			}
+		case "posts":
+		}
 		response.Status = UpdateSuccess
 		writeResponse(w, r, response)
 	default:
