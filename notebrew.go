@@ -54,15 +54,8 @@ type Notebrew struct {
 	// implementation is provided, UsersErrorCode should return an empty string.
 	UsersErrorCode func(error) string
 
-	// NOTE: CMS domain.
-	// TODO: should we rename this to CMSDomain? cmsdomain.txt? The benefit is
-	// that anyone who reads is understands the significance of this domain.
-	// The downside is that asking non-technical users to fill in a
-	// cmsdomain.txt is fucking weird. But we can circumvent it by asking them
-	// to use notebrew config instead of manually filling in cmsdomain.txt.
 	CMSDomain string // localhost:6444, example.com
 
-	// NOTE: Content domain.
 	ContentDomain string // localhost:6444, example.com
 
 	Proxies map[netip.Addr]struct{} // TODO: fill it in in main
