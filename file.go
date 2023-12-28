@@ -409,11 +409,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		head, tail, _ := strings.Cut(filePath, "/")
 		switch head {
 		case "pages":
-			var urlPath string
-			if tail != "index.html" {
-				urlPath = strings.TrimSuffix(tail, path.Ext(tail))
-			}
-			err := nbrew.generatePage(r.Context(), sitePrefix, urlPath, response.Content)
+			err := nbrew.generatePage(r.Context(), sitePrefix, tail, response.Content)
 			if err != nil {
 				// TODO: check if it's a template runtime error.
 				getLogger(r.Context()).Error(err.Error())
@@ -429,7 +425,11 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 	}
 }
 
-func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, text string) error {
+func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, tail, text string) error {
+	var urlPath string
+	if tail != "index.html" {
+		urlPath = strings.TrimSuffix(tail, path.Ext(tail))
+	}
 	outputDir := path.Join(sitePrefix, "output", urlPath)
 	pageData := PageData{
 		Site: Site{
@@ -437,8 +437,8 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, te
 			Favicon: "", // TODO: read site config.
 			Lang:    "", // TODO: read site config.
 		},
-		Parent: path.Dir(urlPath),
-		Name:   path.Base(urlPath),
+		Parent: path.Dir(tail),
+		Name:   path.Base(tail),
 	}
 	if pageData.Parent == "." {
 		pageData.Parent = ""
@@ -508,7 +508,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, te
 				name := path.Base(file.info.filePath)
 				switch path.Ext(file.info.filePath) {
 				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-					pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
+					pageData.Images = append(pageData.Images, Image{Parent: tail, Name: name})
 				case ".md":
 					g2.Go(func() error {
 						err := ctx2.Err()
@@ -547,7 +547,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, te
 				name := dirEntry.Name()
 				switch path.Ext(name) {
 				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-					pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
+					pageData.Images = append(pageData.Images, Image{Parent: tail, Name: name})
 				case ".md":
 					g2.Go(func() error {
 						file, err := nbrew.FS.WithContext(ctx2).Open(path.Join(outputDir, name))
@@ -582,7 +582,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, te
 		return nil
 	})
 	g1.Go(func() error {
-		pageDir := path.Join(sitePrefix, "pages", urlPath)
+		pageDir := path.Join(sitePrefix, "pages", tail)
 		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
 			pageData.ChildPages, err = sq.FetchAll(ctx1, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
@@ -594,7 +594,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, te
 					" ORDER BY file_path",
 			}, func(row *sq.Row) Page {
 				page := Page{
-					Parent: urlPath,
+					Parent: tail,
 					Name:   path.Base(row.String("file_path")),
 				}
 				line := strings.TrimSpace(row.String("{}", sq.DialectExpression{
@@ -642,7 +642,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, te
 					if dirEntry.IsDir() || !strings.HasSuffix(name, ".html") {
 						return nil
 					}
-					pageData.ChildPages[i].Parent = urlPath
+					pageData.ChildPages[i].Parent = tail
 					pageData.ChildPages[i].Name = name
 					file, err := nbrew.FS.WithContext(ctx2).Open(path.Join(pageDir, name))
 					if err != nil {
