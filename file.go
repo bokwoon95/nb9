@@ -409,7 +409,11 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		head, tail, _ := strings.Cut(filePath, "/")
 		switch head {
 		case "pages":
-			err := nbrew.generatePage(r.Context(), sitePrefix, tail, response.Content)
+			var urlPath string
+			if tail != "index.html" {
+				urlPath = strings.TrimSuffix(tail, path.Ext(tail))
+			}
+			err := nbrew.generatePage(r.Context(), sitePrefix, urlPath, response.Content)
 			if err != nil {
 				// TODO: check if it's a template runtime error.
 				getLogger(r.Context()).Error(err.Error())
@@ -426,9 +430,6 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 }
 
 func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, urlPath, text string) error {
-	if urlPath != "index.html" {
-		urlPath = strings.TrimSuffix(urlPath, path.Ext(urlPath))
-	}
 	outputDir := path.Join(sitePrefix, "output", urlPath)
 	pageData := PageData{
 		Site: Site{
