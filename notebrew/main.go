@@ -54,7 +54,7 @@ var (
 
 // static/dynamic private/public config:
 // - static private: users.json, dns.json, s3.json, smtp.json (excluded)
-// - static public: files.txt domain.txt, contentdomain.txt, multisite.txt
+// - static public: files.txt cmsdomain.txt, contentdomain.txt, multisite.txt
 // - dynamic private: captcha.json
 // - dynamic public: allowsignup.txt, 503.html
 
@@ -126,9 +126,9 @@ func main() {
 		nbrew.Logger.Store(&logger)
 
 		// Determine the domain.
-		b, err := os.ReadFile(filepath.Join(configDir, "domain.txt"))
+		b, err := os.ReadFile(filepath.Join(configDir, "cmsdomain.txt"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("%s: %w", filepath.Join(configDir, "domain.txt"), err)
+			return fmt.Errorf("%s: %w", filepath.Join(configDir, "cmsdomain.txt"), err)
 		}
 		nbrew.CMSDomain = string(bytes.TrimSpace(b))
 
