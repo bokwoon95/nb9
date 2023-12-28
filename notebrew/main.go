@@ -130,7 +130,7 @@ func main() {
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("%s: %w", filepath.Join(configDir, "domain.txt"), err)
 		}
-		nbrew.Domain = string(bytes.TrimSpace(b))
+		nbrew.CMSDomain = string(bytes.TrimSpace(b))
 
 		// Determine the port to listen on (can be empty).
 		b, err = os.ReadFile(filepath.Join(configDir, "port.txt"))
@@ -142,8 +142,8 @@ func main() {
 		// Determine the TCP address to listen on (based on the domain and port).
 		var addr string
 		if port != "" {
-			if nbrew.Domain == "" {
-				nbrew.Domain = "localhost:" + port
+			if nbrew.CMSDomain == "" {
+				nbrew.CMSDomain = "localhost:" + port
 			}
 			if port == "443" || port == "80" {
 				addr = ":" + port
@@ -151,8 +151,8 @@ func main() {
 				addr = "localhost:" + port
 			}
 		} else {
-			if nbrew.Domain == "" {
-				nbrew.Domain = "localhost:6444"
+			if nbrew.CMSDomain == "" {
+				nbrew.CMSDomain = "localhost:6444"
 				addr = "localhost:6444"
 			} else {
 				addr = ":443"
@@ -166,7 +166,7 @@ func main() {
 		}
 		nbrew.ContentDomain = string(bytes.TrimSpace(b))
 		if nbrew.ContentDomain == "" {
-			nbrew.ContentDomain = nbrew.Domain
+			nbrew.ContentDomain = nbrew.CMSDomain
 		}
 
 		b, err = os.ReadFile(filepath.Join(configDir, "users.json"))

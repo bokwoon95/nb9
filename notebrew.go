@@ -60,7 +60,7 @@ type Notebrew struct {
 	// The downside is that asking non-technical users to fill in a
 	// cmsdomain.txt is fucking weird. But we can circumvent it by asking them
 	// to use notebrew config instead of manually filling in cmsdomain.txt.
-	Domain string // localhost:6444, example.com
+	CMSDomain string // localhost:6444, example.com
 
 	// NOTE: Content domain.
 	ContentDomain string // localhost:6444, example.com
@@ -98,7 +98,7 @@ func (nbrew *Notebrew) setSession(w http.ResponseWriter, r *http.Request, name s
 	cookie := &http.Cookie{
 		Path:     "/",
 		Name:     name,
-		Secure:   nbrew.Domain != "localhost" && !strings.HasPrefix(nbrew.Domain, "localhost:"),
+		Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	}
@@ -189,7 +189,7 @@ func (nbrew *Notebrew) clearSession(w http.ResponseWriter, r *http.Request, name
 		Name:     name,
 		Value:    "0",
 		MaxAge:   -1,
-		Secure:   nbrew.Domain != "localhost" && !strings.HasPrefix(nbrew.Domain, "localhost:"),
+		Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 		HttpOnly: true,
 	})
 	if nbrew.UsersDB == nil {
@@ -474,11 +474,11 @@ func (nbrew *Notebrew) contentURL(sitePrefix string) string {
 	}
 	// NOTE: if we're proxying localhost to the outside world, our domain *is
 	// not* localhost. It is whichever domain we are hosting the CMS on.
-	if nbrew.Domain == "localhost" || strings.HasPrefix(nbrew.Domain, "localhost:") {
+	if nbrew.CMSDomain == "localhost" || strings.HasPrefix(nbrew.CMSDomain, "localhost:") {
 		if sitePrefix != "" {
-			return "http://" + strings.TrimPrefix(sitePrefix, "@") + "." + nbrew.Domain
+			return "http://" + strings.TrimPrefix(sitePrefix, "@") + "." + nbrew.CMSDomain
 		}
-		return "http://" + nbrew.Domain
+		return "http://" + nbrew.CMSDomain
 	}
 	if sitePrefix != "" {
 		return "https://" + strings.TrimPrefix(sitePrefix, "@") + "." + nbrew.ContentDomain

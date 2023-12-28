@@ -31,7 +31,7 @@ type StartCmd struct {
 }
 
 func NewServer(nbrew *nb9.Notebrew, configDir, addr string) (*http.Server, error) {
-	if nbrew.Domain == "" {
+	if nbrew.CMSDomain == "" {
 		return nil, fmt.Errorf("Domain cannot be empty")
 	}
 	if nbrew.ContentDomain == "" {
@@ -183,10 +183,10 @@ func NewServer(nbrew *nb9.Notebrew, configDir, addr string) (*http.Server, error
 		}),
 	}
 	var domains []string
-	if nbrew.Domain == nbrew.ContentDomain {
-		domains = append(domains, nbrew.Domain, "www."+nbrew.Domain, "cdn."+nbrew.Domain)
+	if nbrew.CMSDomain == nbrew.ContentDomain {
+		domains = append(domains, nbrew.CMSDomain, "www."+nbrew.CMSDomain, "cdn."+nbrew.CMSDomain)
 	} else {
-		domains = append(domains, nbrew.Domain, "www."+nbrew.Domain, "cdn."+nbrew.ContentDomain, nbrew.ContentDomain, "www."+nbrew.ContentDomain)
+		domains = append(domains, nbrew.CMSDomain, "www."+nbrew.CMSDomain, "cdn."+nbrew.ContentDomain, nbrew.ContentDomain, "www."+nbrew.ContentDomain)
 	}
 	if dns01Solver != nil {
 		domains = append(domains, "*."+nbrew.ContentDomain)

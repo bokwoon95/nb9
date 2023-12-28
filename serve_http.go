@@ -22,13 +22,13 @@ import (
 
 func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	scheme := "https://"
-	if nbrew.Domain == "localhost" || strings.HasPrefix(nbrew.Domain, "localhost:") {
+	if nbrew.CMSDomain == "localhost" || strings.HasPrefix(nbrew.CMSDomain, "localhost:") {
 		scheme = "http://"
 	}
 
 	// Redirect the www subdomain to the bare domain.
-	if r.Host == "www."+nbrew.Domain {
-		http.Redirect(w, r, scheme+nbrew.Domain+r.URL.RequestURI(), http.StatusMovedPermanently)
+	if r.Host == "www."+nbrew.CMSDomain {
+		http.Redirect(w, r, scheme+nbrew.CMSDomain+r.URL.RequestURI(), http.StatusMovedPermanently)
 		return
 	}
 
@@ -67,13 +67,13 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Cross-Origin-Opener-Policy", "same-origin")
 	w.Header().Add("Cross-Origin-Embedder-Policy", "require-corp")
 	w.Header().Add("Cross-Origin-Resource-Policy", "same-origin")
-	if nbrew.Domain != "localhost" && !strings.HasPrefix(nbrew.Domain, "localhost:") {
+	if nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:") {
 		w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 	}
 
 	// Special case: make these files available on the root path of the main
 	// domain.
-	if r.Host == nbrew.Domain {
+	if r.Host == nbrew.CMSDomain {
 		switch strings.Trim(r.URL.Path, "/") {
 		case "notebrew.webmanifest":
 			w.Header().Add("Cache-Control", "max-age: 2592000, stale-while-revalidate" /* 1 month */)
@@ -91,7 +91,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	head, tail, _ := strings.Cut(urlPath, "/")
 
 	// Handle the /users/* route on the main domain.
-	if r.Host == nbrew.Domain && head == "users" {
+	if r.Host == nbrew.CMSDomain && head == "users" {
 		switch tail {
 		case "signup":
 			// nbrew.signup(w, r, ip)
@@ -107,7 +107,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Handle the /files/* route on the main domain.
-	if r.Host == nbrew.Domain && head == "files" {
+	if r.Host == nbrew.CMSDomain && head == "files" {
 		urlPath := tail
 		head, tail, _ := strings.Cut(urlPath, "/")
 		if head == "static" {
