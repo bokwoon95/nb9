@@ -119,8 +119,8 @@ func NewSiteGenerator(config SiteGeneratorConfig) (*SiteGenerator, error) {
 		gzipGeneratedContent: config.GzipGeneratedContent,
 	}
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		categories, err := sq.FetchAll(remoteFS.ctx, remoteFS.db, sq.Query{
-			Dialect: remoteFS.dialect,
+		categories, err := sq.FetchAll(remoteFS.ctx, remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
 			Format:  "SELECT {*} FROM files WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {postsDir}) AND is_dir ORDER BY file_path",
 			Values: []any{
 				sq.StringParam("postsDir", path.Join(siteGen.sitePrefix, "posts")),
@@ -223,8 +223,8 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 		g2, ctx2 := errgroup.WithContext(ctx1)
 		markdownMu := sync.Mutex{}
 		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-			cursor, err := sq.FetchCursor(ctx2, remoteFS.db, sq.Query{
-				Dialect: remoteFS.dialect,
+			cursor, err := sq.FetchCursor(ctx2, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
@@ -325,8 +325,8 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	g1.Go(func() error {
 		pageDir := path.Join(siteGen.sitePrefix, "pages", urlPath)
 		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-			childPages, err := sq.FetchAll(ctx1, remoteFS.db, sq.Query{
-				Dialect: remoteFS.dialect,
+			childPages, err := sq.FetchAll(ctx1, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {pageDir})" +
