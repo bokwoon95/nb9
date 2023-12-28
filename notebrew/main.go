@@ -265,9 +265,6 @@ func main() {
 				dataSourceName = config.FormatDSN()
 				nbrew.UsersDialect = "mysql"
 				nbrew.UsersDB = sql.OpenDB(driver)
-				if err != nil {
-					return fmt.Errorf("%s: mysql: open %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
-				}
 				nbrew.UsersErrorCode = func(err error) string {
 					var mysqlErr *mysql.MySQLError
 					if errors.As(err, &mysqlErr) {
