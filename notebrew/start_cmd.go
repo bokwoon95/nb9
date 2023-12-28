@@ -222,11 +222,11 @@ func NewServer(nbrew *nb9.Notebrew, configfolder, addr string) (*http.Server, er
 			// TODO: Remove DB check. Check only the filesystem, it should be
 			// possible to serve static files only by turning off the main DB
 			// (but keeping the files DB).
-			if nbrew.DB == nil {
+			if nbrew.UsersDB == nil {
 				return fmt.Errorf("database is nil")
 			}
-			exists, err := sq.FetchExists(ctx, nbrew.DB, sq.Query{
-				Dialect: nbrew.Dialect,
+			exists, err := sq.FetchExists(ctx, nbrew.UsersDB, sq.Query{
+				Dialect: nbrew.UsersDialect,
 				Format:  "SELECT 1 FROM site WHERE site_name = {name}",
 				Values: []any{
 					sq.StringParam("name", name),

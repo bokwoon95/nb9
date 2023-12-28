@@ -283,7 +283,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
 			"baselineJS":       func() template.JS { return template.JS(baselineJS) },
 			"contentURL":       func() string { return contentURL },
-			"hasDatabase":      func() bool { return nbrew.DB != nil },
+			"hasDatabase":      func() bool { return nbrew.UsersDB != nil },
 			"referer":          func() string { return r.Referer() },
 			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
 			"pagePath":         func() string { return pagePath },
@@ -370,7 +370,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			Content: request.Content,
 		}
 
-		if nbrew.DB != nil {
+		if nbrew.UsersDB != nil {
 			// TODO: check if the owner has exceeded his storage limit, then
 			// defer a function that will calculate and update the new storage
 			// used after the file has been saved.

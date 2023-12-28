@@ -308,8 +308,8 @@ type RemoteFSConfig struct {
 	FilesDialect   string
 	FilesErrorCode func(error) string
 	Storage        Storage
-	AdminDB        *sql.DB
-	AdminDialect   string
+	UsersDB        *sql.DB
+	UsersDialect   string
 }
 
 type RemoteFS struct {
@@ -318,8 +318,8 @@ type RemoteFS struct {
 	filesDialect   string
 	filesErrorCode func(error) string
 	storage        Storage
-	adminDB        *sql.DB
-	adminDialect   string
+	usersDB        *sql.DB
+	usersDialect   string
 }
 
 func NewRemoteFS(config RemoteFSConfig) *RemoteFS {
@@ -329,8 +329,8 @@ func NewRemoteFS(config RemoteFSConfig) *RemoteFS {
 		filesDialect:   config.FilesDialect,
 		filesErrorCode: config.FilesErrorCode,
 		storage:        config.Storage,
-		adminDB:        config.AdminDB,
-		adminDialect:   config.AdminDialect,
+		usersDB:        config.UsersDB,
+		usersDialect:   config.UsersDialect,
 	}
 }
 
@@ -340,8 +340,8 @@ func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
 		filesDB:      fsys.filesDB,
 		filesDialect: fsys.filesDialect,
 		storage:      fsys.storage,
-		adminDB:      fsys.adminDB,
-		adminDialect: fsys.adminDialect,
+		usersDB:      fsys.usersDB,
+		usersDialect: fsys.usersDialect,
 	}
 }
 

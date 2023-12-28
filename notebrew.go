@@ -42,20 +42,27 @@ type Notebrew struct {
 	// FS is the file system associated with the notebrew instance.
 	FS FS
 
-	// DB is the DB associated with the notebrew instance.
-	DB *sql.DB
+	// UsersDB is the UsersDB associated with the notebrew instance.
+	UsersDB *sql.DB
 
-	// Dialect is Dialect of the database. Only sqlite, postgres and mysql
+	// UsersDialect is UsersDialect of the database. Only sqlite, postgres and mysql
 	// databases are supported.
-	Dialect string
+	UsersDialect string
 
-	// ErrorCode translates a database error into an dialect-specific error
+	// UsersErrorCode translates a database error into an dialect-specific error
 	// code. If the error is not a database error or if no underlying
-	// implementation is provided, ErrorCode should return an empty string.
-	ErrorCode func(error) string
+	// implementation is provided, UsersErrorCode should return an empty string.
+	UsersErrorCode func(error) string
 
+	// NOTE: it is the domain the server is serving for. The current server may
+	// be serving on localhost, but feeding into a reverse proxy that is the
+	// actual IP that the domain's DNS entry points to.
 	Domain string // localhost:6444, example.com
 
+	// NOTE: it is the domain that the server's content is hosted on. It is
+	// completely detached from the current machine's Domain, it is possible to
+	// run notebrew in localhost mode but still generate files that reference
+	// the actual domain being served by GitHub pages or something.
 	ContentDomain string // localhost:6444, example.com
 
 	Proxies map[netip.Addr]struct{} // TODO: fill it in in main
@@ -95,7 +102,7 @@ func (nbrew *Notebrew) setSession(w http.ResponseWriter, r *http.Request, name s
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	}
-	if nbrew.DB == nil {
+	if nbrew.UsersDB == nil {
 		cookie.Value = base64.URLEncoding.EncodeToString(buf.Bytes())
 	} else {
 		var sessionToken [8 + 16]byte
@@ -108,8 +115,8 @@ func (nbrew *Notebrew) setSession(w http.ResponseWriter, r *http.Request, name s
 		checksum := blake2b.Sum256(sessionToken[8:])
 		copy(sessionTokenHash[:8], sessionToken[:8])
 		copy(sessionTokenHash[8:], checksum[:])
-		_, err = sq.Exec(r.Context(), nbrew.DB, sq.Query{
-			Dialect: nbrew.Dialect,
+		_, err = sq.Exec(r.Context(), nbrew.UsersDB, sq.Query{
+			Dialect: nbrew.UsersDialect,
 			Format:  "INSERT INTO session (session_token_hash, data) VALUES ({sessionTokenHash}, {data})",
 			Values: []any{
 				sq.BytesParam("sessionTokenHash", sessionTokenHash[:]),
@@ -131,7 +138,7 @@ func (nbrew *Notebrew) getSession(r *http.Request, name string, valuePtr any) (o
 		return false, nil
 	}
 	var dataBytes []byte
-	if nbrew.DB == nil {
+	if nbrew.UsersDB == nil {
 		dataBytes, err = base64.URLEncoding.DecodeString(cookie.Value)
 		if err != nil {
 			return false, nil
@@ -149,8 +156,8 @@ func (nbrew *Notebrew) getSession(r *http.Request, name string, valuePtr any) (o
 		if time.Now().Sub(creationTime) > 5*time.Minute {
 			return false, nil
 		}
-		dataBytes, err = sq.FetchOne(r.Context(), nbrew.DB, sq.Query{
-			Dialect: nbrew.Dialect,
+		dataBytes, err = sq.FetchOne(r.Context(), nbrew.UsersDB, sq.Query{
+			Dialect: nbrew.UsersDialect,
 			Format:  "SELECT {*} FROM session WHERE session_token_hash = {sessionTokenHash}",
 			Values: []any{
 				sq.BytesParam("sessionTokenHash", sessionTokenHash[:]),
@@ -185,7 +192,7 @@ func (nbrew *Notebrew) clearSession(w http.ResponseWriter, r *http.Request, name
 		Secure:   nbrew.Domain != "localhost" && !strings.HasPrefix(nbrew.Domain, "localhost:"),
 		HttpOnly: true,
 	})
-	if nbrew.DB == nil {
+	if nbrew.UsersDB == nil {
 		return
 	}
 	sessionToken, err := hex.DecodeString(fmt.Sprintf("%048s", cookie.Value))
@@ -196,8 +203,8 @@ func (nbrew *Notebrew) clearSession(w http.ResponseWriter, r *http.Request, name
 	checksum := blake2b.Sum256(sessionToken[8:])
 	copy(sessionTokenHash[:8], sessionToken[:8])
 	copy(sessionTokenHash[8:], checksum[:])
-	_, err = sq.Exec(r.Context(), nbrew.DB, sq.Query{
-		Dialect: nbrew.Dialect,
+	_, err = sq.Exec(r.Context(), nbrew.UsersDB, sq.Query{
+		Dialect: nbrew.UsersDialect,
 		Format:  "DELETE FROM session WHERE session_token_hash = {sessionTokenHash}",
 		Values: []any{
 			sq.BytesParam("sessionTokenHash", sessionTokenHash[:]),

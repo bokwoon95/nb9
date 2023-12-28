@@ -81,18 +81,22 @@ func main() {
 	// Wrap main in anonymous function to honor deferred calls.
 	// https://stackoverflow.com/questions/27629380/how-to-exit-a-go-program-honoring-deferred-calls
 	err := func() error {
+		// homeDir is the user's home directory.
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return err
 		}
+		// configHomeDir is the user's config directory.
 		configHomeDir := os.Getenv("XDG_CONFIG_HOME")
 		if configHomeDir == "" {
 			configHomeDir = homeDir
 		}
+		// dataHomeDir is the user's data directory.
 		dataHomeDir := os.Getenv("XDG_DATA_HOME")
 		if dataHomeDir == "" {
 			dataHomeDir = homeDir
 		}
+		// configDir is notebrew's configuration directory.
 		var configDir string
 		flagset := flag.NewFlagSet("", flag.ContinueOnError)
 		flagset.StringVar(&configDir, "configfolder", "", "")
@@ -121,18 +125,21 @@ func main() {
 		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
 		nbrew.Logger.Store(&logger)
 
-		b, err := os.ReadFile(filepath.Join(configDir, "port.txt"))
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("%s: %w", filepath.Join(configDir, "port.txt"), err)
-		}
-		port := string(bytes.TrimSpace(b))
-
-		b, err = os.ReadFile(filepath.Join(configDir, "domain.txt"))
+		// Determine the domain.
+		b, err := os.ReadFile(filepath.Join(configDir, "domain.txt"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("%s: %w", filepath.Join(configDir, "domain.txt"), err)
 		}
 		nbrew.Domain = string(bytes.TrimSpace(b))
 
+		// Determine the port to listen on (can be empty).
+		b, err = os.ReadFile(filepath.Join(configDir, "port.txt"))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("%s: %w", filepath.Join(configDir, "port.txt"), err)
+		}
+		port := string(bytes.TrimSpace(b))
+
+		// Determine the TCP address to listen on (based on the domain and port).
 		var addr string
 		if port != "" {
 			if nbrew.Domain == "" {
@@ -152,6 +159,7 @@ func main() {
 			}
 		}
 
+		// Determine the content domain.
 		b, err = os.ReadFile(filepath.Join(configDir, "contentdomain.txt"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("%s: %w", filepath.Join(configDir, "contentdomain.txt"), err)
@@ -174,6 +182,7 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("%s: %w", filepath.Join(configDir, "database.json"), err)
 			}
+			var dataSourceName string
 			switch databaseConfig.Dialect {
 			case "":
 				return fmt.Errorf("%s: missing dialect field", filepath.Join(configDir, "database.json"))
@@ -185,28 +194,13 @@ func main() {
 				if err != nil {
 					return fmt.Errorf("%s: sqlite: %w", filepath.Join(configDir, "database.json"), err)
 				}
-				dataSourceName := databaseConfig.Filepath + "?" + sqliteQueryString(databaseConfig.Params)
-				nbrew.Dialect = "sqlite"
-				nbrew.DB, err = sql.Open(sqliteDriverName, dataSourceName)
+				dataSourceName = databaseConfig.Filepath + "?" + sqliteQueryString(databaseConfig.Params)
+				nbrew.UsersDialect = "sqlite"
+				nbrew.UsersDB, err = sql.Open(sqliteDriverName, dataSourceName)
 				if err != nil {
 					return fmt.Errorf("%s: sqlite: open %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
 				}
-				err = nbrew.DB.Ping()
-				if err != nil {
-					return fmt.Errorf("%s: sqlite: ping %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
-				}
-				automigrateCmd := &ddl.AutomigrateCmd{
-					DB:             nbrew.DB,
-					Dialect:        nbrew.Dialect,
-					DestCatalog:    nb9.Catalog(nbrew.Dialect),
-					DropObjects:    true, // TODO: turn this off when we go live.
-					AcceptWarnings: true,
-					Stderr:         io.Discard,
-				}
-				err = automigrateCmd.Run()
-				if err != nil {
-					return err
-				}
+				nbrew.UsersErrorCode = sqliteErrorCode
 			case "postgres":
 				values := make(url.Values)
 				for key, value := range databaseConfig.Params {
@@ -228,34 +222,18 @@ func main() {
 					Path:     databaseConfig.DBName,
 					RawQuery: values.Encode(),
 				}
-				dataSourceName := uri.String()
-				nbrew.Dialect = "postgres"
-				nbrew.DB, err = sql.Open("pgx", dataSourceName)
+				dataSourceName = uri.String()
+				nbrew.UsersDialect = "postgres"
+				nbrew.UsersDB, err = sql.Open("pgx", dataSourceName)
 				if err != nil {
 					return fmt.Errorf("%s: postgres: open %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
 				}
-				err = nbrew.DB.Ping()
-				if err != nil {
-					return fmt.Errorf("%s: postgres: ping %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
-				}
-				nbrew.ErrorCode = func(err error) string {
+				nbrew.UsersErrorCode = func(err error) string {
 					var pgErr *pgconn.PgError
 					if errors.As(err, &pgErr) {
 						return pgErr.Code
 					}
 					return ""
-				}
-				automigrateCmd := &ddl.AutomigrateCmd{
-					DB:             nbrew.DB,
-					Dialect:        nbrew.Dialect,
-					DestCatalog:    nb9.Catalog(nbrew.Dialect),
-					DropObjects:    true, // TODO: turn this off when we go live.
-					AcceptWarnings: true,
-					Stderr:         io.Discard,
-				}
-				err = automigrateCmd.Run()
-				if err != nil {
-					return err
 				}
 			case "mysql":
 				values := make(url.Values)
@@ -284,46 +262,47 @@ func main() {
 				if err != nil {
 					return err
 				}
-				nbrew.Dialect = "mysql"
-				nbrew.DB = sql.OpenDB(driver)
+				dataSourceName = config.FormatDSN()
+				nbrew.UsersDialect = "mysql"
+				nbrew.UsersDB = sql.OpenDB(driver)
 				if err != nil {
-					return fmt.Errorf("%s: mysql: open %s: %w", filepath.Join(configDir, "database.json"), config.FormatDSN(), err)
+					return fmt.Errorf("%s: mysql: open %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
 				}
-				err = nbrew.DB.Ping()
-				if err != nil {
-					return fmt.Errorf("%s: mysql: ping %s: %w", filepath.Join(configDir, "database.json"), config.FormatDSN(), err)
-				}
-				nbrew.ErrorCode = func(err error) string {
+				nbrew.UsersErrorCode = func(err error) string {
 					var mysqlErr *mysql.MySQLError
 					if errors.As(err, &mysqlErr) {
 						return strconv.FormatUint(uint64(mysqlErr.Number), 10)
 					}
 					return ""
 				}
-				automigrateCmd := &ddl.AutomigrateCmd{
-					DB:             nbrew.DB,
-					Dialect:        nbrew.Dialect,
-					DestCatalog:    nb9.Catalog(nbrew.Dialect),
-					DropObjects:    true, // TODO: turn this off when we go live.
-					AcceptWarnings: true,
-					Stderr:         io.Discard,
-				}
-				err = automigrateCmd.Run()
-				if err != nil {
-					return err
-				}
 			default:
 				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "database.json"), databaseConfig.Dialect)
 			}
-			err = nb9.Automigrate(nbrew.Dialect, nbrew.DB)
+			err = nbrew.UsersDB.Ping()
+			if err != nil {
+				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "database.json"), nbrew.UsersDialect, dataSourceName, err)
+			}
+			usersCatalog, err := nb9.UsersCatalog(nbrew.UsersDialect)
+			if err != nil {
+				return err
+			}
+			automigrateCmd := &ddl.AutomigrateCmd{
+				DB:             nbrew.UsersDB,
+				Dialect:        nbrew.UsersDialect,
+				DestCatalog:    usersCatalog,
+				DropObjects:    true, // TODO: turn this off when we go live.
+				AcceptWarnings: true,
+				Stderr:         io.Discard,
+			}
+			err = automigrateCmd.Run()
 			if err != nil {
 				return err
 			}
 			defer func() {
-				if nbrew.Dialect == "sqlite" {
-					nbrew.DB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
+				if nbrew.UsersDialect == "sqlite" {
+					nbrew.UsersDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
 				}
-				nbrew.DB.Close()
+				nbrew.UsersDB.Close()
 			}()
 		}
 
@@ -332,18 +311,16 @@ func main() {
 			return fmt.Errorf("%s: %w", filepath.Join(configDir, "files.json"), err)
 		}
 		b = bytes.TrimSpace(b)
-		if len(b) == 0 {
-			b = []byte("{}")
-		}
 		var filesConfig DatabaseConfig
-		decoder := json.NewDecoder(bytes.NewReader(b))
-		decoder.DisallowUnknownFields()
-		err = decoder.Decode(&filesConfig)
-		if err != nil {
-			return fmt.Errorf("%s: %w", filepath.Join(configDir, "files.json"), err)
+		if len(b) > 0 {
+			decoder := json.NewDecoder(bytes.NewReader(b))
+			decoder.DisallowUnknownFields()
+			err = decoder.Decode(&filesConfig)
+			if err != nil {
+				return fmt.Errorf("%s: %w", filepath.Join(configDir, "files.json"), err)
+			}
 		}
-		switch filesConfig.Dialect {
-		case "":
+		if filesConfig.Dialect == "" {
 			if filesConfig.Filepath == "" {
 				filesConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-files")
 				err := os.MkdirAll(filesConfig.Filepath, 0755)
@@ -361,124 +338,129 @@ func main() {
 				RootDir: filesConfig.Filepath,
 				TempDir: os.TempDir(),
 			})
-		case "sqlite":
-			if filesConfig.Filepath == "" {
-				filesConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-files.sqlite")
-			}
-			filesConfig.Filepath, err = filepath.Abs(filesConfig.Filepath)
-			if err != nil {
-				return fmt.Errorf("%s: sqlite: %w", filepath.Join(configDir, "files.json"), err)
-			}
-			dataSourceName := filesConfig.Filepath + "?" + sqliteQueryString(filesConfig.Params)
-			filesDialect := "sqlite"
-			filesDB, err := sql.Open(sqliteDriverName, dataSourceName)
-			if err != nil {
-				return fmt.Errorf("%s: sqlite: open %s: %w", filepath.Join(configDir, "files.json"), dataSourceName, err)
+		} else {
+			var dataSourceName string
+			var filesDialect string
+			var filesDB *sql.DB
+			var filesErrorCode func(error) string
+			switch filesConfig.Dialect {
+			case "sqlite":
+				if filesConfig.Filepath == "" {
+					filesConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-files.sqlite")
+				}
+				filesConfig.Filepath, err = filepath.Abs(filesConfig.Filepath)
+				if err != nil {
+					return fmt.Errorf("%s: sqlite: %w", filepath.Join(configDir, "files.json"), err)
+				}
+				dataSourceName = filesConfig.Filepath + "?" + sqliteQueryString(filesConfig.Params)
+				filesDialect = "sqlite"
+				filesDB, err = sql.Open(sqliteDriverName, dataSourceName)
+				if err != nil {
+					return fmt.Errorf("%s: sqlite: open %s: %w", filepath.Join(configDir, "files.json"), dataSourceName, err)
+				}
+				filesErrorCode = sqliteErrorCode
+			case "postgres":
+				values := make(url.Values)
+				for key, value := range filesConfig.Params {
+					switch key {
+					case "sslmode":
+						values.Set(key, value)
+					}
+				}
+				if _, ok := filesConfig.Params["sslmode"]; !ok {
+					values.Set("sslmode", "disable")
+				}
+				if filesConfig.Port == "" {
+					filesConfig.Port = "5432"
+				}
+				uri := url.URL{
+					Scheme:   "postgres",
+					User:     url.UserPassword(filesConfig.User, filesConfig.Password),
+					Host:     filesConfig.Host + ":" + filesConfig.Port,
+					Path:     filesConfig.DBName,
+					RawQuery: values.Encode(),
+				}
+				dataSourceName = uri.String()
+				filesDialect = "postgres"
+				filesDB, err = sql.Open("pgx", dataSourceName)
+				if err != nil {
+					return fmt.Errorf("%s: postgres: open %s: %w", filepath.Join(configDir, "files.json"), dataSourceName, err)
+				}
+				filesErrorCode = func(err error) string {
+					var pgErr *pgconn.PgError
+					if errors.As(err, &pgErr) {
+						return pgErr.Code
+					}
+					return ""
+				}
+			case "mysql":
+				values := make(url.Values)
+				for key, value := range filesConfig.Params {
+					switch key {
+					case "charset", "collation", "loc", "maxAllowedPacket",
+						"readTimeout", "rejectReadOnly", "serverPubKey", "timeout",
+						"tls", "writeTimeout", "connectionAttributes":
+						values.Set(key, value)
+					}
+				}
+				values.Set("multiStatements", "true")
+				values.Set("parseTime", "true")
+				if filesConfig.Port == "" {
+					filesConfig.Port = "3306"
+				}
+				config, err := mysql.ParseDSN(fmt.Sprintf("tcp(%s:%s)/%s?%s", filesConfig.Host, filesConfig.Port, url.PathEscape(filesConfig.DBName), values.Encode()))
+				if err != nil {
+					return err
+				}
+				// Set user and passwd manually to accomodate special characters.
+				// https://github.com/go-sql-driver/mysql/issues/1323
+				config.User = filesConfig.User
+				config.Passwd = filesConfig.Password
+				driver, err := mysql.NewConnector(config)
+				if err != nil {
+					return err
+				}
+				dataSourceName = config.FormatDSN()
+				filesDialect = "mysql"
+				filesDB = sql.OpenDB(driver)
+				filesErrorCode = func(err error) string {
+					var mysqlErr *mysql.MySQLError
+					if errors.As(err, &mysqlErr) {
+						return strconv.FormatUint(uint64(mysqlErr.Number), 10)
+					}
+					return ""
+				}
+			default:
+				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "database.json"), filesConfig.Dialect)
 			}
 			err = filesDB.Ping()
 			if err != nil {
-				return fmt.Errorf("%s: sqlite: ping %s: %w", filepath.Join(configDir, "files.json"), dataSourceName, err)
+				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "database.json"), filesDialect, dataSourceName, err)
 			}
-			_, _ = filesDialect, filesDB
-		case "postgres":
-			values := make(url.Values)
-			for key, value := range filesConfig.Params {
-				switch key {
-				case "sslmode":
-					values.Set(key, value)
-				}
-			}
-			if _, ok := filesConfig.Params["sslmode"]; !ok {
-				values.Set("sslmode", "disable")
-			}
-			if filesConfig.Port == "" {
-				filesConfig.Port = "5432"
-			}
-			uri := url.URL{
-				Scheme:   "postgres",
-				User:     url.UserPassword(filesConfig.User, filesConfig.Password),
-				Host:     filesConfig.Host + ":" + filesConfig.Port,
-				Path:     filesConfig.DBName,
-				RawQuery: values.Encode(),
-			}
-			dataSourceName := uri.String()
-			filesDialect := "postgres"
-			filesDB, err := sql.Open("pgx", dataSourceName)
-			if err != nil {
-				return fmt.Errorf("%s: postgres: open %s: %w", filepath.Join(configDir, "files.json"), dataSourceName, err)
-			}
-			err = filesDB.Ping()
-			if err != nil {
-				return fmt.Errorf("%s: postgres: ping %s: %w", filepath.Join(configDir, "files.json"), dataSourceName, err)
-			}
-		case "mysql":
-			values := make(url.Values)
-			for key, value := range filesConfig.Params {
-				switch key {
-				case "charset", "collation", "loc", "maxAllowedPacket",
-					"readTimeout", "rejectReadOnly", "serverPubKey", "timeout",
-					"tls", "writeTimeout", "connectionAttributes":
-					values.Set(key, value)
-				}
-			}
-			values.Set("multiStatements", "true")
-			values.Set("parseTime", "true")
-			if filesConfig.Port == "" {
-				filesConfig.Port = "3306"
-			}
-			config, err := mysql.ParseDSN(fmt.Sprintf("tcp(%s:%s)/%s?%s", filesConfig.Host, filesConfig.Port, url.PathEscape(filesConfig.DBName), values.Encode()))
+			filesCatalog, err := nb9.FilesCatalog(filesDialect)
 			if err != nil {
 				return err
 			}
-			// Set user and passwd manually to accomodate special characters.
-			// https://github.com/go-sql-driver/mysql/issues/1323
-			config.User = filesConfig.User
-			config.Passwd = filesConfig.Password
-			driver, err := mysql.NewConnector(config)
+			automigrateCmd := &ddl.AutomigrateCmd{
+				DB:             filesDB,
+				Dialect:        filesDialect,
+				DestCatalog:    filesCatalog,
+				DropObjects:    true, // TODO: turn this off when we go live.
+				AcceptWarnings: true,
+				Stderr:         io.Discard,
+			}
+			err = automigrateCmd.Run()
 			if err != nil {
 				return err
 			}
-			nbrew.Dialect = "mysql"
-			nbrew.DB = sql.OpenDB(driver)
-			if err != nil {
-				return fmt.Errorf("%s: mysql: open %s: %w", filepath.Join(configDir, "database.json"), config.FormatDSN(), err)
-			}
-			err = nbrew.DB.Ping()
-			if err != nil {
-				return fmt.Errorf("%s: mysql: ping %s: %w", filepath.Join(configDir, "database.json"), config.FormatDSN(), err)
-			}
-			nbrew.ErrorCode = func(err error) string {
-				var mysqlErr *mysql.MySQLError
-				if errors.As(err, &mysqlErr) {
-					return strconv.FormatUint(uint64(mysqlErr.Number), 10)
+			defer func() {
+				if filesDialect == "sqlite" {
+					filesDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
 				}
-				return ""
-			}
-		default:
-			return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "database.json"), filesConfig.Dialect)
-		}
-		err = nb9.Automigrate(nbrew.Dialect, nbrew.DB)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if nbrew.Dialect == "sqlite" {
-				nbrew.DB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
-			}
-			nbrew.DB.Close()
-		}()
-		filesfolder := string(bytes.TrimSpace(b))
-		if filesfolder == "" {
-			filesfolder = filepath.Join(dataHomeDir, "notebrew-files")
-			err := os.MkdirAll(filesfolder, 0755)
-			if err != nil {
-				return err
-			}
-			nbrew.FS = nb9.NewLocalFS(filesfolder, os.TempDir())
-		} else if filesfolder == "database" {
-			if nbrew.DB == nil {
-				return fmt.Errorf("%s: cannot use database as filesystem because %s is missing", filepath.Join(configDir, "files.txt"), filepath.Join(configDir, "database.json"))
-			}
+				filesDB.Close()
+			}()
+
+			var storage nb9.Storage
 			b, err = os.ReadFile(filepath.Join(configDir, "s3.json"))
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("%s: %w", filepath.Join(configDir, "s3.json"), err)
@@ -513,14 +495,14 @@ func main() {
 				if s3Config.SecretAccessKey == "" {
 					return fmt.Errorf("%s: missing secretAccessKey field", filepath.Join(configDir, "s3.json"))
 				}
-				nbrew.FS = nb9.NewRemoteFS(nbrew.Dialect, nbrew.DB, nbrew.ErrorCode, &nb9.S3Storage{
+				storage = &nb9.S3Storage{
 					Client: s3.New(s3.Options{
 						BaseEndpoint: aws.String(s3Config.Endpoint),
 						Region:       s3Config.Region,
 						Credentials:  aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(s3Config.AccessKeyID, s3Config.SecretAccessKey, "")),
 					}),
 					Bucket: s3Config.Bucket,
-				}, "", nil)
+				}
 			} else {
 				b, err = os.ReadFile(filepath.Join(configDir, "objectsfolder.txt"))
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -540,15 +522,16 @@ func main() {
 						return err
 					}
 				}
-				nbrew.FS = nb9.NewRemoteFS(nbrew.Dialect, nbrew.DB, nbrew.ErrorCode, nb9.NewFileStorage(objectsDir, os.TempDir()), "", nil)
+				storage = nb9.NewFileStorage(objectsDir, os.TempDir())
 			}
-		} else {
-			filesfolder = filepath.Clean(filesfolder)
-			_, err := os.Stat(filesfolder)
-			if err != nil {
-				return err
-			}
-			nbrew.FS = nb9.NewLocalFS(filesfolder, os.TempDir())
+			nbrew.FS = nb9.NewRemoteFS(nb9.RemoteFSConfig{
+				FilesDB:        filesDB,
+				FilesDialect:   filesDialect,
+				FilesErrorCode: filesErrorCode,
+				Storage:        storage,
+				UsersDB:        nbrew.UsersDB,
+				UsersDialect:   nbrew.UsersDialect,
+			})
 		}
 		dirs := []string{
 			"notes",
@@ -565,9 +548,9 @@ func main() {
 			}
 		}
 
-		reloadableFiles := map[string]func(nbrew *nb9.Notebrew, configfolder string) error{
-			"gzipgeneratedcontent.txt": func(nbrew *nb9.Notebrew, configfolder string) error {
-				b, err := os.ReadFile(filepath.Join(configfolder, "gzipgeneratedcontent.txt"))
+		reloadableConfigFiles := map[string]func(nbrew *nb9.Notebrew, configDir string) error{
+			"gzipgeneratedcontent.txt": func(nbrew *nb9.Notebrew, configDir string) error {
+				b, err := os.ReadFile(filepath.Join(configDir, "gzipgeneratedcontent.txt"))
 				if err != nil {
 					if errors.Is(err, fs.ErrNotExist) {
 						return nil
@@ -579,13 +562,12 @@ func main() {
 				return nil
 			},
 		}
-		for name, reloadFunc := range reloadableFiles {
+		for name, reloadFunc := range reloadableConfigFiles {
 			err := reloadFunc(nbrew, configDir)
 			if err != nil {
 				return fmt.Errorf("%s: %w", filepath.Join(configDir, name), err)
 			}
 		}
-
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
 			return err
@@ -609,7 +591,7 @@ func main() {
 					timer.Reset(500 * time.Millisecond)
 				case <-timer.C:
 					timestamp := time.Now().UTC().Format("2006-01-02 15:04:05Z")
-					for name, reloadFunc := range reloadableFiles {
+					for name, reloadFunc := range reloadableConfigFiles {
 						err := reloadFunc(nbrew, configDir)
 						if err != nil {
 							fmt.Printf("%s: reloading %s: %s", timestamp, filepath.Join(configDir, name), err)

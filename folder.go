@@ -83,9 +83,9 @@ func (nbrew *Notebrew) folder(w http.ResponseWriter, r *http.Request, username, 
 			}
 		}
 		if sitePrefix == "" {
-			if nbrew.DB != nil {
-				results, err := sq.FetchAll(r.Context(), nbrew.DB, sq.Query{
-					Dialect: nbrew.Dialect,
+			if nbrew.UsersDB != nil {
+				results, err := sq.FetchAll(r.Context(), nbrew.UsersDB, sq.Query{
+					Dialect: nbrew.UsersDialect,
 					Format: "SELECT {*}" +
 						" FROM site" +
 						" JOIN site_user ON site_user.site_id = site.site_id" +
@@ -271,7 +271,7 @@ func (nbrew *Notebrew) folder(w http.ResponseWriter, r *http.Request, username, 
 		"stylesCSS":             func() template.CSS { return template.CSS(stylesCSS) },
 		"folderJS":              func() template.JS { return template.JS(folderJS) },
 		"contentURL":            func() string { return contentURL },
-		"hasDatabase":           func() bool { return nbrew.DB != nil },
+		"hasDatabase":           func() bool { return nbrew.UsersDB != nil },
 		"referer":               func() string { return r.Referer() },
 		"safeHTML":              func(s string) template.HTML { return template.HTML(s) },
 		"authorizedForRootSite": func() bool { return authorizedForRootSite },

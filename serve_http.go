@@ -126,7 +126,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// If the database is present, check if the user is authorized to
 		// access the files for this site.
 		var username string
-		if nbrew.DB != nil {
+		if nbrew.UsersDB != nil {
 			authenticationTokenHash := getAuthenticationTokenHash(r)
 			if authenticationTokenHash == nil {
 				if head == "" {
@@ -136,8 +136,8 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				notAuthenticated(w, r)
 				return
 			}
-			result, err := sq.FetchOne(r.Context(), nbrew.DB, sq.Query{
-				Dialect: nbrew.Dialect,
+			result, err := sq.FetchOne(r.Context(), nbrew.UsersDB, sq.Query{
+				Dialect: nbrew.UsersDialect,
 				Format: "SELECT {*}" +
 					" FROM authentication" +
 					" JOIN users ON users.user_id = authentication.user_id" +
