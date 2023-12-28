@@ -26,6 +26,15 @@ type TemplateParser struct {
 	templateInProgress map[string]chan struct{}
 }
 
+func NewTemplateParser(fsys FS, sitePrefix string) *TemplateParser {
+	return &TemplateParser{
+		fsys:               fsys,
+		sitePrefix:         sitePrefix,
+		templateCache:      make(map[string]*template.Template),
+		templateInProgress: make(map[string]chan struct{}),
+	}
+}
+
 func (templateParser *TemplateParser) ParseTemplate(ctx context.Context, name, text string, callers []string) (*template.Template, error) {
 	currentTemplate, err := template.New(name).Funcs(funcMap).Parse(text)
 	if err != nil {
