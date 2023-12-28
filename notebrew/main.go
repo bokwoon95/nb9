@@ -99,7 +99,7 @@ func main() {
 		// configDir is notebrew's configuration directory.
 		var configDir string
 		flagset := flag.NewFlagSet("", flag.ContinueOnError)
-		flagset.StringVar(&configDir, "configfolder", "", "")
+		flagset.StringVar(&configDir, "configdir", "", "")
 		err = flagset.Parse(os.Args[1:])
 		if err != nil {
 			return err
@@ -504,9 +504,9 @@ func main() {
 					Bucket: s3Config.Bucket,
 				}
 			} else {
-				b, err = os.ReadFile(filepath.Join(configDir, "objectsfolder.txt"))
+				b, err = os.ReadFile(filepath.Join(configDir, "objectsdir.txt"))
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
-					return fmt.Errorf("%s: %w", filepath.Join(configDir, "objectsfolder.txt"), err)
+					return fmt.Errorf("%s: %w", filepath.Join(configDir, "objectsdir.txt"), err)
 				}
 				objectsDir := string(bytes.TrimSpace(b))
 				if objectsDir == "" {
