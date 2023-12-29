@@ -29,84 +29,19 @@ type rawTable struct {
 var filesCatalogBytes []byte
 
 func FilesCatalog(dialect string) (*ddl.Catalog, error) {
-	var rawTables []rawTable
-	decoder := json.NewDecoder(bytes.NewReader(filesCatalogBytes))
-	decoder.DisallowUnknownFields()
-	err := decoder.Decode(&rawTables)
-	if err != nil {
-		return nil, err
-	}
-	catalog := &ddl.Catalog{
-		Dialect: dialect,
-	}
-	cache := ddl.NewCatalogCache(catalog)
-	schema := cache.GetOrCreateSchema(catalog, "")
-	for _, rawTable := range rawTables {
-		table := cache.GetOrCreateTable(schema, rawTable.Table)
-		if len(rawTable.PrimaryKey) != 0 {
-			cache.AddOrUpdateConstraint(table, ddl.Constraint{
-				ConstraintName: ddl.GenerateName(ddl.PRIMARY_KEY, rawTable.Table, rawTable.PrimaryKey),
-				ConstraintType: ddl.PRIMARY_KEY,
-				Columns:        rawTable.PrimaryKey,
-			})
-		}
-		for _, rawColumn := range rawTable.Columns {
-			columnType := rawColumn.Type[dialect]
-			if columnType == "" {
-				columnType = rawColumn.Type["default"]
-			}
-			cache.AddOrUpdateColumn(table, ddl.Column{
-				ColumnName:   rawColumn.Column,
-				ColumnType:   columnType,
-				IsPrimaryKey: rawColumn.Primarykey,
-				IsUnique:     rawColumn.Unique,
-				IsNotNull:    rawColumn.NotNull,
-			})
-			if rawColumn.Primarykey {
-				cache.AddOrUpdateConstraint(table, ddl.Constraint{
-					ConstraintName: ddl.GenerateName(ddl.PRIMARY_KEY, rawTable.Table, []string{rawColumn.Column}),
-					ConstraintType: ddl.PRIMARY_KEY,
-					Columns:        []string{rawColumn.Column},
-				})
-			}
-			if rawColumn.Unique {
-				cache.AddOrUpdateConstraint(table, ddl.Constraint{
-					ConstraintName: ddl.GenerateName(ddl.UNIQUE, rawTable.Table, []string{rawColumn.Column}),
-					ConstraintType: ddl.UNIQUE,
-					Columns:        []string{rawColumn.Column},
-				})
-			}
-			if rawColumn.Index {
-				cache.AddOrUpdateIndex(table, ddl.Index{
-					IndexName: ddl.GenerateName(ddl.INDEX, rawTable.Table, []string{rawColumn.Column}),
-					Columns:   []string{rawColumn.Column},
-				})
-			}
-			if rawColumn.References.Table != "" {
-				columnName := rawColumn.References.Column
-				if columnName == "" {
-					columnName = rawColumn.Column
-				}
-				cache.AddOrUpdateConstraint(table, ddl.Constraint{
-					ConstraintName:    ddl.GenerateName(ddl.FOREIGN_KEY, rawTable.Table, []string{columnName}),
-					ConstraintType:    ddl.FOREIGN_KEY,
-					Columns:           []string{rawColumn.Column},
-					ReferencesTable:   rawColumn.References.Table,
-					ReferencesColumns: []string{columnName},
-					UpdateRule:        ddl.CASCADE,
-				})
-			}
-		}
-	}
-	return catalog, nil
+	return unmarshalCatalog(dialect, filesCatalogBytes)
 }
 
 //go:embed users_catalog.json
 var usersCatalogBytes []byte
 
 func UsersCatalog(dialect string) (*ddl.Catalog, error) {
+	return unmarshalCatalog(dialect, usersCatalogBytes)
+}
+
+func unmarshalCatalog(dialect string, b []byte) (*ddl.Catalog, error) {
 	var rawTables []rawTable
-	decoder := json.NewDecoder(bytes.NewReader(usersCatalogBytes))
+	decoder := json.NewDecoder(bytes.NewReader(b))
 	decoder.DisallowUnknownFields()
 	err := decoder.Decode(&rawTables)
 	if err != nil {
@@ -118,9 +53,6 @@ func UsersCatalog(dialect string) (*ddl.Catalog, error) {
 	cache := ddl.NewCatalogCache(catalog)
 	schema := cache.GetOrCreateSchema(catalog, "")
 	for _, rawTable := range rawTables {
-		if rawTable.Table == "files" {
-			continue
-		}
 		table := cache.GetOrCreateTable(schema, rawTable.Table)
 		if len(rawTable.PrimaryKey) != 0 {
 			cache.AddOrUpdateConstraint(table, ddl.Constraint{
