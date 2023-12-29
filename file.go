@@ -756,8 +756,8 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 	outputDir := path.Join(sitePrefix, "output", urlPath)
 	postData := PostData{
 		Site:             site,
-		Category:         path.Dir(urlPath),
-		Name:             path.Base(urlPath),
+		Category:         path.Dir(strings.TrimPrefix(urlPath, "posts/")),
+		Name:             path.Base(strings.TrimPrefix(urlPath, "posts/")),
 		ModificationTime: time.Now().UTC(),
 	}
 	if strings.Contains(postData.Category, "/") {
@@ -766,7 +766,7 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 	if postData.Category == "." {
 		postData.Category = ""
 	}
-	prefix, _, ok := strings.Cut(urlPath, "-")
+	prefix, _, ok := strings.Cut(strings.TrimPrefix(urlPath, "posts/"), "-")
 	if !ok || len(prefix) == 0 || len(prefix) > 8 {
 		return nil
 	}
