@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -785,59 +786,76 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 	var tmpl *template.Template
 	g1, ctx1 := errgroup.WithContext(ctx)
 	g1.Go(func() error {
-		file, err := nbrew.FS.WithContext(ctx1).Open(path.Join(sitePrefix, "output/themes/post.html"))
-		if err != nil {
-			if !errors.Is(err, fs.ErrNotExist) {
+		var err error
+		var text sql.NullString
+		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+			text, err = sq.FetchOne(ctx1, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
+				Values: []any{
+					sq.StringParam("filePath", path.Join(sitePrefix, "output/themes/post.html")),
+				},
+			}, func(row *sq.Row) sql.NullString {
+				return row.NullString("text")
+			})
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
-			file, err = rootFS.Open("static/post.html")
+		} else {
+			file, err := nbrew.FS.WithContext(ctx1).Open(path.Join(sitePrefix, "output/themes/post.html"))
+			if err != nil {
+				if !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+			} else {
+				defer file.Close()
+				fileInfo, err := file.Stat()
+				if err != nil {
+					return err
+				}
+				if fileInfo.IsDir() {
+					return fmt.Errorf("%s is not a file", filePath)
+				}
+				var b strings.Builder
+				b.Grow(int(fileInfo.Size()))
+				_, err = io.Copy(&b, file)
+				if err != nil {
+					return err
+				}
+				err = file.Close()
+				if err != nil {
+					return err
+				}
+				text = sql.NullString{String: b.String(), Valid: true}
+			}
+		}
+		if !text.Valid {
+			file, err := rootFS.Open("static/post.html")
 			if err != nil {
 				return err
 			}
-		}
-		defer file.Close()
-		fileInfo, err := file.Stat()
-		if err != nil {
-			return err
-		}
-		if fileInfo.IsDir() {
-			return fmt.Errorf("%s is not a template", filePath)
-		}
-		var b strings.Builder
-		b.Grow(int(fileInfo.Size()))
-		_, err = io.Copy(&b, file)
-		if err != nil {
-			return err
-		}
-		err = file.Close()
-		if err != nil {
-			return err
-		}
-		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx, "/themes/post.html", b.String(), []string{"/themes/post.html"})
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	g1.Go(func() error {
-		// TODO: handle *RemoteFS optimization
-		dirEntries, err := nbrew.FS.WithContext(ctx1).ReadDir(outputDir)
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil
+			fileInfo, err := file.Stat()
+			if err != nil {
+				return err
 			}
-			return err
+			if fileInfo.IsDir() {
+				return fmt.Errorf("%s is not a file", filePath)
+			}
+			var b strings.Builder
+			b.Grow(int(fileInfo.Size()))
+			_, err = io.Copy(&b, file)
+			if err != nil {
+				return err
+			}
+			err = file.Close()
+			if err != nil {
+				return err
+			}
+			text = sql.NullString{String: b.String(), Valid: true}
 		}
-		for _, dirEntry := range dirEntries {
-			name := dirEntry.Name()
-			if dirEntry.IsDir() {
-				continue
-			}
-			fileType := fileTypes[path.Ext(name)]
-			if !strings.HasPrefix(fileType.ContentType, "image") {
-				continue
-			}
-			postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
+		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, "post.html", text.String, []string{"post.html"})
+		if err != nil {
+			return err
 		}
 		return nil
 	})
@@ -874,6 +892,28 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 			return err
 		}
 		postData.Content = template.HTML(b.String())
+		return nil
+	})
+	g1.Go(func() error {
+		// TODO: handle *RemoteFS optimization
+		dirEntries, err := nbrew.FS.WithContext(ctx1).ReadDir(outputDir)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		for _, dirEntry := range dirEntries {
+			name := dirEntry.Name()
+			if dirEntry.IsDir() {
+				continue
+			}
+			fileType := fileTypes[path.Ext(name)]
+			if !strings.HasPrefix(fileType.ContentType, "image") {
+				continue
+			}
+			postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
+		}
 		return nil
 	})
 	err = g1.Wait()
