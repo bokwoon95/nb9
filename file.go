@@ -463,7 +463,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 	var tmpl *template.Template
 	g1, ctx1 := errgroup.WithContext(ctx)
 	g1.Go(func() error {
-		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, path.Base(filePath), content, nil)
+		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, strings.TrimPrefix(filePath, "pages/"), content, nil)
 		if err != nil {
 			return err
 		}
@@ -709,7 +709,6 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 	if err != nil {
 		return err
 	}
-	// Render the template contents into the output index.html.
 	writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(outputDir, "index.html"), 0644)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
@@ -724,10 +723,6 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 			return err
 		}
 	}
-	// NOTE: because writer.Close() is unaware of any template execution
-	// errors, a faulty template will successfully write out to the index.html
-	// file but in a partial state right up til where the error occurs. Maybe
-	// that's for the best.
 	defer writer.Close()
 	if nbrew.GzipGeneratedContent.Load() {
 		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
@@ -853,7 +848,7 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 			}
 			text = sql.NullString{String: b.String(), Valid: true}
 		}
-		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, "post.html", text.String, []string{"post.html"})
+		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, "/themes/post.html", text.String, []string{"/themes/post.html"})
 		if err != nil {
 			return err
 		}
@@ -895,24 +890,60 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 		return nil
 	})
 	g1.Go(func() error {
-		// TODO: handle *RemoteFS optimization
-		dirEntries, err := nbrew.FS.WithContext(ctx1).ReadDir(outputDir)
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil
+		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+			cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
+					" AND NOT is_dir" +
+					" AND (" +
+					"file_path LIKE '%.jpeg'" +
+					" OR file_path LIKE '%.jpg'" +
+					" OR file_path LIKE '%.png'" +
+					" OR file_path LIKE '%.webp'" +
+					" OR file_path LIKE '%.gif'" +
+					") " +
+					" ORDER BY file_path",
+				Values: []any{
+					sq.StringParam("outputDir", outputDir),
+				},
+			}, func(row *sq.Row) string {
+				return path.Base(row.String("file_path"))
+			})
+			if err != nil {
+				return err
 			}
-			return err
-		}
-		for _, dirEntry := range dirEntries {
-			name := dirEntry.Name()
-			if dirEntry.IsDir() {
-				continue
+			defer cursor.Close()
+			for cursor.Next() {
+				name, err := cursor.Result()
+				if err != nil {
+					return err
+				}
+				postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
 			}
-			fileType := fileTypes[path.Ext(name)]
-			if !strings.HasPrefix(fileType.ContentType, "image") {
-				continue
+			err = cursor.Close()
+			if err != nil {
+				return err
 			}
-			postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
+		} else {
+			dirEntries, err := nbrew.FS.WithContext(ctx1).ReadDir(outputDir)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					return nil
+				}
+				return err
+			}
+			for _, dirEntry := range dirEntries {
+				name := dirEntry.Name()
+				if dirEntry.IsDir() {
+					continue
+				}
+				switch path.Ext(name) {
+				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+					postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
+				}
+			}
 		}
 		return nil
 	})
