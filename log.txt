@@ -11,9 +11,9 @@ serve_http.go
 notebrew/main.go
 
 notebrew-config/
-notebrew-database.sqlite
+notebrew-users.db
 notebrew-files/
-notebrew-files.sqlite
+notebrew-files.db
 notebrew-objects/
 
 notebrew-config/metrics.txt
