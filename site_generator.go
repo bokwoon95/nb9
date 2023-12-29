@@ -16,7 +16,6 @@ import (
 	"sync"
 	"syscall"
 	"text/template/parse"
-	"time"
 	"unicode/utf8"
 
 	"github.com/bokwoon95/nb9/sq"
@@ -27,13 +26,6 @@ import (
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/sync/errgroup"
 )
-
-type Site struct {
-	Title      string
-	Favicon    string
-	Lang       string
-	Categories []string
-}
 
 type SiteGenerator struct {
 	domain               string
@@ -143,27 +135,6 @@ func NewSiteGenerator(config SiteGeneratorConfig) (*SiteGenerator, error) {
 		}
 	}
 	return siteGen, nil
-}
-
-type Page struct {
-	Parent string
-	Name   string
-	Title  string
-}
-
-type Image struct {
-	Parent string
-	Name   string
-}
-
-type PageData struct {
-	Site             Site
-	Parent           string
-	Name             string
-	ChildPages       []Page
-	Markdown         map[string]template.HTML
-	Images           []Image
-	ModificationTime time.Time
 }
 
 // GeneratePage(file, childPages)

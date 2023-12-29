@@ -67,6 +67,45 @@ type Notebrew struct {
 	GzipGeneratedContent atomic.Bool // TODO: fill it in in main, also make it reloadable
 }
 
+type Site struct {
+	Title      string
+	Favicon    string
+	Lang       string
+	Categories []string
+}
+
+type Page struct {
+	Parent string
+	Name   string
+	Title  string
+}
+
+type Image struct {
+	Parent string
+	Name   string
+}
+
+type PageData struct {
+	Site             Site
+	Parent           string
+	Name             string
+	ChildPages       []Page
+	Markdown         map[string]template.HTML
+	Images           []Image
+	ModificationTime time.Time
+}
+
+type PostData struct {
+	Site             Site
+	Category         string
+	Name             string
+	Title            string
+	Content          template.HTML
+	Images           []Image
+	CreationTime     time.Time
+	ModificationTime time.Time
+}
+
 type contextKey struct{}
 
 var loggerKey = &contextKey{}

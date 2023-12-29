@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash"
 	"html/template"
 	"io"
@@ -406,10 +408,10 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			return
 		}
 
-		head, tail, _ := strings.Cut(filePath, "/")
+		head, _, _ := strings.Cut(filePath, "/")
 		switch head {
 		case "pages":
-			err := nbrew.generatePage(r.Context(), sitePrefix, tail, response.Content)
+			err := nbrew.generatePage(r.Context(), sitePrefix, filePath, response.Content)
 			if err != nil {
 				// TODO: check if it's a template runtime error.
 				getLogger(r.Context()).Error(err.Error())
@@ -425,17 +427,20 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 	}
 }
 
-func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, tail, text string) error {
-	var urlPath string
-	if tail != "index.html" {
-		urlPath = strings.TrimSuffix(tail, path.Ext(tail))
+func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, text string) error {
+	urlPath := strings.TrimPrefix(filePath, "pages/")
+	if urlPath == "index.html" {
+		urlPath = ""
+	} else {
+		urlPath = strings.TrimSuffix(urlPath, path.Ext(urlPath))
 	}
 	outputDir := path.Join(sitePrefix, "output", urlPath)
 	pageData := PageData{
 		Site: Site{
-			Title:   "", // TODO: read site config.
-			Favicon: "", // TODO: read site config.
-			Lang:    "", // TODO: read site config.
+			Title:      "",  // TODO: read site config.
+			Favicon:    "",  // TODO: read site config.
+			Lang:       "",  // TODO: read site config.
+			Categories: nil, // TODO: read site fs.
 		},
 		Parent: path.Dir(urlPath),
 		Name:   path.Base(urlPath),
@@ -447,7 +452,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, tail, text 
 	var tmpl *template.Template
 	g1, ctx1 := errgroup.WithContext(ctx)
 	g1.Go(func() error {
-		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, path.Base(tail), text, nil)
+		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, path.Base(filePath), text, nil)
 		if err != nil {
 			return err
 		}
@@ -730,6 +735,118 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, tail, text 
 	} else {
 		// TODO: if template runtime error, set a flash message.
 		err = tmpl.Execute(writer, &pageData)
+		if err != nil {
+			return err
+		}
+	}
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, text string) error {
+	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
+	outputDir := path.Join(sitePrefix, "output", urlPath)
+	postData := PostData{
+		Site: Site{
+			Title:      "",  // TODO: read site config.
+			Favicon:    "",  // TODO: read site config.
+			Lang:       "",  // TODO: read site config.
+			Categories: nil, // TODO: read site fs.
+		},
+		Category: path.Dir(urlPath),
+		Name:     path.Base(urlPath),
+	}
+	if strings.Contains(postData.Category, "/") {
+		return nil
+	}
+	if postData.Category == "." {
+		postData.Category = ""
+	}
+	prefix, _, ok := strings.Cut(urlPath, "-")
+	if !ok || len(prefix) == 0 || len(prefix) > 8 {
+		return nil
+	}
+	b, _ := base32Encoding.DecodeString(fmt.Sprintf("%08s", prefix))
+	if len(b) != 5 {
+		return nil
+	}
+	var timestamp [8]byte
+	copy(timestamp[len(timestamp)-5:], b)
+	postData.CreationTime = time.Unix(int64(binary.BigEndian.Uint64(timestamp[:])), 0)
+	var err error
+	var tmpl *template.Template
+	g1, ctx1 := errgroup.WithContext(ctx)
+	g1.Go(func() error {
+		file, err := nbrew.FS.WithContext(ctx1).Open(path.Join(sitePrefix, "output/themes/post.html"))
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			file, err = rootFS.Open("static/post.html")
+			if err != nil {
+				return err
+			}
+		}
+		defer file.Close()
+		fileInfo, err := file.Stat()
+		if err != nil {
+			return err
+		}
+		if fileInfo.IsDir() {
+			return fmt.Errorf("%s is not a template", filePath)
+		}
+		var b strings.Builder
+		b.Grow(int(fileInfo.Size()))
+		_, err = io.Copy(&b, file)
+		if err != nil {
+			return err
+		}
+		err = file.Close()
+		if err != nil {
+			return err
+		}
+		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx, "/themes/post.html", b.String(), []string{"/themes/post.html"})
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	err = g1.Wait()
+	if err != nil {
+		return err
+	}
+	writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		err := nbrew.FS.WithContext(ctx).MkdirAll(outputDir, 0755)
+		if err != nil {
+			return err
+		}
+		writer, err = nbrew.FS.WithContext(ctx).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+		if err != nil {
+			return err
+		}
+	}
+	defer writer.Close()
+	if nbrew.GzipGeneratedContent.Load() {
+		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
+		gzipWriter.Reset(writer)
+		defer gzipWriterPool.Put(gzipWriter)
+		err = tmpl.Execute(gzipWriter, &postData)
+		if err != nil {
+			return err
+		}
+		err = gzipWriter.Close()
+		if err != nil {
+			return err
+		}
+	} else {
+		err = tmpl.Execute(writer, &postData)
 		if err != nil {
 			return err
 		}
