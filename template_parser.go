@@ -30,6 +30,7 @@ func NewTemplateParser(fsys FS, sitePrefix string) *TemplateParser {
 	return &TemplateParser{
 		fsys:               fsys,
 		sitePrefix:         sitePrefix,
+		mu:                 sync.Mutex{},
 		templateCache:      make(map[string]*template.Template),
 		templateInProgress: make(map[string]chan struct{}),
 	}

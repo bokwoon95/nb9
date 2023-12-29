@@ -449,8 +449,9 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, c
 			Lang:       "",  // TODO: read site config.
 			Categories: nil, // TODO: read site fs.
 		},
-		Parent: path.Dir(urlPath),
-		Name:   path.Base(urlPath),
+		Parent:           path.Dir(urlPath),
+		Name:             path.Base(urlPath),
+		ModificationTime: time.Now().UTC(),
 	}
 	if pageData.Parent == "." {
 		pageData.Parent = ""
@@ -763,8 +764,9 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, c
 			Lang:       "",  // TODO: read site config.
 			Categories: nil, // TODO: read site fs.
 		},
-		Category: path.Dir(urlPath),
-		Name:     path.Base(urlPath),
+		Category:         path.Dir(urlPath),
+		Name:             path.Base(urlPath),
+		ModificationTime: time.Now().UTC(),
 	}
 	if strings.Contains(postData.Category, "/") {
 		return nil
@@ -853,7 +855,6 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, c
 			),
 			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
 		)
-		// TODO: handle *RemoteFS optimization
 		file, err := nbrew.FS.WithContext(ctx1).Open(path.Join(sitePrefix, filePath))
 		if err != nil {
 			return err
@@ -878,8 +879,7 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, c
 		if err != nil {
 			return err
 		}
-		// ModificationTime
-		postData.ModificationTime = fileInfo.ModTime()
+		// TODO: we're not opening a file here, we already have the content.
 		// Title
 		var line []byte
 		remainder := buf.Bytes()
