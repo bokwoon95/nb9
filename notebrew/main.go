@@ -662,7 +662,7 @@ func main() {
 		if server.Addr == ":443" {
 			go func() {
 				err := server.ServeTLS(listener, "", "")
-				if !errors.Is(err, http.ErrServerClosed) {
+				if err != nil && !errors.Is(err, http.ErrServerClosed) {
 					fmt.Println(err)
 					close(wait)
 				}
@@ -684,7 +684,7 @@ func main() {
 		} else {
 			go func() {
 				err := server.Serve(listener)
-				if !errors.Is(err, http.ErrServerClosed) {
+				if err != nil && !errors.Is(err, http.ErrServerClosed) {
 					fmt.Println(err)
 					close(wait)
 				}
