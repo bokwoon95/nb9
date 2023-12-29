@@ -580,7 +580,9 @@ func main() {
 			for {
 				select {
 				case err := <-watcher.Errors:
-					fmt.Println(err)
+					if err != nil {
+						fmt.Println(err)
+					}
 				case event := <-watcher.Events:
 					if event.Op == fsnotify.Chmod {
 						continue
