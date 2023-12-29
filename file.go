@@ -814,6 +814,86 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, t
 		}
 		return nil
 	})
+	g1.Go(func() error {
+		// TODO: handle *RemoteFS optimization
+		dirEntries, err := nbrew.FS.WithContext(ctx1).ReadDir(outputDir)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		for _, dirEntry := range dirEntries {
+			name := dirEntry.Name()
+			if dirEntry.IsDir() {
+				continue
+			}
+			fileType := fileTypes[path.Ext(name)]
+			if !strings.HasPrefix(fileType.ContentType, "image") {
+				continue
+			}
+			postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
+		}
+		return nil
+	})
+	g1.Go(func() error {
+		codeStyle := "dracula" // TODO: read site config.
+		markdown := goldmark.New(
+			goldmark.WithParserOptions(parser.WithAttribute()),
+			goldmark.WithExtensions(
+				extension.Table,
+				highlighting.NewHighlighting(highlighting.WithStyle(codeStyle)),
+			),
+			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+		)
+		// TODO: handle *RemoteFS optimization
+		file, err := nbrew.FS.WithContext(ctx1).Open(path.Join(sitePrefix, filePath))
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		fileInfo, err := file.Stat()
+		if err != nil {
+			return err
+		}
+		if fileInfo.IsDir() {
+			return fmt.Errorf("%s is a folder", filePath)
+		}
+		buf := bufPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bufPool.Put(buf)
+		buf.Grow(int(fileInfo.Size()))
+		_, err = io.Copy(buf, file)
+		if err != nil {
+			return err
+		}
+		err = file.Close()
+		if err != nil {
+			return err
+		}
+		// ModificationTime
+		postData.ModificationTime = fileInfo.ModTime()
+		// Title
+		var line []byte
+		remainder := buf.Bytes()
+		for len(remainder) > 0 {
+			line, remainder, _ = bytes.Cut(remainder, []byte("\n"))
+			line = bytes.TrimSpace(line)
+			if len(line) == 0 {
+				continue
+			}
+			postData.Title = stripMarkdownStyles(line)
+			break
+		}
+		// Content
+		var b strings.Builder
+		err = markdown.Convert(buf.Bytes(), &b)
+		if err != nil {
+			return err
+		}
+		postData.Content = template.HTML(b.String())
+		return nil
+	})
 	err = g1.Wait()
 	if err != nil {
 		return err
