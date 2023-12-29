@@ -419,6 +419,13 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 				return
 			}
 		case "posts":
+			err := nbrew.generatePost(r.Context(), sitePrefix, filePath, response.Content)
+			if err != nil {
+				// TODO: check if it's a template runtime error.
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
 		}
 		response.Status = UpdateSuccess
 		writeResponse(w, r, response)
@@ -427,7 +434,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 	}
 }
 
-func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, text string) error {
+func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, content string) error {
 	urlPath := strings.TrimPrefix(filePath, "pages/")
 	if urlPath == "index.html" {
 		urlPath = ""
@@ -452,7 +459,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, t
 	var tmpl *template.Template
 	g1, ctx1 := errgroup.WithContext(ctx)
 	g1.Go(func() error {
-		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, path.Base(filePath), text, nil)
+		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, path.Base(filePath), content, nil)
 		if err != nil {
 			return err
 		}
@@ -746,7 +753,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, t
 	return nil
 }
 
-func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, text string) error {
+func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, content string) error {
 	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
 	outputDir := path.Join(sitePrefix, "output", urlPath)
 	postData := PostData{
