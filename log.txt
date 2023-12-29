@@ -11,6 +11,7 @@ serve_http.go
 notebrew/main.go
 
 TODO: on saving, hide the back button so we don't keep pressing back.
+TODO: rename folder.go to directory.go.
 
 notebrew-config/
 notebrew-database.sqlite
