@@ -18,7 +18,7 @@ import (
 // TODO: eventually we'll have to do the big headache of adding pagination
 // through interface discovery (which also requires figuring out how sorting
 // would work).
-func (nbrew *Notebrew) folder(w http.ResponseWriter, r *http.Request, username, sitePrefix, folderPath string, fileInfo fs.FileInfo) {
+func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, username, sitePrefix, folderPath string, fileInfo fs.FileInfo) {
 	type FileEntry struct {
 		Name    string    `json:"name,omitempty"`
 		IsDir   bool      `json:"isDir,omitempty"`
@@ -306,7 +306,7 @@ func (nbrew *Notebrew) folder(w http.ResponseWriter, r *http.Request, username, 
 			return template.HTML(b.String())
 		},
 	}
-	tmpl, err := template.New("folder.html").Funcs(funcMap).ParseFS(rootFS, "embed/folder.html")
+	tmpl, err := template.New("directory.html").Funcs(funcMap).ParseFS(rootFS, "embed/directory.html")
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
 		internalServerError(w, r, err)

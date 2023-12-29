@@ -4,7 +4,7 @@ init.go
 error.go
 notebrew.go
 site_generator.go
-folder.go
+directory.go
 file.go
 ...
 serve_http.go
