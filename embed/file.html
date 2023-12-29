@@ -21,7 +21,7 @@
   {{- end }}
 </nav>
 <div class='mv2'>
-  {{- if and referer (ne $.Status.Code "UpdateSuccess") }}
+  {{- if referer }}
   <a href='{{ referer }}' data-go-back>&larr; back</a>
   <span>&boxv;</span>
   {{- end }}

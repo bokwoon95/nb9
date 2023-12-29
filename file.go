@@ -42,7 +42,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		ModTime     time.Time `json:"modTime,omitempty"`
 	}
 	type Response struct {
-		Status         Status       `json:"status"`
+		Status         Status      `json:"status"`
 		ContentDomain  string      `json:"contentDomain,omitempty"`
 		Username       string      `json:"username,omitempty"`
 		SitePrefix     string      `json:"sitePrefix,omitempty"`
@@ -133,7 +133,9 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		response.ModTime = fileInfo.ModTime()
 		response.Size = fileInfo.Size()
 		response.ContentType = fileType.ContentType
-		response.Status = Success
+		if response.Status == "" {
+			response.Status = Success
+		}
 		if isEditableText {
 			file, err := nbrew.FS.Open(path.Join(sitePrefix, filePath))
 			if err != nil {
@@ -284,6 +286,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			return
 		}
 
+		referer := getReferer(r)
 		funcMap := map[string]any{
 			"join":             path.Join,
 			"dir":              path.Dir,
@@ -297,7 +300,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			"baselineJS":       func() template.JS { return template.JS(baselineJS) },
 			"contentURL":       func() string { return contentURL },
 			"hasDatabase":      func() bool { return nbrew.UsersDB != nil },
-			"referer":          func() string { return r.Referer() },
+			"referer":          func() string { return referer },
 			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
 			"pagePath":         func() string { return pagePath },
 			"pageURL":          func() string { return pageURL },

@@ -118,6 +118,9 @@ func getLogger(ctx context.Context) *slog.Logger {
 	return slog.Default()
 }
 
+// TODO: instrument a quick way to toggle dumping setSession/getSession? I used
+// to use sq's logging facilities for this, but maybe I just need the json
+// payload.
 func (nbrew *Notebrew) setSession(w http.ResponseWriter, r *http.Request, name string, value any) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
@@ -517,4 +520,21 @@ func (nbrew *Notebrew) contentURL(sitePrefix string) string {
 		return "https://" + strings.TrimPrefix(sitePrefix, "@") + "." + nbrew.ContentDomain
 	}
 	return "https://" + nbrew.ContentDomain
+}
+
+func getReferer(r *http.Request) string {
+	referer, _, _ := strings.Cut(r.Referer(), "?")
+	uri := *r.URL
+	if r.Host == "localhost" || strings.HasPrefix(r.Host, "localhost:") {
+		uri.Scheme = "http"
+	} else {
+		uri.Scheme = "https"
+	}
+	uri.Host = r.Host
+	uri.RawQuery = ""
+	uri.Fragment = ""
+	if referer == uri.String() {
+		return ""
+	}
+	return referer
 }
