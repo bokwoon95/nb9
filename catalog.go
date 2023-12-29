@@ -15,7 +15,7 @@ type rawTable struct {
 		Column     string            `json:"column"`
 		Type       map[string]string `json:"type"`
 		Index      bool              `json:"index"`
-		Primarykey bool              `json:"primarykey"`
+		PrimaryKey bool              `json:"primarykey"`
 		Unique     bool              `json:"unique"`
 		NotNull    bool              `json:"notnull"`
 		References struct {
@@ -69,11 +69,11 @@ func unmarshalCatalog(dialect string, b []byte) (*ddl.Catalog, error) {
 			cache.AddOrUpdateColumn(table, ddl.Column{
 				ColumnName:   rawColumn.Column,
 				ColumnType:   columnType,
-				IsPrimaryKey: rawColumn.Primarykey,
+				IsPrimaryKey: rawColumn.PrimaryKey,
 				IsUnique:     rawColumn.Unique,
 				IsNotNull:    rawColumn.NotNull,
 			})
-			if rawColumn.Primarykey {
+			if rawColumn.PrimaryKey {
 				cache.AddOrUpdateConstraint(table, ddl.Constraint{
 					ConstraintName: ddl.GenerateName(ddl.PRIMARY_KEY, rawTable.Table, []string{rawColumn.Column}),
 					ConstraintType: ddl.PRIMARY_KEY,
