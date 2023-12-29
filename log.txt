@@ -10,8 +10,6 @@ file.go
 serve_http.go
 notebrew/main.go
 
-TODO: on saving, hide the back button so we don't keep pressing back.
-
 notebrew-config/
 notebrew-database.sqlite
 notebrew-files/
