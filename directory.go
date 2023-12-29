@@ -15,6 +15,9 @@ import (
 	"github.com/bokwoon95/nb9/sq"
 )
 
+func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, username, sitePrefix, folderPath string) {
+}
+
 // TODO: eventually we'll have to do the big headache of adding pagination
 // through interface discovery (which also requires figuring out how sorting
 // would work).
@@ -28,7 +31,7 @@ func (nbrew *Notebrew) directory_Old(w http.ResponseWriter, r *http.Request, use
 		ModTime time.Time `json:"modTime,omitempty"`
 	}
 	type Response struct {
-		Status         Error       `json:"status"`
+		Status         Status       `json:"status"`
 		ContentDomain  string      `json:"contentDomain,omitempty"`
 		Username       string      `json:"username,omitempty"`
 		SitePrefix     string      `json:"sitePrefix,omitempty"`

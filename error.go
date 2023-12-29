@@ -14,64 +14,45 @@ import (
 	"strings"
 )
 
-type Error string
+type Status string
 
+// TODO: rethink the error system when you get into it.
 const (
-	// Class 00 - Success
-	Success       = Error("NB-00000 success")
-	UpdateSuccess = Error("NB-00006 update success")
+	Success       = Status("Success")
+	UpdateSuccess = Status("UpdateSuccess")
 
-	// Class 03 - General
-
-	// Class 99 - HTTP equivalent
-	ErrBadRequest           = Error("NB-99400 bad request")
-	ErrNotAuthenticated     = Error("NB-99401 not authenticated")
-	ErrNotAuthorized        = Error("NB-99403 not authorized")
-	ErrNotFound             = Error("NB-99404 not found")
-	ErrMethodNotAllowed     = Error("NB-99405 method not allowed")
-	ErrUnsupportedMediaType = Error("NB-99415 unsupported media type")
-	ErrServerError          = Error("NB-99500 server error")
+	ErrBadRequest           = Status("BadRequest")
+	ErrNotAuthenticated     = Status("NotAuthenticated")
+	ErrNotAuthorized        = Status("NotAuthorized")
+	ErrNotFound             = Status("NotFound")
+	ErrMethodNotAllowed     = Status("MethodNotAllowed")
+	ErrUnsupportedMediaType = Status("UnsupportedMediaType")
+	ErrServerError          = Status("ServerError")
 )
 
-func (e Error) Error() string {
-	return string(e)
+func (s Status) Error() string {
+	return string(s)
 }
 
-func (e Error) Success() bool {
-	str := string(e)
-	if len(str) > 8 && str[:3] == "NB-" && str[8] == ' ' {
-		return str[3] == '0' && str[4] == '0'
+func (s Status) Code() string {
+	n := strings.Index(string(s), ":")
+	if n < 0 {
+		return string(s)
 	}
-	return false
+	return string(s[:n])
 }
 
-func (e Error) Code() string {
-	str := string(e)
-	if len(str) > 8 && str[:3] == "NB-" && str[8] == ' ' {
-		return str[:8]
-	}
-	return ""
-}
-
-func (e Error) Message() string {
-	code := e.Code()
-	if code != "" {
-		return strings.TrimSpace(strings.TrimPrefix(string(e), code))
-	}
-	return string(e)
-}
-
-func (e Error) Equal(target Error) bool {
-	code := e.Code()
+func (s Status) Equal(target Status) bool {
+	code := s.Code()
 	if code != "" {
 		return code == target.Code()
 	}
-	return string(e) == string(target)
+	return string(s) == string(target)
 }
 
-func (e Error) Is(target error) bool {
-	if target, ok := target.(Error); ok {
-		return e.Equal(target)
+func (s Status) Is(target error) bool {
+	if target, ok := target.(Status); ok {
+		return s.Equal(target)
 	}
 	return false
 }

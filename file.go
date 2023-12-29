@@ -42,7 +42,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		ModTime     time.Time `json:"modTime,omitempty"`
 	}
 	type Response struct {
-		Status         Error       `json:"status"`
+		Status         Status       `json:"status"`
 		ContentDomain  string      `json:"contentDomain,omitempty"`
 		Username       string      `json:"username,omitempty"`
 		SitePrefix     string      `json:"sitePrefix,omitempty"`

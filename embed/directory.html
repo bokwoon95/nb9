@@ -23,7 +23,7 @@
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
-{{- if and $.Status (ne $.Status.Code "NB-00000") }}
+{{- if and $.Status (ne $.Status.Code "Success") }}
   {{- if $.Status.Success }}
   <div role='alert' class='alert-success mv2 pa2 br2 flex items-center'>
     <div>{{ safeHTML $.Status.Message }}</div>
