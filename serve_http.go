@@ -206,6 +206,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch head {
 		case "", "notes", "pages", "posts", "output":
+			// TODO: optimized check for isDir using RemoteFS
 			fileInfo, err := fs.Stat(nbrew.FS, path.Join(".", sitePrefix, urlPath))
 			if err != nil {
 				if errors.Is(err, fs.ErrNotExist) {
@@ -217,7 +218,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if fileInfo.IsDir() {
-				nbrew.directory(w, r, username, sitePrefix, urlPath, fileInfo)
+				nbrew.directory_Old(w, r, username, sitePrefix, urlPath, fileInfo)
 				return
 			}
 			nbrew.file(w, r, username, sitePrefix, urlPath, fileInfo)
