@@ -72,6 +72,7 @@ type Site struct {
 	Favicon    string
 	Lang       string
 	Categories []string
+	CodeStyle  string
 }
 
 type Page struct {

@@ -408,10 +408,17 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			return
 		}
 
+		site := Site{
+			Title:      "",        // TODO: read site config.
+			Favicon:    "",        // TODO: read site config.
+			Lang:       "",        // TODO: read site config.
+			Categories: nil,       // TODO: read site fs.
+			CodeStyle:  "onedark", // TODO: read site config.
+		}
 		head, _, _ := strings.Cut(filePath, "/")
 		switch head {
 		case "pages":
-			err := nbrew.generatePage(r.Context(), sitePrefix, filePath, response.Content)
+			err := nbrew.generatePage(r.Context(), site, sitePrefix, filePath, response.Content)
 			if err != nil {
 				// TODO: check if it's a template runtime error.
 				getLogger(r.Context()).Error(err.Error())
@@ -419,7 +426,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 				return
 			}
 		case "posts":
-			err := nbrew.generatePost(r.Context(), sitePrefix, filePath, response.Content)
+			err := nbrew.generatePost(r.Context(), site, sitePrefix, filePath, response.Content)
 			if err != nil {
 				// TODO: check if it's a template runtime error.
 				getLogger(r.Context()).Error(err.Error())
@@ -434,7 +441,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 	}
 }
 
-func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, content string) error {
+func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, filePath, content string) error {
 	urlPath := strings.TrimPrefix(filePath, "pages/")
 	if urlPath == "index.html" {
 		urlPath = ""
@@ -443,12 +450,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, c
 	}
 	outputDir := path.Join(sitePrefix, "output", urlPath)
 	pageData := PageData{
-		Site: Site{
-			Title:      "",  // TODO: read site config.
-			Favicon:    "",  // TODO: read site config.
-			Lang:       "",  // TODO: read site config.
-			Categories: nil, // TODO: read site fs.
-		},
+		Site:             site,
 		Parent:           path.Dir(urlPath),
 		Name:             path.Base(urlPath),
 		ModificationTime: time.Now().UTC(),
@@ -467,13 +469,12 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, c
 		return nil
 	})
 	g1.Go(func() error {
-		codeStyle := "dracula" // TODO: read site config.
 		markdownMu := sync.Mutex{}
 		markdown := goldmark.New(
 			goldmark.WithParserOptions(parser.WithAttribute()),
 			goldmark.WithExtensions(
 				extension.Table,
-				highlighting.NewHighlighting(highlighting.WithStyle(codeStyle)),
+				highlighting.NewHighlighting(highlighting.WithStyle(pageData.Site.CodeStyle)),
 			),
 			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
 		)
@@ -754,16 +755,11 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, sitePrefix, filePath, c
 	return nil
 }
 
-func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, content string) error {
+func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, filePath, content string) error {
 	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
 	outputDir := path.Join(sitePrefix, "output", urlPath)
 	postData := PostData{
-		Site: Site{
-			Title:      "",  // TODO: read site config.
-			Favicon:    "",  // TODO: read site config.
-			Lang:       "",  // TODO: read site config.
-			Categories: nil, // TODO: read site fs.
-		},
+		Site:             site,
 		Category:         path.Dir(urlPath),
 		Name:             path.Base(urlPath),
 		ModificationTime: time.Now().UTC(),
@@ -846,43 +842,22 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, c
 		return nil
 	})
 	g1.Go(func() error {
-		codeStyle := "dracula" // TODO: read site config.
+		err := ctx1.Err()
+		if err != nil {
+			return err
+		}
 		markdown := goldmark.New(
 			goldmark.WithParserOptions(parser.WithAttribute()),
 			goldmark.WithExtensions(
 				extension.Table,
-				highlighting.NewHighlighting(highlighting.WithStyle(codeStyle)),
+				highlighting.NewHighlighting(highlighting.WithStyle(site.CodeStyle)),
 			),
 			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
 		)
-		file, err := nbrew.FS.WithContext(ctx1).Open(path.Join(sitePrefix, filePath))
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		fileInfo, err := file.Stat()
-		if err != nil {
-			return err
-		}
-		if fileInfo.IsDir() {
-			return fmt.Errorf("%s is a folder", filePath)
-		}
-		buf := bufPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		defer bufPool.Put(buf)
-		buf.Grow(int(fileInfo.Size()))
-		_, err = io.Copy(buf, file)
-		if err != nil {
-			return err
-		}
-		err = file.Close()
-		if err != nil {
-			return err
-		}
-		// TODO: we're not opening a file here, we already have the content.
+		contentBytes := []byte(content)
 		// Title
 		var line []byte
-		remainder := buf.Bytes()
+		remainder := contentBytes
 		for len(remainder) > 0 {
 			line, remainder, _ = bytes.Cut(remainder, []byte("\n"))
 			line = bytes.TrimSpace(line)
@@ -894,7 +869,7 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, sitePrefix, filePath, c
 		}
 		// Content
 		var b strings.Builder
-		err = markdown.Convert(buf.Bytes(), &b)
+		err = markdown.Convert(contentBytes, &b)
 		if err != nil {
 			return err
 		}
