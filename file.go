@@ -36,7 +36,9 @@ import (
 
 func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, fileInfo fs.FileInfo) {
 	type FileEntry struct {
-		Name        string    `json:"name,omitempty"`
+		Name string `json:"name,omitempty"`
+		// TODO: we don't need ContentType, we can simply check the ext and see
+		// if it is an image (hardcoding is better).
 		ContentType string    `json:"contentType,omitempty"`
 		Size        int64     `json:"size,omitempty"`
 		ModTime     time.Time `json:"modTime,omitempty"`

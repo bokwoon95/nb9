@@ -31,7 +31,7 @@ func (nbrew *Notebrew) directory_Old(w http.ResponseWriter, r *http.Request, use
 		ModTime time.Time `json:"modTime,omitempty"`
 	}
 	type Response struct {
-		Status         Status       `json:"status"`
+		Status         Status      `json:"status"`
 		ContentDomain  string      `json:"contentDomain,omitempty"`
 		Username       string      `json:"username,omitempty"`
 		SitePrefix     string      `json:"sitePrefix,omitempty"`
