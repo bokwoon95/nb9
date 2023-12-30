@@ -108,19 +108,19 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Handle the /files/* route on the main domain.
 	if r.Host == nbrew.CMSDomain && head == "files" {
-		urlPath := tail
-		head, tail, _ := strings.Cut(urlPath, "/")
+		filePath := tail
+		head, tail, _ := strings.Cut(filePath, "/")
 		if head == "static" {
 			w.Header().Add("Cache-Control", "max-age: 31536000, stale-while-revalidate" /* 1 year */)
-			serveFile(w, r, rootFS, urlPath)
+			serveFile(w, r, rootFS, filePath)
 			return
 		}
 
 		// Figure out the sitePrefix of the site we are serving.
 		var sitePrefix string
 		if strings.HasPrefix(head, "@") || strings.Contains(head, ".") {
-			sitePrefix, urlPath = head, tail
-			head, tail, _ = strings.Cut(urlPath, "/")
+			sitePrefix, filePath = head, tail
+			head, tail, _ = strings.Cut(filePath, "/")
 		}
 
 		// If the database is present, check if the user is authorized to
@@ -197,17 +197,20 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// 3. deletesite (needed to delete their sites)
 				//
 				// If not any of the three, then notAuthorized.
-				if urlPath != "" && urlPath != "createsite" && urlPath != "deletesite" {
+				if filePath != "" && filePath != "createsite" && filePath != "deletesite" {
 					notAuthorized(w, r)
 					return
 				}
 			}
 		}
 
+		if head == "" || head == "notes" || head == "pages" || head == "posts" || head == "output" {
+		}
+
 		switch head {
 		case "", "notes", "pages", "posts", "output":
 			// TODO: optimized check for isDir using RemoteFS
-			fileInfo, err := fs.Stat(nbrew.FS, path.Join(".", sitePrefix, urlPath))
+			fileInfo, err := fs.Stat(nbrew.FS, path.Join(".", sitePrefix, filePath))
 			if err != nil {
 				if errors.Is(err, fs.ErrNotExist) {
 					notFound(w, r)
@@ -218,13 +221,14 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if fileInfo.IsDir() {
-				nbrew.directory_Old(w, r, username, sitePrefix, urlPath, fileInfo)
+				nbrew.directory_Old(w, r, username, sitePrefix, filePath, fileInfo)
 				return
 			}
-			nbrew.file(w, r, username, sitePrefix, urlPath, fileInfo)
+			// filePath
+			nbrew.file(w, r, username, sitePrefix, filePath, fileInfo)
 			return
 		default:
-			switch urlPath {
+			switch filePath {
 			case "createsite":
 			case "deletesite":
 			case "delete":
