@@ -161,22 +161,22 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return result
 			})
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					http.SetCookie(w, &http.Cookie{
-						Path:   "/",
-						Name:   "authentication",
-						Value:  "0",
-						MaxAge: -1,
-					})
-					if head == "" {
-						http.Redirect(w, r, "/users/login/?401", http.StatusFound)
-						return
-					}
-					notAuthenticated(w, r)
+				if !errors.Is(err, sql.ErrNoRows) {
+					logger.Error(err.Error())
+					internalServerError(w, r, err)
 					return
 				}
-				logger.Error(err.Error())
-				internalServerError(w, r, err)
+				http.SetCookie(w, &http.Cookie{
+					Path:   "/",
+					Name:   "authentication",
+					Value:  "0",
+					MaxAge: -1,
+				})
+				if head == "" {
+					http.Redirect(w, r, "/users/login/?401", http.StatusFound)
+					return
+				}
+				notAuthenticated(w, r)
 				return
 			}
 			username = result.Username
