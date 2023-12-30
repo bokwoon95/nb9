@@ -57,6 +57,8 @@ func (s Status) Is(target error) bool {
 	return false
 }
 
+// TODO: move the below to notebrew.go
+
 var errorTemplate = template.Must(template.
 	New("error.html").
 	Funcs(map[string]any{
