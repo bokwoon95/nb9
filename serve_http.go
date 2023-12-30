@@ -188,7 +188,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				// If the current sitePrefix is empty, the user needs access to
-				// the following URL paths unconditionally:
+				// the following file paths unconditionally:
 				//
 				// 1. <empty> (needed to switch between their sites)
 				//
