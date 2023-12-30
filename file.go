@@ -136,7 +136,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		response.Size = fileInfo.Size()
 		response.ContentType = fileType.ContentType
 		if response.Status == "" {
-			response.Status = Success
+			response.Status = GetSuccess
 		}
 		if isEditableText {
 			file, err := nbrew.FS.Open(path.Join(sitePrefix, filePath))
@@ -440,7 +440,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 				return
 			}
 		}
-		response.Status = UpdateSuccess
+		response.Status = PostSuccess
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)

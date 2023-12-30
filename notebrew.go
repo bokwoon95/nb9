@@ -571,6 +571,7 @@ func fileSizeToString(size int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "kMGTPE"[exp])
 }
 
+// TODO: Convert all referers to use getReferer() instead of r.Referer().
 func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 	var msg string
 	var maxBytesErr *http.MaxBytesError

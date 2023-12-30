@@ -7,8 +7,8 @@ import (
 type Status string
 
 const (
-	Success       = Status("Success")
-	UpdateSuccess = Status("UpdateSuccess")
+	GetSuccess  = Status("GetSuccess")
+	PostSuccess = Status("PostSuccess")
 
 	// TODO: do we really have to make it an error? What scenarios will we have
 	// to treat status strings as errors? If not, remove the error interface

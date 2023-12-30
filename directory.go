@@ -63,7 +63,7 @@ func (nbrew *Notebrew) directory_Old(w http.ResponseWriter, r *http.Request, use
 	response.Path = folderPath
 	response.IsDir = fileInfo.IsDir()
 	if response.Status == "" {
-		response.Status = Success
+		response.Status = GetSuccess
 	}
 
 	var authorizedForRootSite bool
