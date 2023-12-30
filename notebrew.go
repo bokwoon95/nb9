@@ -597,7 +597,7 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		serverErr = encoder.Encode(map[string]any{
-			"status": string(ErrBadRequest) + ": " + msg,
+			"status": string(BadRequest) + ": " + msg,
 		})
 		if serverErr != nil {
 			getLogger(r.Context()).Error(serverErr.Error())
@@ -614,7 +614,7 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, string(ErrBadRequest)+": "+msg, http.StatusBadRequest)
+		http.Error(w, string(BadRequest)+": "+msg, http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
@@ -629,7 +629,7 @@ func notAuthenticated(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": ErrNotAuthenticated,
+			"status": NotAuthenticated,
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -654,7 +654,7 @@ func notAuthenticated(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, string(ErrNotAuthenticated), http.StatusUnauthorized)
+		http.Error(w, string(NotAuthenticated), http.StatusUnauthorized)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)

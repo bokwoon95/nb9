@@ -10,18 +10,20 @@ const (
 	GetSuccess  = Status("GetSuccess")
 	PostSuccess = Status("PostSuccess")
 
-	// TODO: do we really have to make it an error? What scenarios will we have
-	// to treat status strings as errors? If not, remove the error interface
-	// from the Status type entirely.
-	ErrBadRequest           = Status("BadRequest")
-	ErrNotAuthenticated     = Status("NotAuthenticated")
-	ErrNotAuthorized        = Status("NotAuthorized")
-	ErrNotFound             = Status("NotFound")
-	ErrMethodNotAllowed     = Status("MethodNotAllowed")
-	ErrUnsupportedMediaType = Status("UnsupportedMediaType")
-	ErrServerError          = Status("ServerError")
+	// TODO: what do validation errors look like under this framework? What if a single email field violates multiple errors?
+
+	BadRequest           = Status("BadRequest")
+	NotAuthenticated     = Status("NotAuthenticated")
+	NotAuthorized        = Status("NotAuthorized")
+	NotFound             = Status("NotFound")
+	MethodNotAllowed     = Status("MethodNotAllowed")
+	UnsupportedMediaType = Status("UnsupportedMediaType")
+	ServerError          = Status("ServerError")
 )
 
+// TODO: do we really have to make it an error? What scenarios will we have
+// to treat status strings as errors? If not, remove the error interface
+// from the Status type entirely.
 func (s Status) Error() string {
 	return string(s)
 }
