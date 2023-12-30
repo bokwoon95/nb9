@@ -6,7 +6,6 @@ import (
 
 type Status string
 
-// TODO: rethink the error system when you get into it.
 const (
 	Success       = Status("Success")
 	UpdateSuccess = Status("UpdateSuccess")
