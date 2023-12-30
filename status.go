@@ -10,6 +10,9 @@ const (
 	Success       = Status("Success")
 	UpdateSuccess = Status("UpdateSuccess")
 
+	// TODO: do we really have to make it an error? What scenarios will we have
+	// to treat status strings as errors? If not, remove the error interface
+	// from the Status type entirely.
 	ErrBadRequest           = Status("BadRequest")
 	ErrNotAuthenticated     = Status("NotAuthenticated")
 	ErrNotAuthorized        = Status("NotAuthorized")
