@@ -62,6 +62,10 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		return
 	}
 	_ = fileType
+	// TODO: is the file editable?
+	// TODO: does the file have an output/parent link?
+	// TODO: $.ContentURL ()
+	// back | files | <type> | <parent> | <view URL, belongs to page>
 }
 
 func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {

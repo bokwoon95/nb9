@@ -41,7 +41,7 @@
     <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
     {{- end }}
   <span>&boxv;</span>
-  <a href='{{ pageURL }}'>output</a>
+  view: <a href='{{ pageURL }}'>page</a>
   {{- else if eq (head $.Path) "posts" }}
   <span>&boxv;</span>
   <a href='/{{ join "files" $.SitePrefix "posts" }}/'>posts</a>
@@ -50,11 +50,11 @@
     <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
     {{- end }}
   <span>&boxv;</span>
-  <a href='{{ postURL }}'>output</a>
+  view: <a href='{{ postURL }}'>post</a>
   {{- else if eq (head $.Path) "output" }}
     {{- if pagePath }}
     <span>&boxv;</span>
-    parent: <a href='/{{ join "files" $.SitePrefix pagePath }}/'>{{ base pagePath }}</a>
+    belongs to page: <a href='/{{ join "files" $.SitePrefix pagePath }}/'>{{ base pagePath }}</a>
     {{- else }}
       {{- if eq (head (tail $.Path)) "themes" }}
       <span>&boxv;</span>

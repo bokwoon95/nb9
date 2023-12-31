@@ -295,6 +295,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			"base":             path.Base,
 			"ext":              path.Ext,
 			"hasPrefix":        strings.HasPrefix,
+			"hasSuffix":        strings.HasSuffix,
 			"trimPrefix":       strings.TrimPrefix,
 			"contains":         strings.Contains,
 			"fileSizeToString": fileSizeToString,
