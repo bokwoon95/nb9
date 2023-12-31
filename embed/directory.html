@@ -23,21 +23,6 @@
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
-{{- if and $.Status (ne $.Status.Code "Success") }}
-  {{- if $.Status.Success }}
-  <div role='alert' class='alert-success mv2 pa2 br2 flex items-center'>
-    <div>{{ safeHTML $.Status.Message }}</div>
-    <div class='flex-grow-1'></div>
-    <button class='f3 bg-transparent bn color-success o-70 hover-black' data-dismiss-alert>&times;</button>
-  </div>
-  {{- else }}
-  <div role='alert' class='alert-danger mv2 pa2 br2 flex items-center'>
-    <div>{{ safeHTML $.Status.Message }}</div>
-    <div class='flex-grow-1'></div>
-    <button class='f3 bg-transparent bn color-success o-70 hover-black' data-dismiss-alert>&times;</button>
-  </div>
-  {{- end }}
-{{- end }}
 <div class='dashed-border mv2 pa2 br2 flex items-center'>
   <div class='flex-grow-1 truncate'><a href=''>5 items copied</a>: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</div>
   <div class='ml2'><button type='button' class='button ba br2 pv2 ph2'>paste</button></div>
