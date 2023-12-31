@@ -64,7 +64,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 	_ = fileType
 	// TODO: is the file editable?
 	// TODO: does the file have an output/parent link?
-	// TODO: $.ContentURL (remove the ContentDomain field from every Response struct, replace it with ContentURL instead)
+	// TODO: $.ContentURL (remove the ContentDomain field from every Response struct, replace it with ContentSite instead)
 	// back | files | <type> | <parent> | <view URL, belongs to page>
 }
 
