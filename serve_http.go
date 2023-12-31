@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -46,16 +47,14 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Add request method, url and ip to the logger.
+	// Add request method and url to the logger.
 	logger := *nbrew.Logger.Load()
 	if logger == nil {
 		logger = slog.Default()
 	}
-	ip := nbrew.realClientIP(r)
 	logger = logger.With(
 		slog.String("method", r.Method),
 		slog.String("url", scheme+r.Host+r.URL.RequestURI()),
-		slog.String("ip", ip),
 	)
 	r = r.WithContext(context.WithValue(r.Context(), loggerKey, logger))
 
@@ -92,6 +91,15 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Handle the /users/* route on the main domain.
 	if r.Host == nbrew.CMSDomain && head == "users" {
+		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if contentType == "application/x-www-form-urlencoded" {
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1MB */)
+			err := r.ParseForm()
+			if err != nil {
+				badRequest(w, r, err)
+				return
+			}
+		}
 		switch tail {
 		case "signup":
 			// nbrew.signup(w, r, ip)
@@ -108,6 +116,15 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Handle the /files/* route on the main domain.
 	if r.Host == nbrew.CMSDomain && head == "files" {
+		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if contentType == "application/x-www-form-urlencoded" {
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1MB */)
+			err := r.ParseForm()
+			if err != nil {
+				badRequest(w, r, err)
+				return
+			}
+		}
 		filePath := tail
 		head, tail, _ := strings.Cut(filePath, "/")
 		if head == "static" {

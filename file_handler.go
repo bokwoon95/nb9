@@ -1,7 +1,11 @@
 package nb9
 
 import (
+	"errors"
+	"io/fs"
 	"net/http"
+	"path"
+	"strings"
 	"time"
 )
 
@@ -27,10 +31,44 @@ type fileResponse struct {
 }
 
 func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
-	// TODO: open a file
+	file, err := nbrew.FS.Open(path.Join(".", sitePrefix, filePath))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			notFound(w, r)
+			return
+		}
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	defer file.Close()
+	fileInfo, err := file.Stat()
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	if fileInfo.IsDir() {
+		nbrew.listDirectory(w, r, username, sitePrefix, filePath)
+		return
+	}
+	fileType, ok := fileTypes[path.Ext(filePath)]
+	if !ok {
+		notFound(w, r)
+		return
+	}
+	if !strings.Contains(filePath, "/") {
+		notFound(w, r)
+		return
+	}
+	_ = fileType
 }
 
-func (nbrew *Notebrew) listDirectory() {
+func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
+	if r.Method != "GET" {
+		methodNotAllowed(w, r)
+		return
+	}
 }
 
 // displayFile
