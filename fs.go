@@ -355,11 +355,9 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	}
 	if name == "." {
 		file := &RemoteFile{
-			ctx:       fsys.ctx,
-			storage:   fsys.storage,
-			info:      &RemoteFileInfo{filePath: ".", isDir: true},
-			numClones: new(int),
-			mu:        &sync.Mutex{},
+			ctx:     fsys.ctx,
+			storage: fsys.storage,
+			info:    &RemoteFileInfo{filePath: ".", isDir: true},
 		}
 		return file, nil
 	}
@@ -371,22 +369,18 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		},
 	}, func(row *sq.Row) *RemoteFile {
 		file := &RemoteFile{
-			ctx:       fsys.ctx,
-			storage:   fsys.storage,
-			info:      &RemoteFileInfo{},
-			numClones: new(int),
-			mu:        &sync.Mutex{},
+			ctx:     fsys.ctx,
+			storage: fsys.storage,
+			info:    &RemoteFileInfo{},
 		}
 		row.UUID(&file.info.fileID, "file_id")
-		row.UUID(&file.info.parentID, "parent_id")
 		file.info.filePath = row.String("file_path")
 		file.info.isDir = row.Bool("is_dir")
-		file.info.numFiles = row.Int64("num_files")
 		file.info.size = row.Int64("{}", sq.DialectExpression{
-			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Default: sq.Expr("COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0)"),
 			Cases: []sq.DialectCase{{
 				Dialect: "sqlite",
-				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+				Result:  sq.Expr("COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0)"),
 			}},
 		})
 		file.info.modTime = row.Time("mod_time")
@@ -416,10 +410,8 @@ func getBuffer(row *sq.Row, format string, values ...any) *bytes.Buffer {
 
 type RemoteFileInfo struct {
 	fileID   [16]byte
-	parentID [16]byte
 	filePath string
 	isDir    bool
-	numFiles int64
 	size     int64
 	modTime  time.Time
 }
@@ -451,8 +443,6 @@ type RemoteFile struct {
 	info       *RemoteFileInfo
 	buf        *bytes.Buffer
 	readCloser io.ReadCloser
-	numClones  *int
-	mu         *sync.Mutex
 }
 
 func (file *RemoteFile) Stat() (fs.FileInfo, error) {
@@ -487,12 +477,6 @@ func (file *RemoteFile) Close() error {
 		if file.buf == nil {
 			return fs.ErrClosed
 		}
-		file.mu.Lock()
-		defer file.mu.Unlock()
-		*file.numClones--
-		if *file.numClones < 0 {
-			bufPool.Put(file.buf)
-		}
 		file.buf = nil
 		return nil
 	}
@@ -505,30 +489,6 @@ func (file *RemoteFile) Close() error {
 	}
 	file.readCloser = nil
 	return nil
-}
-
-func (file *RemoteFile) Clone() (*RemoteFile, error) {
-	clone := &RemoteFile{
-		ctx:       file.ctx,
-		storage:   file.storage,
-		info:      file.info,
-		numClones: file.numClones,
-		mu:        file.mu,
-	}
-	if file.info.isDir {
-		return clone, nil
-	}
-	if textExtensions[path.Ext(file.info.filePath)] {
-		file.mu.Lock()
-		defer file.mu.Unlock()
-		if *clone.numClones < 0 {
-			return nil, fs.ErrClosed
-		}
-		clone.buf = bytes.NewBuffer(file.buf.Bytes())
-		*clone.numClones++
-		return clone, nil
-	}
-	return clone, nil
 }
 
 func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, error) {
@@ -836,12 +796,11 @@ func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		row.UUID(&file.fileID, "file_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
-		file.numFiles = row.Int64("num_files")
 		file.size = row.Int64("{}", sq.DialectExpression{
-			Default: sq.Expr("SUM(COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0))"),
+			Default: sq.Expr("COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0)"),
 			Cases: []sq.DialectCase{{
 				Dialect: "sqlite",
-				Result:  sq.Expr("SUM(COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0))"),
+				Result:  sq.Expr("COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0)"),
 			}},
 		})
 		file.modTime = row.Time("mod_time")

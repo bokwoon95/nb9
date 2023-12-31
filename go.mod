@@ -20,7 +20,6 @@ require (
 	github.com/libdns/porkbun v0.1.2
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/mholt/acmez v1.2.0
-	github.com/pelletier/go-toml/v2 v2.1.0
 	github.com/yuin/goldmark v1.4.13
 	github.com/yuin/goldmark-highlighting v0.0.0-20220208100518-594be1970594
 	golang.org/x/crypto v0.14.0
@@ -52,6 +51,7 @@ require (
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/miekg/dns v1.1.55 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/zeebo/blake3 v0.2.3 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

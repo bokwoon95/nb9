@@ -27,7 +27,7 @@ type fileResponse struct {
 }
 
 func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
-	// TODO: assume is a file first
+	// TODO: open a file
 }
 
 func (nbrew *Notebrew) listDirectory() {
