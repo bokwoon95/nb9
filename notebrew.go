@@ -571,7 +571,6 @@ func fileSizeToString(size int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "kMGTPE"[exp])
 }
 
-// TODO: Convert all referers to use getReferer() instead of r.Referer().
 func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 	var msg string
 	var maxBytesErr *http.MaxBytesError
@@ -680,7 +679,7 @@ func notAuthorized(w http.ResponseWriter, r *http.Request) {
 	buf.Reset()
 	defer bufPool.Put(buf)
 	err := errorTemplate.Execute(buf, map[string]any{
-		"Referer":  r.Referer(),
+		"Referer":  getReferer(r),
 		"Title":    "403 forbidden",
 		"Headline": "403 forbidden",
 		"Byline":   "You do not have permission to view this page (try logging in to a different account).",
@@ -713,7 +712,7 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 	buf.Reset()
 	defer bufPool.Put(buf)
 	err := errorTemplate.Execute(buf, map[string]any{
-		"Referer":  r.Referer(),
+		"Referer":  getReferer(r),
 		"Title":    "404 not found",
 		"Headline": "404 not found",
 		"Byline":   "The page you are looking for does not exist.",
@@ -746,7 +745,7 @@ func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 	buf.Reset()
 	defer bufPool.Put(buf)
 	err := errorTemplate.Execute(buf, map[string]any{
-		"Referer":  r.Referer(),
+		"Referer":  getReferer(r),
 		"Title":    "405 method not allowed",
 		"Headline": "405 method not allowed: " + r.Method,
 	})
@@ -785,7 +784,7 @@ func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 	buf.Reset()
 	defer bufPool.Put(buf)
 	err := errorTemplate.Execute(buf, map[string]any{
-		"Referer":  r.Referer(),
+		"Referer":  getReferer(r),
 		"Title":    "415 unsupported media type",
 		"Headline": msg,
 	})
@@ -819,7 +818,7 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 	var data map[string]any
 	if errors.Is(serverErr, context.DeadlineExceeded) {
 		data = map[string]any{
-			"Referer":  r.Referer(),
+			"Referer":  getReferer(r),
 			"Title":    "deadline exceeded",
 			"Headline": "The server took too long to respond.",
 		}
