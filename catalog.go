@@ -25,14 +25,14 @@ type rawTable struct {
 	} `json:"columns"`
 }
 
-//go:embed files_catalog.json
+//go:embed catalog_files.json
 var filesCatalogBytes []byte
 
 func FilesCatalog(dialect string) (*ddl.Catalog, error) {
 	return unmarshalCatalog(dialect, filesCatalogBytes)
 }
 
-//go:embed users_catalog.json
+//go:embed catalog_users.json
 var usersCatalogBytes []byte
 
 func UsersCatalog(dialect string) (*ddl.Catalog, error) {
