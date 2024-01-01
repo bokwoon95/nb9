@@ -11,23 +11,27 @@ import (
 
 type fileEntry struct {
 	Name    string    `json:"name,omitempty"`
-	IsDir   bool      `json:"isDir,omitempty"`
-	IsSite  bool      `json:"isSite,omitempty"`
-	IsUser  bool      `json:"isUser,omitempty"`
 	Size    int64     `json:"size,omitempty"`
 	ModTime time.Time `json:"modTime,omitempty"`
+
+	IsDir  bool `json:"isDir,omitempty"`
+	IsSite bool `json:"isSite,omitempty"`
+	IsUser bool `json:"isUser,omitempty"`
 }
 
 type fileResponse struct {
-	Status         Status      `json:"status"`
-	ContentSite    string      `json:"contentSite,omitempty"`
-	Username       string      `json:"username,omitempty"`
-	SitePrefix     string      `json:"sitePrefix,omitempty"`
-	Path           string      `json:"path"`
-	IsDir          bool        `json:"isDir,omitempty"`
-	ModTime        time.Time   `json:"modTime,omitempty"`
-	FileEntries    []fileEntry `json:"fileEntries,omitempty"`
-	TemplateErrors []string    `json:"templateErrors,omitempty"`
+	Status      Status      `json:"status"`
+	ContentSite string      `json:"contentSite,omitempty"`
+	Username    string      `json:"username,omitempty"`
+	SitePrefix  string      `json:"sitePrefix,omitempty"`
+	Path        string      `json:"path"`
+	IsDir       bool        `json:"isDir,omitempty"`
+	ModTime     time.Time   `json:"modTime,omitempty"`
+	FileEntries []fileEntry `json:"fileEntries,omitempty"`
+
+	URL            string   `json:"url,omitempty"`
+	BelongsTo      string   `json:"belongsTo,omitempty"`
+	TemplateErrors []string `json:"templateErrors,omitempty"`
 }
 
 func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {

@@ -30,3 +30,13 @@ Latency (mean) = xxx
 Latency (Q1)   = xxx
 Latency (Q2)   = xxx
 Latency (Q3)   = xxx
+
+TODO: i18n.go
+1. en
+2. zh
+3. ja
+4. es
+5. fr
+6. it
+8. ru
+9. pt
