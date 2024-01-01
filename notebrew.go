@@ -506,7 +506,7 @@ var fileTypes = map[string]FileType{
 	".woff2": {Ext: ".woff2", ContentType: "font/woff2"},
 }
 
-func (nbrew *Notebrew) contentURL(sitePrefix string) string {
+func (nbrew *Notebrew) contentSite(sitePrefix string) string {
 	if strings.Contains(sitePrefix, ".") {
 		return "https://" + sitePrefix
 	}

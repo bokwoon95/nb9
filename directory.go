@@ -266,7 +266,7 @@ func (nbrew *Notebrew) directory_Old(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	contentURL := nbrew.contentURL(sitePrefix)
+	contentURL := nbrew.contentSite(sitePrefix)
 	funcMap := map[string]any{
 		"join":                  path.Join,
 		"base":                  path.Base,

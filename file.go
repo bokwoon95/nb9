@@ -156,7 +156,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			response.Content = b.String()
 		}
 		var pageURL, postURL string
-		contentURL := nbrew.contentURL(sitePrefix)
+		contentURL := nbrew.contentSite(sitePrefix)
 		switch segments[0] {
 		case "pages":
 			if len(segments) == 2 && segments[1] == "index.html" {

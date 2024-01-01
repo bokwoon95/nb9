@@ -20,7 +20,7 @@ type fileEntry struct {
 
 type fileResponse struct {
 	Status         Status      `json:"status"`
-	ContentDomain  string      `json:"contentDomain,omitempty"`
+	ContentSite    string      `json:"contentSite,omitempty"`
 	Username       string      `json:"username,omitempty"`
 	SitePrefix     string      `json:"sitePrefix,omitempty"`
 	Path           string      `json:"path"`
