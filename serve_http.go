@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
-	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -89,17 +88,14 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ext := path.Ext(urlPath)
 	head, tail, _ := strings.Cut(urlPath, "/")
 
+	err := r.ParseForm()
+	if err != nil {
+		badRequest(w, r, err)
+		return
+	}
+
 	// Handle the /users/* route on the main domain.
 	if r.Host == nbrew.CMSDomain && head == "users" {
-		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
-		if contentType == "application/x-www-form-urlencoded" {
-			r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1MB */)
-			err := r.ParseForm()
-			if err != nil {
-				badRequest(w, r, err)
-				return
-			}
-		}
 		switch tail {
 		case "signup":
 			// nbrew.signup(w, r, ip)
@@ -116,15 +112,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Handle the /files/* route on the main domain.
 	if r.Host == nbrew.CMSDomain && head == "files" {
-		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
-		if contentType == "application/x-www-form-urlencoded" {
-			r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1MB */)
-			err := r.ParseForm()
-			if err != nil {
-				badRequest(w, r, err)
-				return
-			}
-		}
 		filePath := tail
 		head, tail, _ := strings.Cut(filePath, "/")
 		if head == "static" {
