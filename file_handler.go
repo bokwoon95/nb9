@@ -390,7 +390,13 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		switch contentType {
 		case "application/json":
-			err := json.NewDecoder(r.Body).Decode(&request)
+			b, err := io.ReadAll(r.Body)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			err = json.Unmarshal(b, &request)
 			if err != nil {
 				badRequest(w, r, err)
 				return
