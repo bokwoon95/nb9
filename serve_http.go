@@ -88,7 +88,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ext := path.Ext(urlPath)
 	head, tail, _ := strings.Cut(urlPath, "/")
 
-	err := r.ParseForm()
+	err := r.ParseMultipartForm(10 << 20 /* 10MB */)
 	if err != nil {
 		badRequest(w, r, err)
 		return
