@@ -216,7 +216,13 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 					ctx: ctx2,
 				}
 				file.info.filePath = row.String("file_path")
-				file.buf = getBuffer(row, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
+				buf := bufPool.Get().(*bytes.Buffer)
+				buf.Reset()
+				b := buf.Bytes()
+				row.Scan(&b, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
+				if b != nil {
+					file.buf = bytes.NewBuffer(b)
+				}
 				return file
 			})
 			if err != nil {

@@ -384,7 +384,13 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 			}},
 		})
 		file.info.modTime = row.Time("mod_time")
-		file.buf = getBuffer(row, "COALESCE(text, data)")
+		buf := bufPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		b := buf.Bytes()
+		row.Scan(&b, "COALESCE(text, data)")
+		if b != nil {
+			file.buf = bytes.NewBuffer(b)
+		}
 		return file
 	})
 	if err != nil {
@@ -394,18 +400,6 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		return nil, err
 	}
 	return file, nil
-}
-
-func getBuffer(row *sq.Row, format string, values ...any) *bytes.Buffer {
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	b := buf.Bytes()
-	row.Scan(&b, format, values...)
-	if b == nil {
-		bufPool.Put(buf)
-		return nil
-	}
-	return bytes.NewBuffer(b)
 }
 
 type RemoteFileInfo struct {

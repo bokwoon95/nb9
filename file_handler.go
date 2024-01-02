@@ -13,25 +13,27 @@ type fileEntry struct {
 	Name    string    `json:"name,omitempty"`
 	Size    int64     `json:"size,omitempty"`
 	ModTime time.Time `json:"modTime,omitempty"`
-
-	IsDir  bool `json:"isDir,omitempty"`
-	IsSite bool `json:"isSite,omitempty"`
-	IsUser bool `json:"isUser,omitempty"`
+	IsDir   bool      `json:"isDir,omitempty"`
 }
 
 type fileResponse struct {
-	Status      Status      `json:"status"`
-	ContentSite string      `json:"contentSite,omitempty"`
-	Username    string      `json:"username,omitempty"`
-	SitePrefix  string      `json:"sitePrefix,omitempty"`
-	Path        string      `json:"path"`
-	IsDir       bool        `json:"isDir,omitempty"`
-	ModTime     time.Time   `json:"modTime,omitempty"`
-	FileEntries []fileEntry `json:"fileEntries,omitempty"`
+	Status      Status    `json:"status"`
+	ContentSite string    `json:"contentSite,omitempty"`
+	Username    string    `json:"username,omitempty"`
+	SitePrefix  string    `json:"sitePrefix,omitempty"`
+	Path        string    `json:"path"`
+	IsDir       bool      `json:"isDir,omitempty"`
+	ModTime     time.Time `json:"modTime,omitempty"`
 
-	URL            string   `json:"url,omitempty"`
-	BelongsTo      string   `json:"belongsTo,omitempty"`
-	TemplateErrors []string `json:"templateErrors,omitempty"`
+	Files []fileEntry `json:"fileEntries,omitempty"`
+	Sites []string    `json:"sites,omitempty"`
+	Users []string    `json:"users,omitempty"`
+
+	URL            string      `json:"url,omitempty"`
+	BelongsTo      string      `json:"belongsTo,omitempty"`
+	AssetDir       string      `json:"assetDir,omitempty"`
+	Assets         []fileEntry `json:"assetEntries,omitempty"`
+	TemplateErrors []string    `json:"templateErrors,omitempty"`
 }
 
 func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
@@ -65,7 +67,65 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		notFound(w, r)
 		return
 	}
-	_ = fileType
+
+	var response fileResponse
+	if r.Method == "GET" {
+		_, err = nbrew.getSession(r, "flash", &response)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+		}
+		nbrew.clearSession(w, r, "flash")
+		if response.Status == "" {
+			response.Status = GetSuccess // TODO: do it like this? set status here?
+		}
+	}
+	response.ContentSite = nbrew.contentSite(sitePrefix)
+	response.Username = username
+	response.SitePrefix = sitePrefix
+	response.Path = filePath
+	response.IsDir = fileInfo.IsDir()
+	response.ModTime = fileInfo.ModTime()
+
+	var isEditable bool
+	head, tail, _ := strings.Cut(filePath, "/")
+	switch head {
+	case "notes":
+		isEditable = fileType.Ext == ".html" || fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md" || fileType.Ext == ".txt"
+	case "pages":
+		isEditable = fileType.Ext == ".html"
+		if !isEditable {
+			notFound(w, r)
+			return
+		}
+		if tail == "index.html" {
+			// (page) pages/index.html => (assetDir) output
+			response.URL = response.ContentSite
+		} else {
+		}
+	case "posts":
+		isEditable = fileType.Ext == ".md"
+		if !isEditable {
+			notFound(w, r)
+			return
+		}
+	case "output":
+		next, _, _ := strings.Cut(tail, "/")
+		switch next {
+		case "posts":
+			isEditable = false
+		case "themes":
+			isEditable = fileType.Ext == ".html" || fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md" || fileType.Ext == ".txt"
+		default:
+			isEditable = fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md"
+			if isEditable {
+				// output/foo/bar/baz.js => pages/foo/bar.html
+				response.BelongsTo = path.Dir(tail) + ".html"
+			}
+		}
+	default:
+		notFound(w, r)
+		return
+	}
 	// TODO: is the file editable? isEditable
 	// TODO: does the file have an output/parent link? URL/BelongsTo
 	// TODO: $.ContentSite

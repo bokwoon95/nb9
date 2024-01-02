@@ -509,7 +509,13 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 					ctx: ctx1,
 				}
 				file.info.filePath = row.String("file_path")
-				file.buf = getBuffer(row, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
+				buf := bufPool.Get().(*bytes.Buffer)
+				buf.Reset()
+				b := buf.Bytes()
+				row.Scan(&b, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
+				if b != nil {
+					file.buf = bytes.NewBuffer(b)
+				}
 				return file
 			})
 			if err != nil {
