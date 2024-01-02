@@ -467,11 +467,13 @@ func (file *RemoteFile) Close() error {
 	if file.info.isDir {
 		return nil
 	}
+	if file.buf != nil {
+		bufPool.Put(file.buf)
+	}
 	if textExtensions[path.Ext(file.info.filePath)] {
 		if file.buf == nil {
 			return fs.ErrClosed
 		}
-		bufPool.Put(file.buf)
 		file.buf = nil
 		return nil
 	}
