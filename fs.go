@@ -471,6 +471,7 @@ func (file *RemoteFile) Close() error {
 		if file.buf == nil {
 			return fs.ErrClosed
 		}
+		bufPool.Put(file.buf)
 		file.buf = nil
 		return nil
 	}
