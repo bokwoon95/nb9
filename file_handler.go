@@ -164,11 +164,11 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		switch head {
 		case "pages":
 			if tail == "index.html" {
-				response.AssetDir = "output"
 				response.URL = response.ContentSite
+				response.AssetDir = "output"
 			} else {
-				response.AssetDir = path.Join("output", strings.TrimSuffix(tail, ".html"))
 				response.URL = response.ContentSite + "/" + strings.TrimSuffix(tail, ".html") + "/"
+				response.AssetDir = path.Join("output", strings.TrimSuffix(tail, ".html"))
 			}
 			if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
 				response.Assets, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
@@ -238,8 +238,8 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 				}
 			}
 		case "posts":
-			response.AssetDir = path.Join("output", strings.TrimSuffix(filePath, ".md"))
 			response.URL = response.ContentSite + "/" + strings.TrimSuffix(filePath, ".md") + "/"
+			response.AssetDir = path.Join("output", strings.TrimSuffix(filePath, ".md"))
 			if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
 				response.Assets, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
 					Dialect: remoteFS.filesDialect,
