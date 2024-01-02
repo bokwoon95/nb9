@@ -163,6 +163,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				IsAuthorized bool
 			}) {
 				result.Username = row.String("users.username")
+				// TODO: convert to EXISTS() subquery
 				result.IsAuthorized = row.Bool("authorized_users.user_id IS NOT NULL")
 				return result
 			})
