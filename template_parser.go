@@ -321,3 +321,9 @@ func (e TemplateErrors) Error() string {
 	b, _ := json.MarshalIndent(e, "", "  ")
 	return fmt.Sprintf("the following templates have errors: %s", string(b))
 }
+
+type TemplateExecutionError struct{ Err error }
+
+func (e *TemplateExecutionError) Error() string { return e.Err.Error() }
+
+func (e *TemplateExecutionError) Unwrap() error { return e.Err }
