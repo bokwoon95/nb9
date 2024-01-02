@@ -89,6 +89,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		return
 	}
 
+	// Figure out if the file is a user-editable file.
 	var isEditable bool
 	n := strings.Index(filePath, "/")
 	if n < 0 {
@@ -149,19 +150,15 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		}
 
 		if isEditable {
-			if remoteFile, ok := file.(*RemoteFile); ok {
-				response.Content = remoteFile.buf.String()
-			} else {
-				var b strings.Builder
-				b.Grow(int(fileInfo.Size()))
-				_, err = io.Copy(&b, file)
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				response.Content = b.String()
+			var b strings.Builder
+			b.Grow(int(fileInfo.Size()))
+			_, err = io.Copy(&b, file)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
 			}
+			response.Content = b.String()
 		}
 
 		switch head {
