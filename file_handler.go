@@ -98,9 +98,11 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			return
 		}
 		if tail == "index.html" {
-			// (page) pages/index.html => (assetDir) output
+			response.AssetDir = "output"
 			response.URL = response.ContentSite
 		} else {
+			response.AssetDir = path.Join("output", strings.TrimSuffix(tail, ".html"))
+			response.URL = response.ContentSite + "/" + strings.TrimSuffix(tail, ".html") + "/"
 		}
 	case "posts":
 		isEditable = fileType.Ext == ".md"
@@ -126,10 +128,18 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		notFound(w, r)
 		return
 	}
+
 	// TODO: is the file editable? isEditable
 	// TODO: does the file have an output/parent link? URL/BelongsTo
 	// TODO: $.ContentSite
 	// back | files | <type> | <parent> | <view URL, belongs to page>
+
+	switch r.Method {
+	case "GET":
+	case "POST":
+	default:
+		methodNotAllowed(w, r)
+	}
 }
 
 func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
