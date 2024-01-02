@@ -525,7 +525,12 @@ func (nbrew *Notebrew) contentSite(sitePrefix string) string {
 }
 
 func getReferer(r *http.Request) string {
-	referer, _, _ := strings.Cut(r.Referer(), "?")
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referer
+	//
+	// "The Referer header can contain an origin, path, and querystring, and
+	// may not contain URL fragments (i.e. #section) or username:password
+	// information."
+	referer := r.Referer()
 	uri := *r.URL
 	if r.Host == "localhost" || strings.HasPrefix(r.Host, "localhost:") {
 		uri.Scheme = "http"
@@ -533,8 +538,8 @@ func getReferer(r *http.Request) string {
 		uri.Scheme = "https"
 	}
 	uri.Host = r.Host
-	uri.RawQuery = ""
 	uri.Fragment = ""
+	uri.User = nil
 	if referer == uri.String() {
 		return ""
 	}
