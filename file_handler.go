@@ -513,6 +513,11 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 }
 
 func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType) {
+	// TODO: what if file is a gzipped output/**/index.html? We need to handle
+	// the case where file is gzipped too. We miiight be able to reuse the same
+	// serveFile function for serve_http as well (in which case serveFile would
+	// live in file_handler.go but also be called in serve_http.go).
+
 	hasher := hashPool.Get().(hash.Hash)
 	hasher.Reset()
 	defer hashPool.Put(hasher)
