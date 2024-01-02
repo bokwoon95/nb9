@@ -271,7 +271,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		}
 
 		if !isEditableText {
-			serveFile(w, r, nbrew.FS, path.Join(sitePrefix, filePath))
+			serveInternalFile(w, r, nbrew.FS, path.Join(sitePrefix, filePath))
 			return
 		}
 
@@ -435,7 +435,10 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 	}
 }
 
-func serveFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) {
+// TODO: repurpose this so that it always serves from RootFS, and move it into
+// serve_http.go. Serving files in the user's filesystem is now manually
+// handled by nbrew.fileHandler().
+func serveInternalFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) {
 	if r.Method != "GET" {
 		methodNotAllowed(w, r)
 		return

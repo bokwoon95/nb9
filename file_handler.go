@@ -325,122 +325,42 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			return
 		}
 
-		if isEditable {
-			referer := getReferer(r)
-			funcMap := map[string]any{
-				"join":             path.Join,
-				"dir":              path.Dir,
-				"base":             path.Base,
-				"ext":              path.Ext,
-				"hasPrefix":        strings.HasPrefix,
-				"hasSuffix":        strings.HasSuffix,
-				"trimPrefix":       strings.TrimPrefix,
-				"fileSizeToString": fileSizeToString,
-				"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
-				"baselineJS":       func() template.JS { return template.JS(baselineJS) },
-				"referer":          func() string { return referer },
-				"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
-				"head": func(s string) string {
-					head, _, _ := strings.Cut(s, "/")
-					return head
-				},
-				"tail": func(s string) string {
-					_, tail, _ := strings.Cut(s, "/")
-					return tail
-				},
-			}
-			tmpl, err := template.New("file_handler.html").Funcs(funcMap).ParseFS(rootFS, "embed/file_handler.html")
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
-			executeTemplate(w, r, response.ModTime, tmpl, &response)
+		if !isEditable {
+			serveFile(w, r, file, fileInfo, fileType)
 			return
 		}
 
-		// If we reach here, it means the file is not editable and we serve the
-		// file content directly.
-		hasher := hashPool.Get().(hash.Hash)
-		hasher.Reset()
-		defer hashPool.Put(hasher)
-		if !fileType.IsGzippable {
-			if file, ok := file.(io.ReadSeeker); ok {
-				_, err := io.Copy(hasher, file)
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				_, err = file.Seek(0, io.SeekStart)
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				var b [blake2b.Size256]byte
-				if _, ok := w.Header()["Content-Type"]; !ok {
-					w.Header().Set("Content-Type", fileType.ContentType)
-				}
-				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-				http.ServeContent(w, r, "", fileInfo.ModTime(), file)
-				return
-			}
+		referer := getReferer(r)
+		funcMap := map[string]any{
+			"join":             path.Join,
+			"dir":              path.Dir,
+			"base":             path.Base,
+			"ext":              path.Ext,
+			"hasPrefix":        strings.HasPrefix,
+			"hasSuffix":        strings.HasSuffix,
+			"trimPrefix":       strings.TrimPrefix,
+			"fileSizeToString": fileSizeToString,
+			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
+			"baselineJS":       func() template.JS { return template.JS(baselineJS) },
+			"referer":          func() string { return referer },
+			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
+			"head": func(s string) string {
+				head, _, _ := strings.Cut(s, "/")
+				return head
+			},
+			"tail": func(s string) string {
+				_, tail, _ := strings.Cut(s, "/")
+				return tail
+			},
 		}
-		// Stream file if too big to buffer in memory.
-		if fileInfo.Size() > 5<<20 /* 5MB */ {
-			w.Header().Set("Content-Type", fileType.ContentType)
-			w.Header().Add("Cache-Control", "max-age: 300, stale-while-revalidate" /* 5 minutes */)
-			_, err := io.Copy(w, file)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				return
-			}
+		tmpl, err := template.New("file_handler.html").Funcs(funcMap).ParseFS(rootFS, "embed/file_handler.html")
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
 			return
 		}
-		buf := bufPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		defer bufPool.Put(buf)
-		multiWriter := io.MultiWriter(hasher, buf)
-		if fileType.IsGzippable {
-			gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-			gzipWriter.Reset(multiWriter)
-			defer gzipWriterPool.Put(gzipWriter)
-			_, err = io.Copy(gzipWriter, file)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			err = gzipWriter.Close()
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-		} else {
-			_, err = io.Copy(multiWriter, file)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-		}
-		var b [blake2b.Size256]byte
-		if _, ok := w.Header()["Content-Type"]; !ok {
-			if fileType.Ext == ".html" {
-				// Serve HTML as plain text so the user can see the source.
-				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			} else {
-				w.Header().Set("Content-Type", fileType.ContentType)
-			}
-		}
-		if fileType.IsGzippable {
-			w.Header().Set("Content-Encoding", "gzip")
-		}
-		w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-		http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		executeTemplate(w, r, response.ModTime, tmpl, &response)
 	case "POST":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response fileResponse) {
 			if r.Form.Has("api") {
@@ -597,6 +517,93 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		methodNotAllowed(w, r)
 		return
 	}
+}
+
+func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType) {
+	hasher := hashPool.Get().(hash.Hash)
+	hasher.Reset()
+	defer hashPool.Put(hasher)
+
+	if !fileType.IsGzippable {
+		if file, ok := file.(io.ReadSeeker); ok {
+			_, err := io.Copy(hasher, file)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			_, err = file.Seek(0, io.SeekStart)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			var b [blake2b.Size256]byte
+			if _, ok := w.Header()["Content-Type"]; !ok {
+				w.Header().Set("Content-Type", fileType.ContentType)
+			}
+			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+			http.ServeContent(w, r, "", fileInfo.ModTime(), file)
+			return
+		}
+	}
+
+	// Stream file if too big to buffer in memory.
+	if fileInfo.Size() > 5<<20 /* 5MB */ {
+		w.Header().Set("Content-Type", fileType.ContentType)
+		w.Header().Add("Cache-Control", "max-age: 300, stale-while-revalidate" /* 5 minutes */)
+		_, err := io.Copy(w, file)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			return
+		}
+		return
+	}
+
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	multiWriter := io.MultiWriter(hasher, buf)
+	if fileType.IsGzippable {
+		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
+		gzipWriter.Reset(multiWriter)
+		defer gzipWriterPool.Put(gzipWriter)
+		_, err := io.Copy(gzipWriter, file)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		err = gzipWriter.Close()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+	} else {
+		_, err := io.Copy(multiWriter, file)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+	}
+
+	var b [blake2b.Size256]byte
+	if _, ok := w.Header()["Content-Type"]; !ok {
+		if fileType.Ext == ".html" {
+			// Serve HTML as plain text so the user can see the source.
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		} else {
+			w.Header().Set("Content-Type", fileType.ContentType)
+		}
+	}
+	if fileType.IsGzippable {
+		w.Header().Set("Content-Encoding", "gzip")
+	}
+	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
 }
 
 func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, filePath, content string) error {
