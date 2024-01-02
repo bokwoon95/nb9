@@ -75,6 +75,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch strings.Trim(r.URL.Path, "/") {
 		case "notebrew.webmanifest":
 			w.Header().Add("Cache-Control", "max-age: 2592000, stale-while-revalidate" /* 1 month */)
+			// TODO: rename to staticFile()
 			serveInternalFile(w, r, rootFS, "static/notebrew.webmanifest")
 			return
 		case "apple-touch-icon.png":
