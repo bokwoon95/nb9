@@ -306,7 +306,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			}
 		case "output":
 			n := strings.Index(tail, "/")
-			if tail[:n] != "posts" && tail[:n] != "themes" && (fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md") {
+			if tail[:n] != "posts" && tail[:n] != "themes" && isEditable {
 				response.BelongsTo = path.Join("pages", path.Dir(tail)+".html")
 			}
 		}
