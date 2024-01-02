@@ -504,6 +504,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 	}
 }
 
+// TODO: copy over directory.go into listDirectory().
 func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
 	if r.Method != "GET" {
 		methodNotAllowed(w, r)
