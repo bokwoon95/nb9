@@ -88,13 +88,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ext := path.Ext(urlPath)
 	head, tail, _ := strings.Cut(urlPath, "/")
 
-	// TODO: set MaxBytesReader here, blanket 10MB.
-	err := r.ParseMultipartForm(10 << 20 /* 10MB */)
-	if err != nil {
-		badRequest(w, r, err)
-		return
-	}
-
 	// Handle the /users/* route on the main domain.
 	if r.Host == nbrew.CMSDomain && head == "users" {
 		switch tail {

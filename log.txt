@@ -3,7 +3,6 @@ fs.go
 fs_local.go
 fs_remote.go
 init.go
-  - status.go (remove)
 notebrew.go
 template_parser.go
 file_handler.go

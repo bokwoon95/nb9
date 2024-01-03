@@ -398,6 +398,19 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 				return
 			}
 		case "application/x-www-form-urlencoded", "multipart/form-data":
+			if contentType == "multipart/form-data" {
+				err := r.ParseMultipartForm(10 << 20 /* 10MB */)
+				if err != nil {
+					badRequest(w, r, err)
+					return
+				}
+			} else {
+				err := r.ParseForm()
+				if err != nil {
+					badRequest(w, r, err)
+					return
+				}
+			}
 			request.Content = r.FormValue("content")
 		default:
 			unsupportedContentType(w, r)
