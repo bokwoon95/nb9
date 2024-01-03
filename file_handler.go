@@ -522,7 +522,7 @@ func newServeFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo
 	// font files are cached for 30 days, maybe gzipped, with ETag only if it is a io.ReadSeeker or its size is smaller than 1MB
 
 	if remoteFile, ok := file.(*RemoteFile); ok {
-		if textExtensions[fileType.Ext] {
+		if remoteFile.fileType.IsGzippable {
 			_ = fileTypes
 			data := remoteFile.buf.Bytes()
 			if http.DetectContentType(data) == "application/x-gzip" {

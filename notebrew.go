@@ -492,19 +492,10 @@ func executeTemplate(w http.ResponseWriter, r *http.Request, modtime time.Time, 
 	http.ServeContent(w, r, "", modtime, bytes.NewReader(buf.Bytes()))
 }
 
-type FileType struct {
-	Ext         string
-	ContentType string
-	IsGzippable bool
-	IsText      bool
-}
-
 func (nbrew *Notebrew) contentSite(sitePrefix string) string {
 	if strings.Contains(sitePrefix, ".") {
 		return "https://" + sitePrefix
 	}
-	// NOTE: if we're proxying localhost to the outside world, our domain *is
-	// not* localhost. It is whichever domain we are hosting the CMS on.
 	if nbrew.CMSDomain == "localhost" || strings.HasPrefix(nbrew.CMSDomain, "localhost:") {
 		if sitePrefix != "" {
 			return "http://" + strings.TrimPrefix(sitePrefix, "@") + "." + nbrew.CMSDomain
