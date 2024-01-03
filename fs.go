@@ -717,6 +717,7 @@ func (file *RemoteFileWriter) Close() error {
 	}
 
 	// TODO: size is never NULL, it is always the size of the file (before any compression).
+	// TODO: we can no longer rename extensions, once a file is created its extension is fixed. We also restrict a file's movement based on whether it is fulltext indexed (both src and dest must be the same).
 
 	// If file exists, just have to update the file entry in the database.
 	if file.fileID != [16]byte{} {
