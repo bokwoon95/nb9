@@ -311,6 +311,11 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		}
 
 		if !isEditable {
+			// Special case: display all .html files as plaintext so that their raw
+			// contents are shown instead of being rendered by the browser.
+			if fileType.Ext == ".html" {
+				fileType.ContentType = "text/plain; charset=utf-8"
+			}
 			serveFile(w, r, file, fileInfo, fileType)
 			return
 		}

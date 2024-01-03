@@ -262,6 +262,9 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		}
 
 		if !isEditableText {
+			// TODO: currently this is making us serve .html files always as
+			// text/html instead of text/plain, but once we switch over to
+			// fileHandler everything should work.
 			staticFile(w, r, nbrew.FS, path.Join(sitePrefix, filePath))
 			return
 		}
