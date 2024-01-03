@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -383,13 +382,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		row.UUID(&file.info.fileID, "file_id")
 		file.info.filePath = row.String("file_path")
 		file.info.isDir = row.Bool("is_dir")
-		file.info.size = row.Int64("{}", sq.DialectExpression{
-			Default: sq.Expr("COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0)"),
-			Cases: []sq.DialectCase{{
-				Dialect: "sqlite",
-				Result:  sq.Expr("COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0)"),
-			}},
-		})
+		file.info.size = row.Int64("size")
 		file.info.modTime = row.Time("mod_time")
 		if fileType.IsGzippable {
 			buf := bufPool.Get().(*bytes.Buffer)
@@ -406,8 +399,8 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		}
 		return nil, err
 	}
-	if fileType.IsGzippable && http.DetectContentType(file.buf.Bytes()) == "application/x-gzip" {
-		file.isFulltextIndexed = true
+	file.isFulltextIndexed = isFulltextIndexed(file.info.filePath)
+	if fileType.IsGzippable && !file.isFulltextIndexed {
 		file.gzipReader = gzipReaderPool.Get().(*gzip.Reader)
 		if file.gzipReader != nil {
 			file.gzipReader.Reset(file.buf)
@@ -474,18 +467,20 @@ func (file *RemoteFile) Read(p []byte) (n int, err error) {
 		return 0, &fs.PathError{Op: "read", Path: file.info.filePath, Err: syscall.EISDIR}
 	}
 	if file.fileType.IsGzippable {
-		if file.gzipReader != nil {
+		if file.isFulltextIndexed {
+			return file.buf.Read(p)
+		} else {
 			return file.gzipReader.Read(p)
 		}
-		return file.buf.Read(p)
-	}
-	if file.readCloser == nil {
-		file.readCloser, err = file.storage.Get(file.ctx, hex.EncodeToString(file.info.fileID[:])+path.Ext(file.info.filePath))
-		if err != nil {
-			return 0, err
+	} else {
+		if file.readCloser == nil {
+			file.readCloser, err = file.storage.Get(file.ctx, hex.EncodeToString(file.info.fileID[:])+path.Ext(file.info.filePath))
+			if err != nil {
+				return 0, err
+			}
 		}
+		return file.readCloser.Read(p)
 	}
-	return file.readCloser.Read(p)
 }
 
 func (file *RemoteFile) Close() error {
@@ -493,27 +488,35 @@ func (file *RemoteFile) Close() error {
 		return nil
 	}
 	if file.fileType.IsGzippable {
-		if file.gzipReader != nil {
+		if file.isFulltextIndexed {
+			if file.buf == nil {
+				return fs.ErrClosed
+			}
+			if file.buf.Len() <= 1<<18 {
+				bufPool.Put(file.buf)
+			}
+			file.buf = nil
+		} else {
+			if file.gzipReader == nil {
+				return fs.ErrClosed
+			}
 			gzipReaderPool.Put(file.gzipReader)
 			file.gzipReader = nil
+			if file.buf.Len() <= 1<<18 {
+				bufPool.Put(file.buf)
+			}
+			file.buf = nil
 		}
-		if file.buf == nil {
+	} else {
+		if file.readCloser == nil {
 			return fs.ErrClosed
 		}
-		if file.buf.Len() <= 1<<18 {
-			bufPool.Put(file.buf)
+		err := file.readCloser.Close()
+		if err != nil {
+			return err
 		}
-		file.buf = nil
-		return nil
+		file.readCloser = nil
 	}
-	if file.readCloser == nil {
-		return fs.ErrClosed
-	}
-	err := file.readCloser.Close()
-	if err != nil {
-		return err
-	}
-	file.readCloser = nil
 	return nil
 }
 
@@ -533,13 +536,14 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 		fileType = fileTypes[ext]
 	}
 	file := &RemoteFileWriter{
-		ctx:      fsys.ctx,
-		fileType: fileType,
-		db:       fsys.filesDB,
-		dialect:  fsys.filesDialect,
-		storage:  fsys.storage,
-		filePath: name,
-		modTime:  time.Now().UTC().Truncate(time.Second),
+		ctx:               fsys.ctx,
+		fileType:          fileType,
+		isFulltextIndexed: isFulltextIndexed(name),
+		db:                fsys.filesDB,
+		dialect:           fsys.filesDialect,
+		storage:           fsys.storage,
+		filePath:          name,
+		modTime:           time.Now().UTC().Truncate(time.Second),
 	}
 	// If parentDir is the root directory, just fetch the file information.
 	// Otherwise fetch both the parent and file information.
@@ -609,9 +613,12 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 		}
 	}
 	if fileType.IsGzippable {
-		file.buf = bufPool.Get().(*bytes.Buffer)
-		file.buf.Reset()
-		if !isFulltextIndexed(file.filePath) {
+		if file.isFulltextIndexed {
+			file.buf = bufPool.Get().(*bytes.Buffer)
+			file.buf.Reset()
+		} else {
+			file.buf = bufPool.Get().(*bytes.Buffer)
+			file.buf.Reset()
 			file.gzipWriter = gzipWriterPool.Get().(*gzip.Writer)
 			file.gzipWriter.Reset(file.buf)
 		}
@@ -628,21 +635,22 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 }
 
 type RemoteFileWriter struct {
-	ctx            context.Context
-	fileType       FileType
-	db             *sql.DB
-	dialect        string
-	storage        Storage
-	fileID         [16]byte
-	parentID       any // either nil or [16]byte
-	filePath       string
-	buf            *bytes.Buffer
-	gzipWriter     *gzip.Writer
-	modTime        time.Time
-	storageWriter  *io.PipeWriter
-	storageWritten int
-	storageResult  chan error
-	writeFailed    bool
+	ctx               context.Context
+	fileType          FileType
+	isFulltextIndexed bool
+	db                *sql.DB
+	dialect           string
+	storage           Storage
+	fileID            [16]byte
+	parentID          any // either nil or [16]byte
+	filePath          string
+	size              int64
+	buf               *bytes.Buffer
+	gzipWriter        *gzip.Writer
+	modTime           time.Time
+	storageWriter     *io.PipeWriter
+	storageResult     chan error
+	writeFailed       bool
 }
 
 func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
@@ -652,18 +660,15 @@ func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 	if file.fileType.IsGzippable {
-		if file.gzipWriter != nil {
-			n, err = file.gzipWriter.Write(p)
-		} else {
+		if file.isFulltextIndexed {
 			n, err = file.buf.Write(p)
+		} else {
+			n, err = file.gzipWriter.Write(p)
 		}
-		if err != nil {
-			file.writeFailed = true
-		}
-		return n, err
+	} else {
+		n, err = file.storageWriter.Write(p)
 	}
-	n, err = file.storageWriter.Write(p)
-	file.storageWritten += n
+	file.size += int64(n)
 	if err != nil {
 		file.writeFailed = true
 	}
@@ -672,22 +677,33 @@ func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
 
 func (file *RemoteFileWriter) Close() error {
 	if file.fileType.IsGzippable {
-		if file.gzipWriter != nil {
+		if file.isFulltextIndexed {
+			if file.buf == nil {
+				return fs.ErrClosed
+			}
+			defer func() {
+				if file.buf.Len() <= 1<<18 {
+					bufPool.Put(file.buf)
+				}
+				file.buf = nil
+			}()
+		} else {
+			if file.gzipWriter == nil {
+				return fs.ErrClosed
+			}
 			err := file.gzipWriter.Close()
 			if err != nil {
 				return err
 			}
-			defer gzipWriterPool.Put(file.gzipWriter)
+			defer func() {
+				gzipWriterPool.Put(file.gzipWriter)
+				file.gzipWriter = nil
+				if file.buf.Len() <= 1<<18 {
+					bufPool.Put(file.buf)
+				}
+				file.buf = nil
+			}()
 		}
-		if file.buf == nil {
-			return fs.ErrClosed
-		}
-		defer func() {
-			if file.buf.Len() <= 1<<18 {
-				bufPool.Put(file.buf)
-			}
-			file.buf = nil
-		}()
 	} else {
 		if file.storageWriter == nil {
 			return fs.ErrClosed
@@ -695,19 +711,6 @@ func (file *RemoteFileWriter) Close() error {
 		file.storageWriter.Close()
 		err := <-file.storageResult
 		file.storageWriter = nil
-		if err != nil {
-			return err
-		}
-	}
-	if textExtensions[path.Ext(file.filePath)] {
-		defer func() {
-			if file.buf.Len() <= 1<<18 {
-				bufPool.Put(file.buf)
-			}
-		}()
-	} else {
-		file.storageWriter.Close()
-		err := <-file.storageResult
 		if err != nil {
 			return err
 		}
@@ -721,13 +724,14 @@ func (file *RemoteFileWriter) Close() error {
 
 	// If file exists, just have to update the file entry in the database.
 	if file.fileID != [16]byte{} {
-		if textExtensions[path.Ext(file.filePath)] {
-			if isFulltextIndexed(file.filePath) {
+		if file.fileType.IsGzippable {
+			if file.isFulltextIndexed {
 				_, err := sq.Exec(file.ctx, file.db, sq.Query{
 					Dialect: file.dialect,
-					Format:  "UPDATE files SET text = {text}, data = NULL, size = NULL, mod_time = {modTime} WHERE file_id = {fileID}",
+					Format:  "UPDATE files SET text = {text}, data = NULL, size = {size}, mod_time = {modTime} WHERE file_id = {fileID}",
 					Values: []any{
 						sq.BytesParam("text", file.buf.Bytes()),
+						sq.Int64Param("size", file.size),
 						sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
 						sq.UUIDParam("fileID", file.fileID),
 					},
@@ -738,9 +742,10 @@ func (file *RemoteFileWriter) Close() error {
 			} else {
 				_, err := sq.Exec(file.ctx, file.db, sq.Query{
 					Dialect: file.dialect,
-					Format:  "UPDATE files SET text = NULL, data = {data}, size = NULL, mod_time = {modTime} WHERE file_id = {fileID}",
+					Format:  "UPDATE files SET text = NULL, data = {data}, size = {size}, mod_time = {modTime} WHERE file_id = {fileID}",
 					Values: []any{
 						sq.BytesParam("data", file.buf.Bytes()),
+						sq.Int64Param("size", file.size),
 						sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
 						sq.UUIDParam("fileID", file.fileID),
 					},
@@ -754,7 +759,7 @@ func (file *RemoteFileWriter) Close() error {
 				Dialect: file.dialect,
 				Format:  "UPDATE files SET text = NULL, data = NULL, size = {size}, mod_time = {modTime} WHERE file_id = {fileID}",
 				Values: []any{
-					sq.IntParam("size", file.storageWritten),
+					sq.Int64Param("size", file.size),
 					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
 					sq.UUIDParam("fileID", file.fileID),
 				},
@@ -773,17 +778,17 @@ func (file *RemoteFileWriter) Close() error {
 		return err
 	}
 	defer tx.Rollback()
-	if textExtensions[path.Ext(file.filePath)] {
-		if isFulltextIndexed(file.filePath) {
+	if file.fileType.IsGzippable {
+		if file.isFulltextIndexed {
 			_, err := sq.Exec(file.ctx, tx, sq.Query{
 				Dialect: file.dialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, text, mod_time)" +
-					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {text}, {modTime})",
+				Format: "INSERT INTO files (file_id, parent_id, file_path, size, text, mod_time, is_dir)" +
+					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {text}, {modTime}, FALSE)",
 				Values: []any{
 					sq.UUIDParam("fileID", NewID()),
 					sq.UUIDParam("parentID", file.parentID),
 					sq.StringParam("filePath", file.filePath),
-					sq.BoolParam("isDir", false),
+					sq.Int64Param("size", file.size),
 					sq.BytesParam("text", file.buf.Bytes()),
 					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
 				},
@@ -794,13 +799,13 @@ func (file *RemoteFileWriter) Close() error {
 		} else {
 			_, err := sq.Exec(file.ctx, tx, sq.Query{
 				Dialect: file.dialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, data, mod_time)" +
-					" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {data}, {modTime})",
+				Format: "INSERT INTO files (file_id, parent_id, file_path, size, data, mod_time, is_dir)" +
+					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {data}, {modTime}, FALSE)",
 				Values: []any{
 					sq.UUIDParam("fileID", NewID()),
 					sq.UUIDParam("parentID", file.parentID),
 					sq.StringParam("filePath", file.filePath),
-					sq.BoolParam("isDir", false),
+					sq.Int64Param("size", file.size),
 					sq.BytesParam("data", file.buf.Bytes()),
 					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
 				},
@@ -812,14 +817,13 @@ func (file *RemoteFileWriter) Close() error {
 	} else {
 		_, err := sq.Exec(file.ctx, tx, sq.Query{
 			Dialect: file.dialect,
-			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, size, mod_time)" +
-				" VALUES ({fileID}, {parentID}, {filePath}, {isDir}, {size}, {modTime})",
+			Format: "INSERT INTO files (file_id, parent_id, file_path, size, mod_time, is_dir)" +
+				" VALUES ({fileID}, {parentID}, {filePath}, {size}, {modTime}, FALSE)",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.UUIDParam("parentID", file.parentID),
 				sq.StringParam("filePath", file.filePath),
-				sq.BoolParam("isDir", false),
-				sq.IntParam("size", file.storageWritten),
+				sq.Int64Param("size", file.size),
 				sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
 			},
 		})
@@ -872,13 +876,7 @@ func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		row.UUID(&file.fileID, "file_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
-		file.size = row.Int64("{}", sq.DialectExpression{
-			Default: sq.Expr("COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0)"),
-			Cases: []sq.DialectCase{{
-				Dialect: "sqlite",
-				Result:  sq.Expr("COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0)"),
-			}},
-		})
+		file.size = row.Int64("size")
 		file.modTime = row.Time("mod_time")
 		return file
 	})
