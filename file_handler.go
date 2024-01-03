@@ -1079,23 +1079,9 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 		}
 	}
 	defer writer.Close()
-	if nbrew.GzipGeneratedContent.Load() {
-		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-		gzipWriter.Reset(writer)
-		defer gzipWriterPool.Put(gzipWriter)
-		err = tmpl.Execute(gzipWriter, &pageData)
-		if err != nil {
-			return &TemplateExecutionError{Err: err}
-		}
-		err = gzipWriter.Close()
-		if err != nil {
-			return err
-		}
-	} else {
-		err = tmpl.Execute(writer, &pageData)
-		if err != nil {
-			return &TemplateExecutionError{Err: err}
-		}
+	err = tmpl.Execute(writer, &pageData)
+	if err != nil {
+		return &TemplateExecutionError{Err: err}
 	}
 	err = writer.Close()
 	if err != nil {
@@ -1319,23 +1305,9 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 		}
 	}
 	defer writer.Close()
-	if nbrew.GzipGeneratedContent.Load() {
-		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-		gzipWriter.Reset(writer)
-		defer gzipWriterPool.Put(gzipWriter)
-		err = tmpl.Execute(gzipWriter, &postData)
-		if err != nil {
-			return &TemplateExecutionError{Err: err}
-		}
-		err = gzipWriter.Close()
-		if err != nil {
-			return err
-		}
-	} else {
-		err = tmpl.Execute(writer, &postData)
-		if err != nil {
-			return &TemplateExecutionError{Err: err}
-		}
+	err = tmpl.Execute(writer, &postData)
+	if err != nil {
+		return &TemplateExecutionError{Err: err}
 	}
 	err = writer.Close()
 	if err != nil {

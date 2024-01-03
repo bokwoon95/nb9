@@ -545,20 +545,7 @@ func main() {
 			}
 		}
 
-		reloadableConfigFiles := map[string]func(nbrew *nb9.Notebrew, configDir string) error{
-			"gzipgeneratedcontent.txt": func(nbrew *nb9.Notebrew, configDir string) error {
-				b, err := os.ReadFile(filepath.Join(configDir, "gzipgeneratedcontent.txt"))
-				if err != nil {
-					if errors.Is(err, fs.ErrNotExist) {
-						return nil
-					}
-					return err
-				}
-				gzipGeneratedContent, _ := strconv.ParseBool(string(b))
-				nbrew.GzipGeneratedContent.Store(gzipGeneratedContent)
-				return nil
-			},
-		}
+		reloadableConfigFiles := map[string]func(nbrew *nb9.Notebrew, configDir string) error{}
 		for name, reloadFunc := range reloadableConfigFiles {
 			err := reloadFunc(nbrew, configDir)
 			if err != nil {
