@@ -285,7 +285,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var fileType FileType
 	ext := path.Ext(urlPath)
 	if ext == "" {
-		filePath = path.Join(sitePrefix, "output", urlPath+".html")
+		filePath = path.Join(sitePrefix, "output", urlPath, "index.html")
 		fileType.Ext = ".html"
 		fileType.ContentType = "text/html; charset=utf-8"
 		fileType.IsGzippable = true
