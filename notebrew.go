@@ -65,8 +65,6 @@ type Notebrew struct {
 	ProxyForwardedIPHeader map[netip.Addr]string // TODO: fill it in in main
 
 	Logger atomic.Pointer[*slog.Logger] // TODO: make it reloadable?
-
-	GzipGeneratedContent atomic.Bool // TODO: fill it in in main, also make it reloadable
 }
 
 type Site struct {
