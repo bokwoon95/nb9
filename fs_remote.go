@@ -984,10 +984,6 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	if !fs.ValidPath(newname) || strings.Contains(newname, "\\") {
 		return &fs.PathError{Op: "rename", Path: newname, Err: fs.ErrInvalid}
 	}
-	modTime := sq.Timestamp{
-		Time:  time.Now().UTC().Truncate(time.Second),
-		Valid: true,
-	}
 	tx, err := fsys.filesDB.BeginTx(fsys.ctx, nil)
 	if err != nil {
 		return err
@@ -1048,7 +1044,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} {updateTextOrData} WHERE file_path = {oldname}",
 		Values: []any{
 			sq.StringParam("newname", newname),
-			sq.Param("modTime", modTime),
+			sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
 			sq.Param("updateTextOrData", updateTextOrData),
 			sq.StringParam("oldname", oldname),
 		},
@@ -1077,7 +1073,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 						Result:  sq.Expr("CONCAT({}, SUBSTR(file_path, {}))", newname, len(oldname)+1),
 					}},
 				}),
-				sq.Param("modTime", modTime),
+				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
 				sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldname)+"/%"),
 			},
 		})
