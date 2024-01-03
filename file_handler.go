@@ -512,6 +512,185 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	}
 }
 
+func newServeFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType) {
+	hasher := hashPool.Get().(hash.Hash)
+	hasher.Reset()
+	defer hashPool.Put(hasher)
+
+	// text files (in a buf) are always gzipped, are never cached, always with ETag (1MB limitation should already be enforced on write)
+	// image files are maybe gzipped, are cached for 5 minutes externally, never cached internally, with ETag only if it is a io.ReadSeeker or its size is smaller than 1MB
+	// font files are cached for 30 days, maybe gzipped, with ETag only if it is a io.ReadSeeker or its size is smaller than 1MB
+
+	if remoteFile, ok := file.(*RemoteFile); ok {
+		if textExtensions[fileType.Ext] {
+			_ = fileTypes
+			data := remoteFile.buf.Bytes()
+			if http.DetectContentType(data) == "application/x-gzip" {
+				_, err := hasher.Write(data)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				var b [blake2b.Size256]byte
+				w.Header().Set("Content-Type", fileType.ContentType)
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(data))
+				return
+			}
+			if len(data) <= 1<<20 {
+				buf := bufPool.Get().(*bytes.Buffer)
+				buf.Reset()
+				defer func() {
+					if buf.Len() <= 1<<18 {
+						bufPool.Put(buf)
+					}
+				}()
+				multiWriter := io.MultiWriter(buf, hasher)
+				gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
+				gzipWriter.Reset(multiWriter)
+				defer gzipWriterPool.Put(gzipWriter)
+				_, err := gzipWriter.Write(data)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				err = gzipWriter.Close()
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				var b [blake2b.Size256]byte
+				w.Header().Set("Content-Type", fileType.ContentType)
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
+				return
+			}
+		}
+	}
+
+	// if fileSeeker, ok := file.(io.ReadSeeker); ok {
+	// }
+
+	if fileType.IsGzippable {
+		if remoteFile, ok := file.(*RemoteFile); ok {
+			data := remoteFile.buf.Bytes()
+			if http.DetectContentType(data) == "application/x-gzip" {
+				_, err := hasher.Write(data)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				var b [blake2b.Size256]byte
+				w.Header().Set("Content-Type", fileType.ContentType)
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(data))
+				return
+			}
+		}
+		switch file := file.(type) {
+		case io.ReadSeeker:
+			var peekData [256]byte
+			n, err := file.Read(peekData[:])
+			if err != nil && err != io.EOF {
+				getLogger(r.Context()).Error(err.Error())
+				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			_, err = file.Seek(0, io.SeekStart)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			if http.DetectContentType(peekData[:n]) == "application/x-gzip" {
+				_, err := io.Copy(hasher, file)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				_, err = file.Seek(0, io.SeekStart)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				var b [blake2b.Size256]byte
+				w.Header().Set("Content-Type", fileType.ContentType)
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+				http.ServeContent(w, r, "", fileInfo.ModTime(), file)
+				return
+			}
+		case *RemoteFile:
+			if http.DetectContentType(file.buf.Bytes()) == "application/x-gzip" {
+				_, err := hasher.Write(file.buf.Bytes())
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				var b [blake2b.Size256]byte
+				w.Header().Set("Content-Type", fileType.ContentType)
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(file.buf.Bytes()))
+				return
+			}
+		default:
+			reader := readerPool.Get().(*bufio.Reader)
+			reader.Reset(file)
+			defer readerPool.Put(reader)
+			peekData, err := reader.Peek(512)
+			if err != nil && err != io.EOF {
+				getLogger(r.Context()).Error(err.Error())
+				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			if http.DetectContentType(peekData) == "application/x-gzip" {
+				buf := bufPool.Get().(*bytes.Buffer)
+				buf.Reset()
+				defer func() {
+					if buf.Len() <= 1<<18 {
+						bufPool.Put(buf)
+					}
+				}()
+				_, err := buf.ReadFrom(file)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				_, err = hasher.Write(buf.Bytes())
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				var b [blake2b.Size256]byte
+				w.Header().Set("Content-Type", fileType.ContentType)
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
+				return
+			}
+		}
+	}
+}
+
 func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType) {
 	// TODO: what if file is a gzipped output/**/index.html? We need to handle
 	// the case where file is gzipped too. We miiight be able to reuse the same

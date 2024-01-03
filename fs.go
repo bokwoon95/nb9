@@ -1568,14 +1568,16 @@ func IsForeignKeyViolation(dialect string, errcode string) bool {
 	}
 }
 
+// if a file has a text extension, it's stored in the database. All text files have a hard cap of 1MB (1<<20 bytes).
 var textExtensions = map[string]bool{
-	".html": true,
-	".css":  true,
-	".js":   true,
-	".md":   true,
-	".txt":  true,
-	".json": true,
-	".atom": true,
+	".html":        true,
+	".css":         true,
+	".js":          true,
+	".md":          true,
+	".txt":         true,
+	".json":        true,
+	".atom":        true,
+	".webmanifest": true,
 }
 
 func isFulltextIndexed(filePath string) bool {
