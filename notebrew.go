@@ -823,7 +823,7 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": "ServerError",
+			"status": "ServerError: " + serverErr.Error(),
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
