@@ -137,12 +137,6 @@ func NewSiteGenerator(config SiteGeneratorConfig) (*SiteGenerator, error) {
 	return siteGen, nil
 }
 
-// GeneratePage(file, childPages)
-// GeneratePost(file)
-// GeneratePostList(files)
-// TODO: figure out how to make GeneratePage and GeneratePost/GeneratePostList
-// workable using a single walk of the directory.
-// GeneratePage(ctx context.Context, text string, pageData PageData) // Parent and Name *must* be filled in.
 func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, file fs.File) error {
 	var urlPath string
 	if name != "index.html" {

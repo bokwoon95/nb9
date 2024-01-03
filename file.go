@@ -1,31 +1,22 @@
 package nb9
 
 import (
-	"bytes"
-	"compress/gzip"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"hash"
 	"html/template"
 	"io"
 	"io/fs"
 	"mime"
 	"net/http"
-	"os"
 	"path"
 	"slices"
 	"strings"
 	"time"
-
-	"golang.org/x/crypto/blake2b"
 )
 
 func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, fileInfo fs.FileInfo) {
 	type FileEntry struct {
 		Name string `json:"name,omitempty"`
-		// TODO: we don't need ContentType, we can simply check the ext and see
-		// if it is an image (hardcoding is better).
 		ContentType string    `json:"contentType,omitempty"`
 		Size        int64     `json:"size,omitempty"`
 		ModTime     time.Time `json:"modTime,omitempty"`
@@ -377,9 +368,6 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		}
 
 		if nbrew.UsersDB != nil {
-			// TODO: check if the owner has exceeded his storage limit, then
-			// defer a function that will calculate and update the new storage
-			// used after the file has been saved.
 		}
 
 		writer, err := nbrew.FS.OpenWriter(path.Join(sitePrefix, filePath), 0644)
@@ -403,18 +391,17 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		}
 
 		site := Site{
-			Title:      "",        // TODO: read site config.
-			Favicon:    "",        // TODO: read site config.
-			Lang:       "",        // TODO: read site config.
-			Categories: nil,       // TODO: read site fs.
-			CodeStyle:  "onedark", // TODO: read site config.
+			Title:      "",
+			Favicon:    "",
+			Lang:       "",
+			Categories: nil,
+			CodeStyle:  "onedark",
 		}
 		head, _, _ := strings.Cut(filePath, "/")
 		switch head {
 		case "pages":
 			err := nbrew.generatePage(r.Context(), site, sitePrefix, filePath, response.Content)
 			if err != nil {
-				// TODO: check if it's a template runtime error.
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
@@ -422,7 +409,6 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		case "posts":
 			err := nbrew.generatePost(r.Context(), site, sitePrefix, filePath, response.Content)
 			if err != nil {
-				// TODO: check if it's a template runtime error.
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
@@ -433,124 +419,4 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 	default:
 		methodNotAllowed(w, r)
 	}
-}
-
-// TODO: repurpose this so that it always serves from RootFS, and move it into
-// serve_http.go. Serving files in the user's filesystem is now manually
-// handled by nbrew.fileHandler().
-func staticFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) {
-	if r.Method != "GET" {
-		methodNotAllowed(w, r)
-		return
-	}
-	fileType, ok := fileTypes[path.Ext(name)]
-	if !ok {
-		notFound(w, r)
-		return
-	}
-
-	file, err := fsys.Open(name)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			notFound(w, r)
-			return
-		}
-		getLogger(r.Context()).Error(err.Error())
-		internalServerError(w, r, err)
-		return
-	}
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		getLogger(r.Context()).Error(err.Error())
-		internalServerError(w, r, err)
-		return
-	}
-	if fileInfo.IsDir() {
-		notFound(w, r)
-		return
-	}
-
-	hasher := hashPool.Get().(hash.Hash)
-	hasher.Reset()
-	defer hashPool.Put(hasher)
-
-	if !fileType.IsGzippable {
-		if file, ok := file.(*os.File); ok {
-			_, err := io.Copy(hasher, file)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			_, err = file.Seek(0, io.SeekStart)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			var b [blake2b.Size256]byte
-			if _, ok := w.Header()["Content-Type"]; !ok {
-				w.Header().Set("Content-Type", fileType.ContentType)
-			}
-			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), file)
-			return
-		}
-		if file, ok := file.(*RemoteFile); ok {
-			_, err := hasher.Write(file.buf.Bytes())
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			var b [blake2b.Size256]byte
-			if _, ok := w.Header()["Content-Type"]; !ok {
-				w.Header().Set("Content-Type", fileType.ContentType)
-			}
-			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(file.buf.Bytes()))
-			return
-		}
-	}
-
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer bufPool.Put(buf)
-
-	multiWriter := io.MultiWriter(hasher, buf)
-	if fileType.IsGzippable {
-		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-		gzipWriter.Reset(multiWriter)
-		defer gzipWriterPool.Put(gzipWriter)
-		_, err = io.Copy(gzipWriter, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		err = gzipWriter.Close()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-	} else {
-		_, err = io.Copy(multiWriter, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-	}
-	var b [blake2b.Size256]byte
-	if _, ok := w.Header()["Content-Type"]; !ok {
-		w.Header().Set("Content-Type", fileType.ContentType)
-	}
-	if fileType.IsGzippable {
-		w.Header().Set("Content-Encoding", "gzip")
-	}
-	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
 }

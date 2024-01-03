@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/bokwoon95/nb9"
-	"github.com/bokwoon95/nb9/sq"
 	"github.com/caddyserver/certmagic"
 	"github.com/klauspost/cpuid/v2"
 	"github.com/libdns/cloudflare"
@@ -218,25 +217,6 @@ func NewServer(nbrew *nb9.Notebrew, configDir, addr string) (*http.Server, error
 			}
 			if !fileInfo.IsDir() {
 				return fmt.Errorf("%q is not a directory", name)
-			}
-			// TODO: Remove DB check. Check only the filesystem, it should be
-			// possible to serve static files only by turning off the main DB
-			// (but keeping the files DB).
-			if nbrew.UsersDB == nil {
-				return fmt.Errorf("database is nil")
-			}
-			exists, err := sq.FetchExists(ctx, nbrew.UsersDB, sq.Query{
-				Dialect: nbrew.UsersDialect,
-				Format:  "SELECT 1 FROM site WHERE site_name = {name}",
-				Values: []any{
-					sq.StringParam("name", name),
-				},
-			})
-			if err != nil {
-				return err
-			}
-			if !exists {
-				return fmt.Errorf("%q does not exist in site table", name)
 			}
 			return nil
 		},

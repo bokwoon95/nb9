@@ -67,6 +67,11 @@ type Notebrew struct {
 	Logger atomic.Pointer[*slog.Logger] // TODO: make it reloadable?
 }
 
+type User struct {
+	Username string
+	LangCode string
+}
+
 type Site struct {
 	Title      string
 	Favicon    string

@@ -18,9 +18,6 @@ import (
 func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, username, sitePrefix, folderPath string) {
 }
 
-// TODO: eventually we'll have to do the big headache of adding pagination
-// through interface discovery (which also requires figuring out how sorting
-// would work).
 func (nbrew *Notebrew) directory_Old(w http.ResponseWriter, r *http.Request, username, sitePrefix, folderPath string, fileInfo fs.FileInfo) {
 	type FileEntry struct {
 		Name    string    `json:"name,omitempty"`

@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 
@@ -139,12 +140,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Format: "SELECT {*}" +
 					" FROM authentication" +
 					" JOIN users ON users.user_id = authentication.user_id" +
-					" LEFT JOIN (" +
-					"SELECT site_user.user_id" +
-					" FROM site_user" +
-					" JOIN site ON site.site_id = site_user.site_id" +
-					" WHERE site.site_name = {siteName}" +
-					") AS authorized_users ON authorized_users.user_id = users.user_id" +
 					" WHERE authentication.authentication_token_hash = {authenticationTokenHash}",
 				Values: []any{
 					sq.StringParam("siteName", strings.TrimPrefix(sitePrefix, "@")),
@@ -155,8 +150,12 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				IsAuthorized bool
 			}) {
 				result.Username = row.String("users.username")
-				// TODO: convert to EXISTS() subquery
-				result.IsAuthorized = row.Bool("authorized_users.user_id IS NOT NULL")
+				result.IsAuthorized = row.Bool("EXISTS (SELECT 1" +
+					" FROM site" +
+					" JOIN site_user ON site_user.site_id = site.site_id" +
+					" WHERE site.site_name = {siteName}" +
+					" AND site_user.user_id = users.user_id" +
+					")")
 				return result
 			})
 			if err != nil {
@@ -204,11 +203,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if head == "" || head == "notes" || head == "pages" || head == "posts" || head == "output" {
+			// TODO: nbrew.fileHandler(w, r, user, sitePrefix, filePath)
 		}
 
 		switch head {
 		case "", "notes", "pages", "posts", "output":
-			// TODO: optimized check for isDir using RemoteFS
 			fileInfo, err := fs.Stat(nbrew.FS, path.Join(".", sitePrefix, filePath))
 			if err != nil {
 				if errors.Is(err, fs.ErrNotExist) {
@@ -223,7 +222,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				nbrew.directory_Old(w, r, username, sitePrefix, filePath, fileInfo)
 				return
 			}
-			// filePath
 			nbrew.file(w, r, username, sitePrefix, filePath, fileInfo)
 			return
 		default:
@@ -688,4 +686,121 @@ func MatchWildcard(subject, wildcard string) bool {
 		}
 	}
 	return false
+}
+
+func staticFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) {
+	if r.Method != "GET" {
+		methodNotAllowed(w, r)
+		return
+	}
+	fileType, ok := fileTypes[path.Ext(name)]
+	if !ok {
+		notFound(w, r)
+		return
+	}
+
+	file, err := fsys.Open(name)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			notFound(w, r)
+			return
+		}
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	if fileInfo.IsDir() {
+		notFound(w, r)
+		return
+	}
+
+	hasher := hashPool.Get().(hash.Hash)
+	hasher.Reset()
+	defer hashPool.Put(hasher)
+
+	if !fileType.IsGzippable {
+		if file, ok := file.(*os.File); ok {
+			_, err := io.Copy(hasher, file)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			_, err = file.Seek(0, io.SeekStart)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			var b [blake2b.Size256]byte
+			if _, ok := w.Header()["Content-Type"]; !ok {
+				w.Header().Set("Content-Type", fileType.ContentType)
+			}
+			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+			http.ServeContent(w, r, "", fileInfo.ModTime(), file)
+			return
+		}
+		if file, ok := file.(*RemoteFile); ok {
+			_, err := hasher.Write(file.buf.Bytes())
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			var b [blake2b.Size256]byte
+			if _, ok := w.Header()["Content-Type"]; !ok {
+				w.Header().Set("Content-Type", fileType.ContentType)
+			}
+			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+			http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(file.buf.Bytes()))
+			return
+		}
+	}
+
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	multiWriter := io.MultiWriter(hasher, buf)
+	if fileType.IsGzippable {
+		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
+		gzipWriter.Reset(multiWriter)
+		defer gzipWriterPool.Put(gzipWriter)
+		_, err = io.Copy(gzipWriter, file)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		err = gzipWriter.Close()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+	} else {
+		_, err = io.Copy(multiWriter, file)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+	}
+	var b [blake2b.Size256]byte
+	if _, ok := w.Header()["Content-Type"]; !ok {
+		w.Header().Set("Content-Type", fileType.ContentType)
+	}
+	if fileType.IsGzippable {
+		w.Header().Set("Content-Encoding", "gzip")
+	}
+	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
 }

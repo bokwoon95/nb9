@@ -973,7 +973,6 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 }
 
 func (fsys *RemoteFS) Rename(oldname, newname string) error {
-	// TODO: we can no longer rename extensions, once a file is created its extension is fixed. We also restrict a file's movement based on whether it is fulltext indexed (both src and dest must be the same).
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
