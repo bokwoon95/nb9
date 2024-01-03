@@ -10,7 +10,7 @@ file_handler.go
 serve_http.go
 notebrew/main.go
 
-TODO: work on newServeFile, must be flexible enough to be used in both file_handler.go and serve_http.go to serve user files.
+TODO: work on listDirectory so that we can switch over to fileHandler() asap and remove file.go/directory.go.
 
 notebrew-config/
 notebrew-users.db
