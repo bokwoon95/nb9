@@ -716,6 +716,8 @@ func (file *RemoteFileWriter) Close() error {
 		return nil
 	}
 
+	// TODO: size is never NULL, it is always the size of the file (before any compression).
+
 	// If file exists, just have to update the file entry in the database.
 	if file.fileID != [16]byte{} {
 		if textExtensions[path.Ext(file.filePath)] {
