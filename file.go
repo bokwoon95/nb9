@@ -443,24 +443,10 @@ func staticFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string)
 		methodNotAllowed(w, r)
 		return
 	}
-
-	var fileType FileType
-	ext := path.Ext(name)
-	if ext == ".webmanifest" {
-		fileType.Ext = ".webmanifest"
-		fileType.ContentType = "application/manifest+json"
-		fileType.IsGzippable = true
-	} else {
-		fileType = fileTypes[ext]
-		if fileType.Ext == ".html" {
-			// Serve HTML as plaintext so that the browser doesn't display it
-			// as markup.
-			fileType.ContentType = "text/plain; charset=utf-8"
-		}
-		if fileType == (FileType{}) {
-			notFound(w, r)
-			return
-		}
+	fileType, ok := fileTypes[path.Ext(name)]
+	if !ok {
+		notFound(w, r)
+		return
 	}
 
 	file, err := fsys.Open(name)
