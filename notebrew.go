@@ -425,6 +425,8 @@ func (nbrew *Notebrew) realClientIP(r *http.Request) string {
 	return ""
 }
 
+var gzipReaderPool = sync.Pool{}
+
 var gzipWriterPool = sync.Pool{
 	New: func() any {
 		// Use compression level 4 for best balance between space and

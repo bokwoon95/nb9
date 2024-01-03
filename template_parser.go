@@ -197,8 +197,8 @@ func (templateParser *TemplateParser) ParseTemplate(ctx context.Context, name, t
 				externalTemplateErrs[i] = err
 				return nil
 			}
-			callers = append(append(make([]string, 0, len(callers)+1), callers...), externalName)
-			externalTemplate, err := templateParser.ParseTemplate(ctx, externalName, b.String(), callers)
+			newCallers := append(append(make([]string, 0, len(callers)+1), callers...), externalName)
+			externalTemplate, err := templateParser.ParseTemplate(ctx, externalName, b.String(), newCallers)
 			if err != nil {
 				externalTemplateErrs[i] = err
 				return nil

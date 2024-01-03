@@ -2,6 +2,7 @@ package nb9
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -361,6 +363,10 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		}
 		return file, nil
 	}
+	var fileType FileType
+	if ext := path.Ext(name); ext != "" {
+		fileType = fileTypes[ext]
+	}
 	file, err := sq.FetchOne(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
 		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
@@ -369,9 +375,10 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		},
 	}, func(row *sq.Row) *RemoteFile {
 		file := &RemoteFile{
-			ctx:     fsys.ctx,
-			storage: fsys.storage,
-			info:    &RemoteFileInfo{},
+			ctx:      fsys.ctx,
+			fileType: fileType,
+			storage:  fsys.storage,
+			info:     &RemoteFileInfo{},
 		}
 		row.UUID(&file.info.fileID, "file_id")
 		file.info.filePath = row.String("file_path")
@@ -384,11 +391,11 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 			}},
 		})
 		file.info.modTime = row.Time("mod_time")
-		buf := bufPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		b := buf.Bytes()
-		row.Scan(&b, "COALESCE(text, data)")
-		if b != nil {
+		if fileType.IsGzippable {
+			buf := bufPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			b := buf.Bytes()
+			row.Scan(&b, "COALESCE(text, data)")
 			file.buf = bytes.NewBuffer(b)
 		}
 		return file
@@ -398,6 +405,18 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 		}
 		return nil, err
+	}
+	if fileType.IsGzippable && http.DetectContentType(file.buf.Bytes()) == "application/x-gzip" {
+		file.isFulltextIndexed = true
+		file.gzipReader = gzipReaderPool.Get().(*gzip.Reader)
+		if file.gzipReader != nil {
+			file.gzipReader.Reset(file.buf)
+		} else {
+			file.gzipReader, err = gzip.NewReader(file.buf)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	return file, nil
 }
@@ -432,11 +451,14 @@ func (fileInfo *RemoteFileInfo) Mode() fs.FileMode {
 }
 
 type RemoteFile struct {
-	ctx        context.Context
-	storage    Storage
-	info       *RemoteFileInfo
-	buf        *bytes.Buffer
-	readCloser io.ReadCloser
+	ctx               context.Context
+	fileType          FileType
+	isFulltextIndexed bool
+	storage           Storage
+	info              *RemoteFileInfo
+	buf               *bytes.Buffer
+	gzipReader        *gzip.Reader
+	readCloser        io.ReadCloser
 }
 
 func (file *RemoteFile) Stat() (fs.FileInfo, error) {
@@ -451,7 +473,10 @@ func (file *RemoteFile) Read(p []byte) (n int, err error) {
 	if file.info.isDir {
 		return 0, &fs.PathError{Op: "read", Path: file.info.filePath, Err: syscall.EISDIR}
 	}
-	if textExtensions[path.Ext(file.info.filePath)] {
+	if file.fileType.IsGzippable {
+		if file.gzipReader != nil {
+			return file.gzipReader.Read(p)
+		}
 		return file.buf.Read(p)
 	}
 	if file.readCloser == nil {
@@ -467,7 +492,11 @@ func (file *RemoteFile) Close() error {
 	if file.info.isDir {
 		return nil
 	}
-	if textExtensions[path.Ext(file.info.filePath)] {
+	if file.fileType.IsGzippable {
+		if file.gzipReader != nil {
+			gzipReaderPool.Put(file.gzipReader)
+			file.gzipReader = nil
+		}
 		if file.buf == nil {
 			return fs.ErrClosed
 		}
@@ -475,16 +504,16 @@ func (file *RemoteFile) Close() error {
 			bufPool.Put(file.buf)
 		}
 		file.buf = nil
-	} else {
-		if file.readCloser == nil {
-			return fs.ErrClosed
-		}
-		err := file.readCloser.Close()
-		if err != nil {
-			return err
-		}
-		file.readCloser = nil
+		return nil
 	}
+	if file.readCloser == nil {
+		return fs.ErrClosed
+	}
+	err := file.readCloser.Close()
+	if err != nil {
+		return err
+	}
+	file.readCloser = nil
 	return nil
 }
 
@@ -499,18 +528,23 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 	if name == "." {
 		return nil, &fs.PathError{Op: "openwriter", Path: name, Err: syscall.EISDIR}
 	}
+	var fileType FileType
+	if ext := path.Ext(name); ext != "" {
+		fileType = fileTypes[ext]
+	}
 	file := &RemoteFileWriter{
 		ctx:      fsys.ctx,
+		fileType: fileType,
 		db:       fsys.filesDB,
 		dialect:  fsys.filesDialect,
 		storage:  fsys.storage,
 		filePath: name,
 		modTime:  time.Now().UTC().Truncate(time.Second),
 	}
+	// If parentDir is the root directory, just fetch the file information.
+	// Otherwise fetch both the parent and file information.
 	parentDir := path.Dir(file.filePath)
 	if parentDir == "." {
-		// If parentDir is the root directory, just fetch the file information
-		// (if it exists).
 		result, err := sq.FetchOne(fsys.ctx, fsys.filesDB, sq.Query{
 			Dialect: fsys.filesDialect,
 			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
@@ -574,9 +608,13 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 			return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrNotExist}
 		}
 	}
-	if textExtensions[path.Ext(file.filePath)] {
+	if fileType.IsGzippable {
 		file.buf = bufPool.Get().(*bytes.Buffer)
 		file.buf.Reset()
+		if !isFulltextIndexed(file.filePath) {
+			file.gzipWriter = gzipWriterPool.Get().(*gzip.Writer)
+			file.gzipWriter.Reset(file.buf)
+		}
 	} else {
 		pipeReader, pipeWriter := io.Pipe()
 		file.storageWriter = pipeWriter
@@ -591,6 +629,7 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 
 type RemoteFileWriter struct {
 	ctx            context.Context
+	fileType       FileType
 	db             *sql.DB
 	dialect        string
 	storage        Storage
@@ -598,6 +637,7 @@ type RemoteFileWriter struct {
 	parentID       any // either nil or [16]byte
 	filePath       string
 	buf            *bytes.Buffer
+	gzipWriter     *gzip.Writer
 	modTime        time.Time
 	storageWriter  *io.PipeWriter
 	storageWritten int
@@ -611,8 +651,12 @@ func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
 		file.writeFailed = true
 		return 0, err
 	}
-	if textExtensions[path.Ext(file.filePath)] {
-		n, err = file.buf.Write(p)
+	if file.fileType.IsGzippable {
+		if file.gzipWriter != nil {
+			n, err = file.gzipWriter.Write(p)
+		} else {
+			n, err = file.buf.Write(p)
+		}
 		if err != nil {
 			file.writeFailed = true
 		}
@@ -627,6 +671,34 @@ func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
 }
 
 func (file *RemoteFileWriter) Close() error {
+	if file.fileType.IsGzippable {
+		if file.gzipWriter != nil {
+			err := file.gzipWriter.Close()
+			if err != nil {
+				return err
+			}
+			defer gzipWriterPool.Put(file.gzipWriter)
+		}
+		if file.buf == nil {
+			return fs.ErrClosed
+		}
+		defer func() {
+			if file.buf.Len() <= 1<<18 {
+				bufPool.Put(file.buf)
+			}
+			file.buf = nil
+		}()
+	} else {
+		if file.storageWriter == nil {
+			return fs.ErrClosed
+		}
+		file.storageWriter.Close()
+		err := <-file.storageResult
+		file.storageWriter = nil
+		if err != nil {
+			return err
+		}
+	}
 	if textExtensions[path.Ext(file.filePath)] {
 		defer func() {
 			if file.buf.Len() <= 1<<18 {
