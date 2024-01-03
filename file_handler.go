@@ -1177,7 +1177,7 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 			}
 		}
 		if !text.Valid {
-			file, err := rootFS.Open("static/post.html")
+			file, err := rootFS.Open("embed/post.html")
 			if err != nil {
 				return err
 			}
