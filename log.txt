@@ -11,7 +11,7 @@ serve_http.go
 notebrew/main.go
 
 TODO: work on listDirectory so that we can switch over to fileHandler() asap and remove file.go/directory.go.
-TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in every page we have a little language icon switcher that simply links to /users/language/.
+TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
 
 notebrew-config/
 notebrew-users.db
