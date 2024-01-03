@@ -75,12 +75,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch strings.Trim(r.URL.Path, "/") {
 		case "notebrew.webmanifest":
 			w.Header().Add("Cache-Control", "max-age: 2592000, stale-while-revalidate" /* 1 month */)
-			// TODO: rename to staticFile()
-			serveInternalFile(w, r, rootFS, "static/notebrew.webmanifest")
+			staticFile(w, r, rootFS, "static/notebrew.webmanifest")
 			return
 		case "apple-touch-icon.png":
 			w.Header().Add("Cache-Control", "max-age: 2592000, stale-while-revalidate" /* 1 month */)
-			serveInternalFile(w, r, rootFS, "static/icons/apple-touch-icon.png")
+			staticFile(w, r, rootFS, "static/icons/apple-touch-icon.png")
 			return
 		}
 	}
@@ -118,7 +117,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		head, tail, _ := strings.Cut(filePath, "/")
 		if head == "static" {
 			w.Header().Add("Cache-Control", "max-age: 31536000, stale-while-revalidate" /* 1 year */)
-			serveInternalFile(w, r, rootFS, filePath)
+			staticFile(w, r, rootFS, filePath)
 			return
 		}
 
