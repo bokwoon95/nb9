@@ -311,7 +311,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		}
 
 		if !isEditable {
-			newServeFile(w, r, file, fileInfo, fileType)
+			serveFile(w, r, file, fileInfo, fileType)
 			return
 		}
 
@@ -519,7 +519,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	}
 }
 
-func newServeFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType) {
+func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType) {
 	hasher := hashPool.Get().(hash.Hash)
 	hasher.Reset()
 	defer hashPool.Put(hasher)
@@ -657,102 +657,6 @@ func newServeFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo
 			getLogger(r.Context()).Error(err.Error())
 		}
 	}
-}
-
-func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType) {
-	// TODO: what if file is a gzipped output/**/index.html? We need to handle
-	// the case where file is gzipped too. We miiight be able to reuse the same
-	// serveFile function for serve_http as well (in which case serveFile would
-	// live in file_handler.go but also be called in serve_http.go).
-
-	hasher := hashPool.Get().(hash.Hash)
-	hasher.Reset()
-	defer hashPool.Put(hasher)
-
-	if !fileType.IsGzippable {
-		if file, ok := file.(io.ReadSeeker); ok {
-			_, err := io.Copy(hasher, file)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			_, err = file.Seek(0, io.SeekStart)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			var b [blake2b.Size256]byte
-			if _, ok := w.Header()["Content-Type"]; !ok {
-				w.Header().Set("Content-Type", fileType.ContentType)
-			}
-			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), file)
-			return
-		}
-	}
-
-	// Stream file if too big to buffer in memory.
-	if fileInfo.Size() > 5<<20 /* 5 MB */ {
-		w.Header().Set("Content-Type", fileType.ContentType)
-		w.Header().Add("Cache-Control", "max-age: 300, stale-while-revalidate" /* 5 minutes */)
-		_, err := io.Copy(w, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			return
-		}
-		return
-	}
-
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer func() {
-		if buf.Len() <= 1<<18 {
-			bufPool.Put(buf)
-		}
-	}()
-
-	multiWriter := io.MultiWriter(hasher, buf)
-	if fileType.IsGzippable {
-		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-		gzipWriter.Reset(multiWriter)
-		defer gzipWriterPool.Put(gzipWriter)
-		_, err := io.Copy(gzipWriter, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		err = gzipWriter.Close()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-	} else {
-		_, err := io.Copy(multiWriter, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-	}
-
-	var b [blake2b.Size256]byte
-	if _, ok := w.Header()["Content-Type"]; !ok {
-		if fileType.Ext == ".html" {
-			// Serve HTML as plain text so the user can see the source.
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		} else {
-			w.Header().Set("Content-Type", fileType.ContentType)
-		}
-	}
-	if fileType.IsGzippable {
-		w.Header().Set("Content-Encoding", "gzip")
-	}
-	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
 }
 
 func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, filePath, content string) error {

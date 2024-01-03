@@ -86,7 +86,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	urlPath := strings.Trim(r.URL.Path, "/")
-	ext := path.Ext(urlPath)
 	head, tail, _ := strings.Cut(urlPath, "/")
 
 	// Handle the /users/* route on the main domain.
@@ -282,181 +281,18 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		sitePrefix = r.Host
 	}
 
-	// Special case: when ext is empty or .atom, the files must always be
-	// served gzipped and they may additionally be pre-gzipped (which saves us
-	// from having to gzip it). We can implement additional optimizations
-	// depending on whether they are a ReadSeeker or a *RemoteFile.
-	if ext == "" || ext == ".atom" {
-		var name, contentType string
-		if ext == ".atom" {
-			name = path.Join(sitePrefix, "output", urlPath)
-			contentType = "application/xml; charset=utf-8"
-		} else {
-			name = path.Join(sitePrefix, "output", urlPath, "index.html")
-			contentType = "text/html; charset=utf-8"
-		}
-		file, err := nbrew.FS.Open(name)
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				nbrew.site404(w, r, sitePrefix)
-				return
-			}
-			logger.Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		defer file.Close()
-		fileInfo, err := file.Stat()
-		if err != nil {
-			logger.Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		if fileInfo.IsDir() {
+	var fileType FileType
+	ext := path.Ext(urlPath)
+	if ext == "" {
+		fileType.Ext = ".html"
+		fileType.ContentType = "text/html; charset=utf-8"
+		fileType.IsGzippable = true
+	} else {
+		fileType = fileTypes[ext]
+		if fileType == (FileType{}) {
 			nbrew.site404(w, r, sitePrefix)
 			return
 		}
-
-		hasher := hashPool.Get().(hash.Hash)
-		hasher.Reset()
-		defer hashPool.Put(hasher)
-
-		switch file := file.(type) {
-		case io.ReadSeeker:
-			var peekData [256]byte
-			n, err := file.Read(peekData[:])
-			if err != nil && err != io.EOF {
-				logger.Error(err.Error())
-				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-			_, err = file.Seek(0, io.SeekStart)
-			if err != nil {
-				logger.Error(err.Error())
-				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-			if http.DetectContentType(peekData[:n]) == "application/x-gzip" {
-				_, err := io.Copy(hasher, file)
-				if err != nil {
-					logger.Error(err.Error())
-					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-					return
-				}
-				_, err = file.Seek(0, io.SeekStart)
-				if err != nil {
-					logger.Error(err.Error())
-					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-					return
-				}
-				var b [blake2b.Size256]byte
-				w.Header().Set("Content-Type", contentType)
-				w.Header().Set("Content-Encoding", "gzip")
-				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-				http.ServeContent(w, r, "", fileInfo.ModTime(), file)
-				return
-			}
-		case *RemoteFile:
-			if http.DetectContentType(file.buf.Bytes()) == "application/x-gzip" {
-				_, err := hasher.Write(file.buf.Bytes())
-				if err != nil {
-					logger.Error(err.Error())
-					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-					return
-				}
-				var b [blake2b.Size256]byte
-				w.Header().Set("Content-Type", contentType)
-				w.Header().Set("Content-Encoding", "gzip")
-				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(file.buf.Bytes()))
-				return
-			}
-		default:
-			reader := readerPool.Get().(*bufio.Reader)
-			reader.Reset(file)
-			defer readerPool.Put(reader)
-			peekData, err := reader.Peek(512)
-			if err != nil && err != io.EOF {
-				logger.Error(err.Error())
-				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-			if http.DetectContentType(peekData) == "application/x-gzip" {
-				buf := bufPool.Get().(*bytes.Buffer)
-				buf.Reset()
-				defer func() {
-					if buf.Len() <= 1<<18 {
-						bufPool.Put(buf)
-					}
-				}()
-				_, err := buf.ReadFrom(file)
-				if err != nil {
-					logger.Error(err.Error())
-					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-					return
-				}
-				_, err = hasher.Write(buf.Bytes())
-				if err != nil {
-					logger.Error(err.Error())
-					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-					return
-				}
-				var b [blake2b.Size256]byte
-				w.Header().Set("Content-Type", contentType)
-				w.Header().Set("Content-Encoding", "gzip")
-				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
-				return
-			}
-		}
-
-		buf := bufPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		defer func() {
-			if buf.Len() <= 1<<18 {
-				bufPool.Put(buf)
-			}
-		}()
-
-		multiWriter := io.MultiWriter(buf, hasher)
-		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-		gzipWriter.Reset(multiWriter)
-		defer gzipWriterPool.Put(gzipWriter)
-
-		_, err = io.Copy(gzipWriter, file)
-		if err != nil {
-			logger.Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		err = gzipWriter.Close()
-		if err != nil {
-			logger.Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		var b [blake2b.Size256]byte
-		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-		w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-		http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
-		return
-	}
-
-	fileType := fileTypes[ext]
-	if fileType == (FileType{}) {
-		nbrew.site404(w, r, sitePrefix)
-		return
-	}
-	// Special case: display all .html files as plaintext so that their raw
-	// contents are shown instead of being rendered by the browser (normal
-	// HTML pages have extensionless URLs, handled above).
-	if fileType.Ext == ".html" {
-		fileType.ContentType = "text/plain; charset=utf-8"
 	}
 	file, err := nbrew.FS.Open(path.Join(sitePrefix, "output", urlPath))
 	if err != nil {
@@ -479,91 +315,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		nbrew.site404(w, r, sitePrefix)
 		return
 	}
-
-	hasher := hashPool.Get().(hash.Hash)
-	hasher.Reset()
-	defer hashPool.Put(hasher)
-
-	// If the file is a ReadSeeker and we don't have to gzip it, we can
-	// calculate its hash as-is, rewind it, then serve it as-is (no need to
-	// buffer it in memory).
-	if !fileType.IsGzippable {
-		if file, ok := file.(io.ReadSeeker); ok {
-			_, err := io.Copy(hasher, file)
-			if err != nil {
-				logger.Error(err.Error())
-				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-			_, err = file.Seek(0, io.SeekStart)
-			if err != nil {
-				logger.Error(err.Error())
-				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-			var b [blake2b.Size256]byte
-			w.Header().Set("Content-Type", fileType.ContentType)
-			w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), file)
-			return
-		}
-	}
-
-	// If the file is too big, stream it out to the user instead of
-	// buffering it in memory. This means we won't be able to calculate its
-	// ETag, but that's the tradeoff.
-	if fileInfo.Size() > 5<<20 /* 5 MB */ {
-		w.Header().Set("Content-Type", fileType.ContentType)
-		w.Header().Add("Cache-Control", "max-age: 300, stale-while-revalidate" /* 5 minutes */)
-		_, err := io.Copy(w, file)
-		if err != nil {
-			logger.Error(err.Error())
-		}
-		return
-	}
-
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer func() {
-		if buf.Len() <= 1<<18 {
-			bufPool.Put(buf)
-		}
-	}()
-
-	multiWriter := io.MultiWriter(buf, hasher)
-	if !fileType.IsGzippable {
-		_, err := io.Copy(multiWriter, file)
-		if err != nil {
-			logger.Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-	} else {
-		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-		gzipWriter.Reset(multiWriter)
-		defer gzipWriterPool.Put(gzipWriter)
-		_, err := io.Copy(gzipWriter, file)
-		if err != nil {
-			logger.Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		err = gzipWriter.Close()
-		if err != nil {
-			logger.Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-	}
-	var b [blake2b.Size256]byte
-	if fileType.IsGzippable {
-		w.Header().Set("Content-Encoding", "gzip")
-	}
-	w.Header().Set("Content-Type", fileType.ContentType)
-	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
+	serveFile(w, r, file, fileInfo, fileType)
 }
 
 // site404 is a 404 handler that will use the site's 404 page if present,
