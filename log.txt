@@ -10,8 +10,6 @@ file_handler.go
 serve_http.go
 notebrew/main.go
 
-TODO: rework (*RemoteFS).Rename().
-
 notebrew-config/
 notebrew-users.db
 notebrew-files/
