@@ -193,14 +193,8 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 					},
 				}, func(row *sq.Row) fileEntry {
 					return fileEntry{
-						Name: path.Base(row.String("file_path")),
-						Size: row.Int64("{}", sq.DialectExpression{
-							Default: sq.Expr("COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0)"),
-							Cases: []sq.DialectCase{{
-								Dialect: "sqlite",
-								Result:  sq.Expr("COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0)"),
-							}},
-						}),
+						Name:    path.Base(row.String("file_path")),
+						Size:    row.Int64("size"),
 						ModTime: row.Time("mod_time"),
 					}
 				})
@@ -260,14 +254,8 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 					},
 				}, func(row *sq.Row) fileEntry {
 					return fileEntry{
-						Name: path.Base(row.String("file_path")),
-						Size: row.Int64("{}", sq.DialectExpression{
-							Default: sq.Expr("COALESCE(OCTET_LENGTH(text), OCTET_LENGTH(data), size, 0)"),
-							Cases: []sq.DialectCase{{
-								Dialect: "sqlite",
-								Result:  sq.Expr("COALESCE(LENGTH(CAST(text AS BLOB)), LENGTH(CAST(data AS BLOB)), size, 0)"),
-							}},
-						}),
+						Name:    path.Base(row.String("file_path")),
+						Size:    row.Int64("size"),
 						ModTime: row.Time("mod_time"),
 					}
 				})
