@@ -457,11 +457,14 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 				var templateErrors TemplateErrors
 				var templateExecutionError *TemplateExecutionError
 				if errors.As(err, &templateErrors) {
+					var n int
 					names := make([]string, 0, len(templateErrors))
-					for name := range templateErrors {
+					for name, errmsgs := range templateErrors {
 						names = append(names, name)
+						n += len(errmsgs)
 					}
 					slices.Sort(names)
+					response.TemplateErrors = make([]string, 0, n)
 					for _, name := range names {
 						for _, errmsg := range templateErrors[name] {
 							response.TemplateErrors = append(response.TemplateErrors, name+": "+errmsg)
@@ -480,11 +483,14 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			var templateErrors TemplateErrors
 			var templateExecutionError *TemplateExecutionError
 			if errors.As(err, &templateErrors) {
+				var n int
 				names := make([]string, 0, len(templateErrors))
-				for name := range templateErrors {
+				for name, errmsgs := range templateErrors {
 					names = append(names, name)
+					n += len(errmsgs)
 				}
 				slices.Sort(names)
+				response.TemplateErrors = make([]string, 0, n)
 				for _, name := range names {
 					for _, errmsg := range templateErrors[name] {
 						response.TemplateErrors = append(response.TemplateErrors, name+": "+errmsg)
