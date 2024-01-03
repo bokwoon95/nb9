@@ -29,7 +29,7 @@ var (
 
 func init() {
 	// top-10000-passwords.txt
-	file, err := rootFS.Open("embed/top-10000-passwords.txt")
+	file, err := embedFS.Open("embed/top-10000-passwords.txt")
 	if err != nil {
 		return
 	}
@@ -54,14 +54,14 @@ func init() {
 		commonPasswordHashes[encodedHash] = struct{}{}
 	}
 	// styles.css
-	b, err := fs.ReadFile(rootFS, "static/styles.css")
+	b, err := fs.ReadFile(embedFS, "static/styles.css")
 	if err != nil {
 		return
 	}
 	hash := sha256.Sum256(b)
 	stylesCSS = string(b)
 	// baseline.js
-	b, err = fs.ReadFile(rootFS, "static/baseline.js")
+	b, err = fs.ReadFile(embedFS, "static/baseline.js")
 	if err != nil {
 		return
 	}
@@ -69,7 +69,7 @@ func init() {
 	baselineJS = string(b)
 	baselineJSHash := "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
 	// folder.js
-	b, err = fs.ReadFile(rootFS, "static/folder.js")
+	b, err = fs.ReadFile(embedFS, "static/folder.js")
 	if err != nil {
 		return
 	}
