@@ -517,7 +517,7 @@ func newServeFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo
 	hasher.Reset()
 	defer hashPool.Put(hasher)
 
-	// text files (in a buf) are always gzipped, are never cached, always with ETag (1MB limitation should already be enforced on write)
+	// text files (in a buf) are always gzipped, are never cached, ETag only if len is smaller than 1MB
 	// image files are maybe gzipped, are cached for 5 minutes externally, never cached internally, with ETag only if it is a io.ReadSeeker or its size is smaller than 1MB
 	// font files are cached for 30 days, maybe gzipped, with ETag only if it is a io.ReadSeeker or its size is smaller than 1MB
 
