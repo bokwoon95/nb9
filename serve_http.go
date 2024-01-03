@@ -513,13 +513,12 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If the file is too big, stream it out to the user instead of
 	// buffering it in memory. This means we won't be able to calculate its
 	// ETag, but that's the tradeoff.
-	if fileInfo.Size() > 5<<20 /* 5MB */ {
+	if fileInfo.Size() > 5<<20 /* 5 MB */ {
 		w.Header().Set("Content-Type", fileType.ContentType)
 		w.Header().Add("Cache-Control", "max-age: 300, stale-while-revalidate" /* 5 minutes */)
 		_, err := io.Copy(w, file)
 		if err != nil {
 			logger.Error(err.Error())
-			return
 		}
 		return
 	}
