@@ -14,7 +14,7 @@ notebrew/main.go
 TODO: fs.go, fs_local.go, fs_remote.go
 TODO: rethink status.go/error.go. We know most HTTP error statuses are not used (outside of the error handlers), so we can eliminate the dependency on the error statuses from the error handlers.
     TODO: I may commit the sin of putting all the error statuses at the top of notebrew.go instead of in its own file. So the file chain looks like this: init.go -> notebrew.go -> template_parser.go.
-TODO: move index.html, post.html and post-list.html from static/ to embed/, we no longer serve .html static files. This means we can remove the special handling code for .webmanifest and .html from staticFiles, which is another win for simplicity.
+TODO: move index.html, post.html and post-list.html from static/ to embed/, we no longer serve .html static files. This means we can remove the special handling code for .webmanifest and .html from staticFiles, which is another win for simplicity. If a user wants to see the sample post.html/post-list.html file, they just have delete the file and notebrew will automatically create the default file for them.
 
 notebrew-config/
 notebrew-users.db
