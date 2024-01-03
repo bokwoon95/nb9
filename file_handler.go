@@ -560,7 +560,11 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 
 	multiWriter := io.MultiWriter(hasher, buf)
 	if fileType.IsGzippable {
@@ -736,7 +740,11 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 						defer file.Close()
 						buf := bufPool.Get().(*bytes.Buffer)
 						buf.Reset()
-						defer bufPool.Put(buf)
+						defer func() {
+							if buf.Len() <= 1<<18 {
+								bufPool.Put(buf)
+							}
+						}()
 						_, err = buf.ReadFrom(file)
 						if err != nil {
 							return err

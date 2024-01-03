@@ -87,7 +87,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	urlPath := strings.Trim(r.URL.Path, "/")
 	ext := path.Ext(urlPath)
 	head, tail, _ := strings.Cut(urlPath, "/")
-	
+
 	// TODO: set MaxBytesReader here, blanket 10MB.
 	err := r.ParseMultipartForm(10 << 20 /* 10MB */)
 	if err != nil {
@@ -395,7 +395,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if http.DetectContentType(peekData) == "application/x-gzip" {
 				buf := bufPool.Get().(*bytes.Buffer)
 				buf.Reset()
-				defer bufPool.Put(buf)
+				defer func() {
+					if buf.Len() <= 1<<18 {
+						bufPool.Put(buf)
+					}
+				}()
 				_, err := buf.ReadFrom(file)
 				if err != nil {
 					logger.Error(err.Error())
@@ -420,7 +424,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		buf := bufPool.Get().(*bytes.Buffer)
 		buf.Reset()
-		defer bufPool.Put(buf)
+		defer func() {
+			if buf.Len() <= 1<<18 {
+				bufPool.Put(buf)
+			}
+		}()
 
 		multiWriter := io.MultiWriter(buf, hasher)
 		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
@@ -527,7 +535,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 
 	multiWriter := io.MultiWriter(buf, hasher)
 	if !fileType.IsGzippable {
@@ -589,7 +601,11 @@ func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefi
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 
 	hasher := hashPool.Get().(hash.Hash)
 	hasher.Reset()

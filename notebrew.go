@@ -126,7 +126,11 @@ func getLogger(ctx context.Context) *slog.Logger {
 func (nbrew *Notebrew) setSession(w http.ResponseWriter, r *http.Request, name string, value any) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
 	err := encoder.Encode(&value)
@@ -289,7 +293,11 @@ var goldmarkMarkdown = func() goldmark.Markdown {
 func stripMarkdownStyles(src []byte) string {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 	var node ast.Node
 	nodes := []ast.Node{
 		goldmarkMarkdown.Parser().Parse(text.NewReader(src)),
@@ -448,7 +456,11 @@ var readerPool = sync.Pool{
 func executeTemplate(w http.ResponseWriter, r *http.Request, modtime time.Time, tmpl *template.Template, data any) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 
 	hasher := hashPool.Get().(hash.Hash)
 	hasher.Reset()
@@ -610,7 +622,11 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 	err := errorTemplate.Execute(buf, map[string]any{
 		"Title":    `400 bad request`,
 		"Headline": "400 bad request",
@@ -642,7 +658,11 @@ func notAuthenticated(w http.ResponseWriter, r *http.Request) {
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 	var query string
 	if r.Method == "GET" {
 		if r.URL.RawQuery != "" {
@@ -682,7 +702,11 @@ func notAuthorized(w http.ResponseWriter, r *http.Request) {
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 	err := errorTemplate.Execute(buf, map[string]any{
 		"Referer":  getReferer(r),
 		"Title":    "403 forbidden",
@@ -715,7 +739,11 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 	err := errorTemplate.Execute(buf, map[string]any{
 		"Referer":  getReferer(r),
 		"Title":    "404 not found",
@@ -748,7 +776,11 @@ func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 	err := errorTemplate.Execute(buf, map[string]any{
 		"Referer":  getReferer(r),
 		"Title":    "405 method not allowed",
@@ -787,7 +819,11 @@ func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 	err := errorTemplate.Execute(buf, map[string]any{
 		"Referer":  getReferer(r),
 		"Title":    "415 unsupported media type",
@@ -819,7 +855,11 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Len() <= 1<<18 {
+			bufPool.Put(buf)
+		}
+	}()
 	var data map[string]any
 	if errors.Is(serverErr, context.DeadlineExceeded) {
 		data = map[string]any{

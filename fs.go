@@ -471,7 +471,9 @@ func (file *RemoteFile) Close() error {
 		if file.buf == nil {
 			return fs.ErrClosed
 		}
-		bufPool.Put(file.buf)
+		if file.buf.Len() <= 1<<18 {
+			bufPool.Put(file.buf)
+		}
 		file.buf = nil
 	} else {
 		if file.readCloser == nil {
@@ -626,7 +628,11 @@ func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
 
 func (file *RemoteFileWriter) Close() error {
 	if textExtensions[path.Ext(file.filePath)] {
-		defer bufPool.Put(file.buf)
+		defer func() {
+			if file.buf.Len() <= 1<<18 {
+				bufPool.Put(file.buf)
+			}
+		}()
 	} else {
 		file.storageWriter.Close()
 		err := <-file.storageResult
