@@ -10,7 +10,6 @@ file_handler.go
 serve_http.go
 notebrew/main.go
 
-TODO: move index.html, post.html and post-list.html from static/ to embed/, we no longer serve .html static files. This means we can remove the special handling code for .webmanifest and .html from staticFiles, which is another win for simplicity. If a user wants to see the sample post.html/post-list.html file, they just have delete the file and notebrew will automatically create the default file for them.
 TODO: rework (*RemoteFS).Rename().
 
 notebrew-config/
