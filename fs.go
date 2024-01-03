@@ -719,9 +719,6 @@ func (file *RemoteFileWriter) Close() error {
 		return nil
 	}
 
-	// TODO: size is never NULL, it is always the size of the file (before any compression).
-	// TODO: we can no longer rename extensions, once a file is created its extension is fixed. We also restrict a file's movement based on whether it is fulltext indexed (both src and dest must be the same).
-
 	// If file exists, just have to update the file entry in the database.
 	if file.fileID != [16]byte{} {
 		if file.fileType.IsGzippable {
@@ -902,12 +899,11 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 	if parentDir == "." {
 		_, err := sq.Exec(fsys.ctx, fsys.filesDB, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
-				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})",
+			Format: "INSERT INTO files (file_id, file_path, mod_time, is_dir)" +
+				" VALUES ({fileID}, {filePath}, {modTime}, TRUE)",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("filePath", name),
-				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			},
 		})
@@ -924,13 +920,12 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 	} else {
 		_, err = sq.Exec(fsys.ctx, fsys.filesDB, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
-				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})",
+			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, is_dir)" +
+				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, TRUE)",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("parentDir", parentDir),
 				sq.StringParam("filePath", name),
-				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			},
 		})
@@ -972,13 +967,12 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 	case "sqlite", "postgres":
 		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
-				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})" +
+			Format: "INSERT INTO files (file_id, file_path, mod_time, is_dir)" +
+				" VALUES ({fileID}, {filePath}, {modTime}, TRUE)" +
 				" ON CONFLICT DO NOTHING",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("filePath", segments[0]),
-				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			},
 		})
@@ -988,13 +982,12 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 	case "mysql":
 		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format: "INSERT INTO files (file_id, file_path, is_dir, mod_time)" +
-				" VALUES ({fileID}, {filePath}, {isDir}, {modTime})" +
+			Format: "INSERT INTO files (file_id, file_path, mod_time, is_dir)" +
+				" VALUES ({fileID}, {filePath}, {modTime}, TRUE)" +
 				" ON DUPLICATE KEY UPDATE file_id = file_id",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("filePath", segments[0]),
-				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			},
 		})
@@ -1012,14 +1005,13 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 		case "sqlite", "postgres":
 			preparedExec, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
 				Dialect: fsys.filesDialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
-					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})" +
+				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, is_dir)" +
+					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, TRUE)" +
 					" ON CONFLICT DO NOTHING",
 				Values: []any{
 					sq.Param("fileID", nil),
 					sq.Param("parentDir", nil),
 					sq.Param("filePath", nil),
-					sq.Param("isDir", nil),
 					sq.Param("modTime", nil),
 				},
 			})
@@ -1029,14 +1021,13 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 		case "mysql":
 			preparedExec, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
 				Dialect: fsys.filesDialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, is_dir, mod_time)" +
-					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {isDir}, {modTime})" +
+				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, is_dir)" +
+					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, TRUE)" +
 					" ON DUPLICATE KEY UPDATE file_id = file_id",
 				Values: []any{
 					sq.Param("fileID", nil),
 					sq.Param("parentDir", nil),
 					sq.Param("filePath", nil),
-					sq.Param("isDir", nil),
 					sq.Param("modTime", nil),
 				},
 			})
@@ -1054,7 +1045,6 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("parentDir", parentDir),
 				sq.StringParam("filePath", filePath),
-				sq.BoolParam("isDir", true),
 				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
 			)
 			if err != nil {
@@ -1258,6 +1248,7 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 }
 
 func (fsys *RemoteFS) Rename(oldname, newname string) error {
+	// TODO: we can no longer rename extensions, once a file is created its extension is fixed. We also restrict a file's movement based on whether it is fulltext indexed (both src and dest must be the same).
 	err := fsys.ctx.Err()
 	if err != nil {
 		return err
