@@ -1004,8 +1004,8 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		}
 		return err
 	}
-	if !oldnameIsDir && textExtensions[path.Ext(oldname)] != textExtensions[path.Ext(newname)] {
-		return fmt.Errorf("cannot rename file from %q to %q because their extensions are not compatible", oldname, newname)
+	if !oldnameIsDir && path.Ext(oldname) != path.Ext(newname) {
+		return fmt.Errorf("file extension cannot be renamed")
 	}
 	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.filesDialect,
@@ -1017,46 +1017,23 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	if err != nil {
 		return err
 	}
-	var updateTextOrData sq.Expression
-	if !oldnameIsDir && textExtensions[path.Ext(oldname)] && textExtensions[path.Ext(newname)] {
-		if !isFulltextIndexed(oldname) && isFulltextIndexed(newname) {
-			switch fsys.filesDialect {
-			case "sqlite":
-				updateTextOrData = sq.Expr(", text = data, data = NULL")
-			case "postgres":
-				updateTextOrData = sq.Expr(", text = convert_from(data, 'UTF8'), data = NULL")
-			case "mysql":
-				updateTextOrData = sq.Expr(", text = convert(data USING utf8mb4), data = NULL")
-			}
-		} else if isFulltextIndexed(oldname) && !isFulltextIndexed(newname) {
-			switch fsys.filesDialect {
-			case "sqlite":
-				updateTextOrData = sq.Expr(", data = text, text = NULL")
-			case "postgres":
-				updateTextOrData = sq.Expr(", data = convert_to(text, 'UTF8'), text = NULL")
-			case "mysql":
-				updateTextOrData = sq.Expr(", data = convert(text USING BINARY), text = NULL")
-			}
-		}
-	}
 	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.filesDialect,
-		Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} {updateTextOrData} WHERE file_path = {oldname}",
+		Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} WHERE file_path = {oldname}",
 		Values: []any{
 			sq.StringParam("newname", newname),
 			sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
-			sq.Param("updateTextOrData", updateTextOrData),
 			sq.StringParam("oldname", oldname),
 		},
 	})
 	if err != nil {
-		// We weren't able to delete {newname} earlier, which means it is a
-		// directory.
 		if fsys.filesErrorCode == nil {
 			return err
 		}
 		errcode := fsys.filesErrorCode(err)
 		if IsKeyViolation(fsys.filesDialect, errcode) {
+			// We weren't able to delete {newname} earlier, which means it is a
+			// directory.
 			return &fs.PathError{Op: "rename", Path: newname, Err: syscall.EISDIR}
 		}
 		return err
