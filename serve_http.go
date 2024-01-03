@@ -281,20 +281,23 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		sitePrefix = r.Host
 	}
 
+	var filePath string
 	var fileType FileType
 	ext := path.Ext(urlPath)
 	if ext == "" {
+		filePath = path.Join(sitePrefix, "output", urlPath+".html")
 		fileType.Ext = ".html"
 		fileType.ContentType = "text/html; charset=utf-8"
 		fileType.IsGzippable = true
 	} else {
+		filePath = path.Join(sitePrefix, "output", urlPath)
 		fileType = fileTypes[ext]
 		if fileType == (FileType{}) {
 			nbrew.site404(w, r, sitePrefix)
 			return
 		}
 	}
-	file, err := nbrew.FS.Open(path.Join(sitePrefix, "output", urlPath))
+	file, err := nbrew.FS.Open(filePath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			nbrew.site404(w, r, sitePrefix)
