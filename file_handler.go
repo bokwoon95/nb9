@@ -41,7 +41,7 @@ type fileEntry struct {
 }
 
 type fileResponse struct {
-	Status      Status         `json:"status"`
+	Status      string         `json:"status"`
 	ContentSite string         `json:"contentSite,omitempty"`
 	Username    sql.NullString `json:"username,omitempty"`
 	SitePrefix  string         `json:"sitePrefix,omitempty"`
@@ -146,7 +146,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		response.IsDir = fileInfo.IsDir()
 		response.ModTime = fileInfo.ModTime()
 		if response.Status == "" {
-			response.Status = GetSuccess
+			response.Status = "GetSuccess"
 		}
 
 		if isEditable {
@@ -497,7 +497,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 				return
 			}
 		}
-		response.Status = PostSuccess
+		response.Status = "PostSuccess"
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)

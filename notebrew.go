@@ -585,7 +585,7 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		serverErr = encoder.Encode(map[string]any{
-			"status": string(BadRequest) + ": " + msg,
+			"status": "BadRequest: " + msg,
 		})
 		if serverErr != nil {
 			getLogger(r.Context()).Error(serverErr.Error())
@@ -606,7 +606,7 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, string(BadRequest)+": "+msg, http.StatusBadRequest)
+		http.Error(w, "BadRequest: "+msg, http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
@@ -621,7 +621,7 @@ func notAuthenticated(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": NotAuthenticated,
+			"status": "NotAuthenticated",
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -650,7 +650,7 @@ func notAuthenticated(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, string(NotAuthenticated), http.StatusUnauthorized)
+		http.Error(w, "NotAuthenticated", http.StatusUnauthorized)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
@@ -665,7 +665,7 @@ func notAuthorized(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": NotAuthorized,
+			"status": "NotAuthorized",
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -687,7 +687,7 @@ func notAuthorized(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, string(NotAuthorized), http.StatusForbidden)
+		http.Error(w, "NotAuthorized", http.StatusForbidden)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
@@ -702,7 +702,7 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": NotFound,
+			"status": "NotFound",
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -724,7 +724,7 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, string(NotFound), http.StatusNotFound)
+		http.Error(w, "NotFound", http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
@@ -739,7 +739,7 @@ func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": string(MethodNotAllowed) + ": " + r.Method,
+			"status": "MethodNotAllowed: " + r.Method,
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -760,7 +760,7 @@ func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, string(NotFound), http.StatusMethodNotAllowed)
+		http.Error(w, "NotFound", http.StatusMethodNotAllowed)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
@@ -782,7 +782,7 @@ func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": UnsupportedMediaType.Code() + " " + msg,
+			"status": "UnsupportedMediaType " + msg,
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -803,7 +803,7 @@ func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, UnsupportedMediaType.Code()+" "+msg, http.StatusUnsupportedMediaType)
+		http.Error(w, "UnsupportedMediaType "+msg, http.StatusUnsupportedMediaType)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
@@ -818,7 +818,7 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": ServerError,
+			"status": "ServerError",
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -851,7 +851,7 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 	err := errorTemplate.Execute(buf, data)
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, string(ServerError), http.StatusInternalServerError)
+		http.Error(w, "ServerError", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)

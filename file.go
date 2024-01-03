@@ -31,7 +31,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		ModTime     time.Time `json:"modTime,omitempty"`
 	}
 	type Response struct {
-		Status         Status      `json:"status"`
+		Status         string      `json:"status"`
 		ContentDomain  string      `json:"contentDomain,omitempty"`
 		Username       string      `json:"username,omitempty"`
 		SitePrefix     string      `json:"sitePrefix,omitempty"`
@@ -123,7 +123,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		response.Size = fileInfo.Size()
 		response.ContentType = fileType.ContentType
 		if response.Status == "" {
-			response.Status = GetSuccess
+			response.Status = "GetSuccess"
 		}
 		if isEditableText {
 			file, err := nbrew.FS.Open(path.Join(sitePrefix, filePath))
@@ -428,7 +428,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 				return
 			}
 		}
-		response.Status = PostSuccess
+		response.Status = "PostSuccess"
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)
