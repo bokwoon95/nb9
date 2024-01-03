@@ -90,7 +90,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1MB */)
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
 	switch r.Method {
 	case "GET":
 		err := r.ParseForm()
@@ -342,7 +342,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			}
 		case "application/x-www-form-urlencoded", "multipart/form-data":
 			if contentType == "multipart/form-data" {
-				err := r.ParseMultipartForm(15 << 20 /* 15MB */)
+				err := r.ParseMultipartForm(15 << 20 /* 15 MB */)
 				if err != nil {
 					badRequest(w, r, err)
 					return

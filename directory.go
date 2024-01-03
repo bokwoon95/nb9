@@ -42,7 +42,7 @@ func (nbrew *Notebrew) directory_Old(w http.ResponseWriter, r *http.Request, use
 		methodNotAllowed(w, r)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1MB */)
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
 	err := r.ParseForm()
 	if err != nil {
 		badRequest(w, r, err)

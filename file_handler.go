@@ -387,7 +387,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			}
 		case "application/x-www-form-urlencoded", "multipart/form-data":
 			if contentType == "multipart/form-data" {
-				err := r.ParseMultipartForm(10 << 20 /* 10MB */)
+				err := r.ParseMultipartForm(10 << 20 /* 10 MB */)
 				if err != nil {
 					badRequest(w, r, err)
 					return
@@ -524,17 +524,15 @@ func newServeFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo
 	hasher.Reset()
 	defer hashPool.Put(hasher)
 
-	// text files (in a buf) are always gzipped, are never cached, ETag only if len is smaller than 1MB
-	// image files are maybe gzipped, are cached for 5 minutes externally, never cached internally, with ETag only if it is a io.ReadSeeker or its size is smaller than 1MB
-	// font files are cached for 30 days, maybe gzipped, with ETag only if it is a io.ReadSeeker or its size is smaller than 1MB
+	// text files (in a buf) are always gzipped, are never cached, ETag only if len is smaller than 1 MB
+	// image files are maybe gzipped, are cached for 5 minutes externally, never cached internally, with ETag only if it is a io.ReadSeeker or its size is smaller than 1 MB
+	// font files are cached for 30 days, maybe gzipped, with ETag only if it is a io.ReadSeeker or its size is smaller than 1 MB
 	// actually: never cache under any scenario, use ETag only.
 
 	if remoteFile, ok := file.(*RemoteFile); ok {
 		if remoteFile.fileType.IsGzippable {
-			_ = fileTypes
-			data := remoteFile.buf.Bytes()
-			if http.DetectContentType(data) == "application/x-gzip" {
-				_, err := hasher.Write(data)
+			if http.DetectContentType(remoteFile.buf.Bytes()) == "application/x-gzip" {
+				_, err := hasher.Write(remoteFile.buf.Bytes())
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
 					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
@@ -545,10 +543,10 @@ func newServeFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo
 				w.Header().Set("Content-Encoding", "gzip")
 				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 				w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(data))
+				http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(remoteFile.buf.Bytes()))
 				return
 			}
-			if len(data) <= 1<<20 {
+			if remoteFile.buf.Len() <= 1<<20 /* 10 MB */ {
 				buf := bufPool.Get().(*bytes.Buffer)
 				buf.Reset()
 				defer func() {
@@ -560,7 +558,7 @@ func newServeFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo
 				gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
 				gzipWriter.Reset(multiWriter)
 				defer gzipWriterPool.Put(gzipWriter)
-				_, err := gzipWriter.Write(data)
+				_, err := gzipWriter.Write(remoteFile.buf.Bytes())
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
 					http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
@@ -734,7 +732,7 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 	}
 
 	// Stream file if too big to buffer in memory.
-	if fileInfo.Size() > 5<<20 /* 5MB */ {
+	if fileInfo.Size() > 5<<20 /* 5 MB */ {
 		w.Header().Set("Content-Type", fileType.ContentType)
 		w.Header().Add("Cache-Control", "max-age: 300, stale-while-revalidate" /* 5 minutes */)
 		_, err := io.Copy(w, file)
