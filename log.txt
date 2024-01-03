@@ -10,6 +10,8 @@ file_handler.go
 serve_http.go
 notebrew/main.go
 
+TODO: work on newServeFile, must be flexible enough to be used in both file_handler.go and serve_http.go to serve user files.
+
 notebrew-config/
 notebrew-users.db
 notebrew-files/
