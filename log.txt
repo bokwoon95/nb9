@@ -14,6 +14,7 @@ TODO: work on listDirectory so that we can switch over to fileHandler() asap and
 TODO: list_root_directory.html: separate the site folders into its own separate section with a "sites" header (non-link).
     Move the "+ create site" button down to the site folders section.
     Now it becomes clear that pagination only works on the site folders, the normal folders are always on top. And when we are in a site folder the site folder section goes away entirely.
+    More importantly, this aligns with how we are implementing the root level directory: first we pull out the normal folders, then we iterate the site folders.
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
 
 notebrew-config/
