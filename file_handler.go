@@ -80,6 +80,14 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		return
 	}
 	if fileInfo.IsDir() {
+		if r.Method != "GET" {
+			methodNotAllowed(w, r)
+			return
+		}
+		if filePath == "" {
+			nbrew.listRootDirectory(w, r, username, sitePrefix, filePath)
+			return
+		}
 		nbrew.listDirectory(w, r, username, sitePrefix, filePath)
 		return
 	}
@@ -516,12 +524,51 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 	}
 }
 
-// TODO: copy over directory.go into listDirectory().
-func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
-	if r.Method != "GET" {
-		methodNotAllowed(w, r)
+func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
+	var response fileResponse
+	if nbrew.UsersDB == nil {
+		remoteFS, ok := nbrew.FS.(*RemoteFS)
+		if !ok {
+			for _, name := range []string{"notes", "pages", "posts", "output/themes", "output"} {
+				fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, name))
+				if err != nil {
+					if !errors.Is(err, fs.ErrNotExist) {
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
+				}
+				if fileInfo.IsDir() {
+					response.Files = append(response.Files, fileEntry{Name: name, IsDir: true})
+				}
+			}
+			dirEntries, err := nbrew.FS.ReadDir(filePath)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			for _, dirEntry := range dirEntries {
+				if !dirEntry.IsDir() {
+					continue
+				}
+				name := dirEntry.Name()
+				if strings.HasPrefix(name, "@") || strings.Contains(name, ".") {
+					response.Files = append(response.Files, fileEntry{Name: name, IsDir: true})
+				}
+			}
+			return
+		}
+		_ = remoteFS // TODO: optimized routines for remoteFS.
+		// If no users database, just list everything that is either notes/pages/posts/output or is site folder.
+		// - but if it's a RemoteFS, we can paginate everything in the directory (1000 items per page). No reverse or inverse.
 		return
 	}
+}
+
+// TODO: copy over directory.go into listDirectory().
+func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
+	// sort=x&order=y&from=z
 }
 
 func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType) {
