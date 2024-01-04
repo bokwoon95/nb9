@@ -24,6 +24,10 @@ var ordinalIndexPool = sync.Pool{
 	New: func() any { return map[int]int{} },
 }
 
+var namedIndexPool = sync.Pool{
+	New: func() any { return map[string]int{} },
+}
+
 var argsPool = sync.Pool{
 	New: func() any { return &[]any{} },
 }
@@ -71,7 +75,9 @@ func writef(ctx context.Context, dialect string, buf *bytes.Buffer, args *[]any,
 
 	// namedIndex tracks the indexes of the namedArgs that are inside the
 	// values slice
-	namedIndex := make(map[string]int)
+	namedIndex := namedIndexPool.Get().(map[string]int)
+	clear(namedIndex)
+	defer namedIndexPool.Put(namedIndex)
 	for i, value := range values {
 		var name string
 		switch arg := value.(type) {
