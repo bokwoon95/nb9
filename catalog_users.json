@@ -52,12 +52,6 @@
         "notnull": true
       },
       {
-        "column": "lang_code",
-        "type": {
-          "default": "VARCHAR(500)"
-        }
-      },
-      {
         "column": "password_hash",
         "type": {
           "default": "VARCHAR(500)"
