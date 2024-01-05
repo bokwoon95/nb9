@@ -583,7 +583,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			return
 		}
 		// start = p1, next = p2
-		// from=p2: start = p2, next = p3, prev = p1 (next => from=p3) (prev => from=p1&until=p2 so we don't miss out on anything inserted in between)
+		// from=p2: start = p2, next = p3, prev = p1 (next => from=p3) (prev => from=p1&before=p2 so we don't miss out on anything inserted in between)
 		_ = remoteFS // TODO: optimized routines for remoteFS.
 		// If no users database, just list everything that is either notes/pages/posts/output or is site folder.
 		// - but if it's a RemoteFS, we can paginate everything in the directory (1000 items per page). No reverse or inverse.
