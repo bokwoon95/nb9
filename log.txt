@@ -10,6 +10,12 @@ file_handler.go
 serve_http.go
 notebrew/main.go
 
+/themes/path-to-image.png
+/themes/path-to-template.html
+/themes/path-to-font.ttf
+
+{{ template "/themes/brassica/post.html" $ }}
+
 TODO: work on listDirectory so that we can switch over to fileHandler() asap and remove file.go/directory.go.
 TODO: list_root_directory.html: separate the site folders into its own separate section with a "sites" header (non-link).
     Move the "+ create site" button down to the site folders section.
