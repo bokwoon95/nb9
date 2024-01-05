@@ -34,10 +34,16 @@ import (
 )
 
 type fileEntry struct {
-	Name    string    `json:"name,omitempty"`
+	Name    string    `json:"name"`
 	Size    int64     `json:"size,omitempty"`
 	ModTime time.Time `json:"modTime,omitempty"`
 	IsDir   bool      `json:"isDir,omitempty"`
+}
+
+type siteEntry struct {
+	Name    string    `json:"name"`
+	ModTime time.Time `json:"modTime,omitempty"`
+	IsUser  bool      `json:"isUser,omitempty"`
 }
 
 type fileResponse struct {
@@ -49,9 +55,10 @@ type fileResponse struct {
 	IsDir       bool           `json:"isDir,omitempty"`
 	ModTime     time.Time      `json:"modTime,omitempty"`
 
-	Files []fileEntry `json:"fileEntries,omitempty"`
-	Sites []string    `json:"sites,omitempty"`
-	Users []string    `json:"users,omitempty"`
+	Files        []fileEntry `json:"fileEntries,omitempty"`
+	Sites        []siteEntry `json:"sites,omitempty"`
+	PreviousSite string      `json:"previousSite,omitempty"`
+	NextSite     string      `json:"nextSite,omitempty"`
 
 	Content        string      `json:"content,omitempty"`
 	URL            string      `json:"url,omitempty"`
@@ -529,6 +536,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	if nbrew.UsersDB == nil {
 		remoteFS, ok := nbrew.FS.(*RemoteFS)
 		if !ok {
+			// TODO: do this in an errgroup.
 			for _, name := range []string{"notes", "pages", "posts", "output/themes", "output"} {
 				fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, name))
 				if err != nil {
@@ -538,9 +546,14 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 						return
 					}
 				}
-				if fileInfo.IsDir() {
-					response.Files = append(response.Files, fileEntry{Name: name, IsDir: true})
+				if !fileInfo.IsDir() {
+					continue
 				}
+				response.Files = append(response.Files, fileEntry{
+					Name:    name,
+					ModTime: fileInfo.ModTime(),
+					IsDir:   true,
+				})
 			}
 			dirEntries, err := nbrew.FS.ReadDir(filePath)
 			if err != nil {
@@ -553,12 +566,24 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					continue
 				}
 				name := dirEntry.Name()
-				if strings.HasPrefix(name, "@") || strings.Contains(name, ".") {
-					response.Files = append(response.Files, fileEntry{Name: name, IsDir: true})
+				if !strings.HasPrefix(name, "@") && !strings.Contains(name, ".") {
+					continue
 				}
+				fileInfo, err := dirEntry.Info()
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				response.Sites = append(response.Sites, siteEntry{
+					Name:    name,
+					ModTime: fileInfo.ModTime(),
+				})
 			}
 			return
 		}
+		// start = p1, next = p2
+		// from=p2: start = p2, next = p3, prev = p1 (next => from=p3) (prev => from=p1&until=p2)
 		_ = remoteFS // TODO: optimized routines for remoteFS.
 		// If no users database, just list everything that is either notes/pages/posts/output or is site folder.
 		// - but if it's a RemoteFS, we can paginate everything in the directory (1000 items per page). No reverse or inverse.
