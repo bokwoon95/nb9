@@ -535,9 +535,15 @@ func staticFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string)
 		}
 	}
 
+	// TODO: calculate the ETag only if the fileInfo.Size() is less than or
+	// equal to 1 MB, then it is safe to buffer the file contents.
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer bufPool.Put(buf)
+	defer func() {
+		if buf.Cap() <= maxPoolableBufferCapacity {
+			bufPool.Put(buf)
+		}
+	}()
 
 	multiWriter := io.MultiWriter(hasher, buf)
 	if fileType.IsGzippable {
