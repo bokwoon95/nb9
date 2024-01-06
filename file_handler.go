@@ -643,6 +643,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			response.NextSite = response.Sites[1000].Name
 			response.Sites = response.Sites[:1000]
 		}
+		// NextSite determines whether the next button exists (from=$.NextSite)
+		// PreviousSite determines whether the previous button exists (from=$.PreviousSite&before=$.FirstSiteOnCurrentPage)
 		// start = p1, next = p2
 		// from=p2: start = p2, next = p3, prev = p1 (next => from=p3) (prev => from=p1&before=p2 so we don't miss out on anything inserted in between)
 		// If no users database, just list everything that is either notes/pages/posts/output or is site folder.
