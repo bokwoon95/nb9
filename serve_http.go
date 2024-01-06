@@ -367,10 +367,16 @@ func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefi
 	hasher.Reset()
 	defer hashPool.Put(hasher)
 
+	// TODO: rewrite this to no longer need bufio.Reader because whether a file
+	// is gzipped is an implementation detail of the underlying filesystem.
 	reader := readerPool.Get().(*bufio.Reader)
 	reader.Reset(file)
 	defer readerPool.Put(reader)
 
+	// TODO: instead of peeking to check if the file is gzipped, type assert it
+	// to a *RemoteFile and check its isFulltextIndexed field (must be false)
+	// to see whether its buf is gzipped.
+	//
 	// Peek the first 512 bytes to check if 404/index.html is gzipped and
 	// write it into the buffer + ETag hasher accordingly. The buffer
 	// always receives gzipped data, the only difference is whether the
