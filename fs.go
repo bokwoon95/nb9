@@ -16,11 +16,6 @@ import (
 // "The maximum capacity of a cached pool is limited to 2^18 bytes as we’ve
 // found that the RAM cost of storing buffers larger than this limit is not
 // worth the savings of not recreating those buffers."
-//
-// TODO: instead of checking if a buffer is safe to put back if it's below 1
-// MB, we pull a bytes.Buffer from the pool only if the file size is guaranteed
-// to be below 1<<18. Otherwise, we preallocate a bytes.Buffer from scratch and
-// call buf.Grow(int(fileInfo.Size())) on it.
 const maxPoolableBufferCapacity = 1 << 18
 
 var bufPool = sync.Pool{
