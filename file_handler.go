@@ -41,9 +41,8 @@ type fileEntry struct {
 }
 
 type siteEntry struct {
-	Name    string    `json:"name"`
-	ModTime time.Time `json:"modTime,omitempty"`
-	IsUser  bool      `json:"isUser,omitempty"`
+	Name   string `json:"name"`
+	IsUser bool   `json:"isUser,omitempty"`
 }
 
 type fileResponse struct {
@@ -556,16 +555,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				if !strings.HasPrefix(name, "@") && !strings.Contains(name, ".") {
 					continue
 				}
-				fileInfo, err := dirEntry.Info()
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				response.Sites = append(response.Sites, siteEntry{
-					Name:    name,
-					ModTime: fileInfo.ModTime(),
-				})
+				response.Sites = append(response.Sites, siteEntry{Name: name})
 			}
 			return
 		}
@@ -602,6 +592,13 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			internalServerError(w, r, err)
 			return
 		}
+		// TODO: in the case of users DB being present, we must paginate the
+		// users DB instead. The users DB does not offer any modTime, so the
+		// siteEntry should not contain any modTime.
+		// TODO: instead of handling whether usersDB is present or not present
+		// at the top level, handle whether FS is remoteFS or not at the top
+		// level. The check whether usersDB is present to handle how we should
+		// display the site folders to the user.
 		query := sq.Query{
 			Dialect: remoteFS.filesDialect,
 			Format: "SELECT {*}" +
@@ -625,8 +622,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		}
 		response.Sites, err = sq.FetchAll(r.Context(), remoteFS.filesDB, query, func(row *sq.Row) siteEntry {
 			return siteEntry{
-				Name:    path.Base(row.String("file_path")),
-				ModTime: row.Time("mod_time"),
+				Name: path.Base(row.String("file_path")),
 			}
 		})
 		if err != nil {
