@@ -8,7 +8,11 @@ import (
 	"sync"
 )
 
-// https://victoriametrics.com/blog/tsdb-performance-techniques-sync-pool/
+// If a buffer's length exceeds this capacity, don't put it back in the pool
+// because it's cheaper to recreate such a huge buffer from scratch than to
+// keep it around in memory.
+//
+// From https://victoriametrics.com/blog/tsdb-performance-techniques-sync-pool/:
 //
 // "The maximum capacity of a cached pool is limited to 2^18 bytes as we’ve
 // found that the RAM cost of storing buffers larger than this limit is not
