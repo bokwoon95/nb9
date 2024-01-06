@@ -13,7 +13,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 
@@ -498,14 +497,14 @@ func staticFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string)
 	defer hashPool.Put(hasher)
 
 	if !fileType.IsGzippable {
-		if file, ok := file.(*os.File); ok {
-			_, err := io.Copy(hasher, file)
+		if fileSeeker, ok := file.(io.ReadSeeker); ok {
+			_, err := io.Copy(hasher, fileSeeker)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
-			_, err = file.Seek(0, io.SeekStart)
+			_, err = fileSeeker.Seek(0, io.SeekStart)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
@@ -516,7 +515,7 @@ func staticFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string)
 				w.Header().Set("Content-Type", fileType.ContentType)
 			}
 			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), file)
+			http.ServeContent(w, r, "", fileInfo.ModTime(), fileSeeker)
 			return
 		}
 		if file, ok := file.(*RemoteFile); ok {
