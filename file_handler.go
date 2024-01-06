@@ -41,8 +41,8 @@ type fileEntry struct {
 }
 
 type siteEntry struct {
-	Name   string `json:"name"`
-	IsUser bool   `json:"isUser,omitempty"`
+	Name       string `json:"name"`
+	IsUsername bool   `json:"isUsername,omitempty"`
 }
 
 type fileResponse struct {
