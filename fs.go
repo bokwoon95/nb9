@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// If a buffer's length exceeds this capacity, don't put it back in the pool
+// If a buffer's capacity exceeds this value, don't put it back in the pool
 // because it's cheaper to recreate such a huge buffer from scratch than to
 // keep it around in memory.
 //
