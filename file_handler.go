@@ -1181,6 +1181,10 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 		}
 	}
 	defer writer.Close()
+	// TODO: stream template output into a pipeWriter, pass the pipeReader end
+	// into a golang.org/x/net/html.Tokenizer and iterate over tokens, looking
+	// for anchor tags and rewriting their href attribute to a CDN version if
+	// applicable.
 	err = tmpl.Execute(writer, &pageData)
 	if err != nil {
 		return &TemplateExecutionError{Err: err}
@@ -1392,6 +1396,10 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 	if err != nil {
 		return err
 	}
+	// TODO: stream template output into a pipeWriter, pass the pipeReader end
+	// into a golang.org/x/net/html.Tokenizer and iterate over tokens, looking
+	// for anchor tags and rewriting their href attribute to a CDN version if
+	// applicable.
 	writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(outputDir, "index.html"), 0644)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
