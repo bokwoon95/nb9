@@ -18,7 +18,7 @@ notebrew/main.go
 
 TODO: instead of checking if a buffer is safe to put back if it's below 1 MB, we pull a bytes.Buffer from the pool only if the file size is guaranteed to be below 1<<18. Otherwise, we preallocate a bytes.Buffer from scratch and call buf.Grow(int(fileInfo.Size())) on it. The threshold for calculating an ETag is 1 MB, but the threshold for pulling out a buffer from the pool is ~262 KB.
 TODO: work on listDirectory so that we can switch over to fileHandler() asap and remove file.go/directory.go.
-    TODO: use from=xxx&limit=1000 and before=xxxx&limit=1000
+    TODO: listRootDirectory: use from=xxx&limit=1000 and before=xxxx&limit=1000
 TODO: list_root_directory.html: separate the site folders into its own separate section with a "sites" header (non-link).
     Move the "+ create site" button down to the site folders section.
     Now it becomes clear that pagination only works on the site folders, the normal folders are always on top. And when we are in a site folder the site folder section goes away entirely.
