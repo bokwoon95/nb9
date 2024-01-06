@@ -519,6 +519,93 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 
 func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
 	var response fileResponse
+	if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+		var err error
+		response.Files, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format: "SELECT {*}" +
+				" FROM files" +
+				" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
+				" AND is_dir" +
+				" ORDER BY CASE file_path" +
+				" WHEN {notes} THEN 1" +
+				" WHEN {pages} THEN 2" +
+				" WHEN {posts} THEN 3" +
+				" WHEN {themes} THEN 4" +
+				" WHEN {output} THEN 5" +
+				" END",
+			Values: []any{
+				sq.StringParam("notes", path.Join(sitePrefix, "notes")),
+				sq.StringParam("pages", path.Join(sitePrefix, "pages")),
+				sq.StringParam("posts", path.Join(sitePrefix, "posts")),
+				sq.StringParam("themes", path.Join(sitePrefix, "output/themes")),
+				sq.StringParam("output", path.Join(sitePrefix, "output")),
+			},
+		}, func(row *sq.Row) fileEntry {
+			return fileEntry{
+				Name:    strings.Trim(strings.TrimPrefix(row.String("file_path"), sitePrefix), "/"),
+				ModTime: row.Time("mod_time"),
+				IsDir:   true,
+			}
+		})
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		if nbrew.UsersDB != nil {
+			return
+		}
+		query := sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format: "SELECT {*}" +
+				" FROM files" +
+				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {sitePrefix})" +
+				" AND is_dir" +
+				" AND file_path NOT LIKE '%/notes'" +
+				" AND file_path NOT LIKE '%/pages'" +
+				" AND file_path NOT LIKE '%/posts'" +
+				" AND file_path NOT LIKE '%/output'",
+			Values: []any{
+				sq.StringParam("sitePrefix", sitePrefix),
+			},
+		}
+		from := r.FormValue("from")
+		if from != "" {
+			query = query.Append("AND file_path >= {}", path.Join(sitePrefix, from))
+		}
+		before := r.FormValue("before")
+		if before != "" {
+			query = query.Append("AND file_path <= {}", path.Join(sitePrefix, before))
+		} else {
+			query = query.Append("LIMIT 1001")
+		}
+		response.Sites, err = sq.FetchAll(r.Context(), remoteFS.filesDB, query,
+			func(row *sq.Row) siteEntry {
+				return siteEntry{
+					Name: path.Base(row.String("file_path")),
+				}
+			},
+		)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		if from != "" {
+			response.PreviousSite = from
+		}
+		if before != "" {
+			response.NextSite = before
+		} else if len(response.Sites) > 1000 {
+			response.NextSite = response.Sites[1000].Name
+			response.Sites = response.Sites[:1000]
+		}
+		// In the template:
+		// next => from=$.NextSite&previous=$firstSiteOnCurrentPage
+		// prev => from=$.PreviousSite&before=$firstSiteOnCurrentPage
+		return
+	}
 	if nbrew.UsersDB == nil {
 		remoteFS, ok := nbrew.FS.(*RemoteFS)
 		if !ok {
@@ -620,11 +707,13 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		} else {
 			query = query.Append("LIMIT 1001")
 		}
-		response.Sites, err = sq.FetchAll(r.Context(), remoteFS.filesDB, query, func(row *sq.Row) siteEntry {
-			return siteEntry{
-				Name: path.Base(row.String("file_path")),
-			}
-		})
+		response.Sites, err = sq.FetchAll(r.Context(), remoteFS.filesDB, query,
+			func(row *sq.Row) siteEntry {
+				return siteEntry{
+					Name: path.Base(row.String("file_path")),
+				}
+			},
+		)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
