@@ -8,6 +8,13 @@ import (
 	"sync"
 )
 
+// https://victoriametrics.com/blog/tsdb-performance-techniques-sync-pool/
+//
+// "The maximum capacity of a cached pool is limited to 2^18 bytes as we’ve
+// found that the RAM cost of storing buffers larger than this limit is not
+// worth the savings of not recreating those buffers."
+const maxPoolableBufferCapacity = 1 << 18
+
 var bufPool = sync.Pool{
 	New: func() any { return &bytes.Buffer{} },
 }

@@ -125,7 +125,7 @@ func (nbrew *Notebrew) setSession(w http.ResponseWriter, r *http.Request, name s
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
@@ -292,7 +292,7 @@ func stripMarkdownStyles(src []byte) string {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
@@ -457,7 +457,7 @@ func executeTemplate(w http.ResponseWriter, r *http.Request, modtime time.Time, 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
@@ -595,7 +595,7 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
@@ -631,7 +631,7 @@ func notAuthenticated(w http.ResponseWriter, r *http.Request) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
@@ -675,7 +675,7 @@ func notAuthorized(w http.ResponseWriter, r *http.Request) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
@@ -712,7 +712,7 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
@@ -749,7 +749,7 @@ func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
@@ -792,7 +792,7 @@ func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
@@ -828,7 +828,7 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()

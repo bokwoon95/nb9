@@ -220,7 +220,7 @@ func (file *RemoteFile) Close() error {
 			if file.buf == nil {
 				return fs.ErrClosed
 			}
-			if file.buf.Len() <= 1<<18 {
+			if file.buf.Len() <= maxPoolableBufferCapacity {
 				bufPool.Put(file.buf)
 			}
 			file.buf = nil
@@ -230,7 +230,7 @@ func (file *RemoteFile) Close() error {
 			}
 			gzipReaderPool.Put(file.gzipReader)
 			file.gzipReader = nil
-			if file.buf.Len() <= 1<<18 {
+			if file.buf.Len() <= maxPoolableBufferCapacity {
 				bufPool.Put(file.buf)
 			}
 			file.buf = nil
@@ -410,7 +410,7 @@ func (file *RemoteFileWriter) Close() error {
 				return fs.ErrClosed
 			}
 			defer func() {
-				if file.buf.Len() <= 1<<18 {
+				if file.buf.Len() <= maxPoolableBufferCapacity {
 					bufPool.Put(file.buf)
 				}
 				file.buf = nil
@@ -426,7 +426,7 @@ func (file *RemoteFileWriter) Close() error {
 			defer func() {
 				gzipWriterPool.Put(file.gzipWriter)
 				file.gzipWriter = nil
-				if file.buf.Len() <= 1<<18 {
+				if file.buf.Len() <= maxPoolableBufferCapacity {
 					bufPool.Put(file.buf)
 				}
 				file.buf = nil

@@ -791,7 +791,7 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 			buf := bufPool.Get().(*bytes.Buffer)
 			buf.Reset()
 			defer func() {
-				if buf.Len() <= 1<<18 {
+				if buf.Len() <= maxPoolableBufferCapacity {
 					bufPool.Put(buf)
 				}
 			}()
@@ -843,7 +843,7 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 		buf := bufPool.Get().(*bytes.Buffer)
 		buf.Reset()
 		defer func() {
-			if buf.Len() <= 1<<18 {
+			if buf.Len() <= maxPoolableBufferCapacity {
 				bufPool.Put(buf)
 			}
 		}()
@@ -1022,7 +1022,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 						buf := bufPool.Get().(*bytes.Buffer)
 						buf.Reset()
 						defer func() {
-							if buf.Len() <= 1<<18 {
+							if buf.Len() <= maxPoolableBufferCapacity {
 								bufPool.Put(buf)
 							}
 						}()

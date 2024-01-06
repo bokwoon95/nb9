@@ -358,7 +358,7 @@ func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefi
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
-		if buf.Len() <= 1<<18 {
+		if buf.Len() <= maxPoolableBufferCapacity {
 			bufPool.Put(buf)
 		}
 	}()
