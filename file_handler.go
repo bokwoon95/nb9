@@ -548,13 +548,19 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				IsDir:   true,
 			}
 		})
+		// listDirectory:
+		// sort=name&order=desc&from=xxxx&limit=1000
+		// sort=name&order=desc&before=xxxx&limit=1000
+		// listRootDirectory:
+		// from=xxxx&limit=1000
+		// before=xxxx&limit=1000
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
 		}
 		if nbrew.UsersDB != nil {
-			return
+		} else {
 		}
 		query := sq.Query{
 			Dialect: remoteFS.filesDialect,
