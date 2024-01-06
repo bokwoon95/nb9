@@ -406,19 +406,6 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 				return
 			}
 		case "application/x-www-form-urlencoded", "multipart/form-data":
-			if contentType == "multipart/form-data" {
-				err := r.ParseMultipartForm(10 << 20 /* 10 MB */)
-				if err != nil {
-					badRequest(w, r, err)
-					return
-				}
-			} else {
-				err := r.ParseForm()
-				if err != nil {
-					badRequest(w, r, err)
-					return
-				}
-			}
 			request.Content = r.FormValue("content")
 		default:
 			unsupportedContentType(w, r)
@@ -582,9 +569,82 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			}
 			return
 		}
+		var err error
+		response.Files, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format: "SELECT {*}" +
+				" FROM files" +
+				" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
+				" AND is_dir" +
+				" ORDER BY CASE file_path" +
+				" WHEN {notes} THEN 1" +
+				" WHEN {pages} THEN 2" +
+				" WHEN {posts} THEN 3" +
+				" WHEN {themes} THEN 4" +
+				" WHEN {output} THEN 5" +
+				" END",
+			Values: []any{
+				sq.StringParam("notes", path.Join(sitePrefix, "notes")),
+				sq.StringParam("pages", path.Join(sitePrefix, "pages")),
+				sq.StringParam("posts", path.Join(sitePrefix, "posts")),
+				sq.StringParam("themes", path.Join(sitePrefix, "output/themes")),
+				sq.StringParam("output", path.Join(sitePrefix, "output")),
+			},
+		}, func(row *sq.Row) fileEntry {
+			return fileEntry{
+				Name:    strings.Trim(strings.TrimPrefix(row.String("file_path"), sitePrefix), "/"),
+				ModTime: row.Time("mod_time"),
+				IsDir:   true,
+			}
+		})
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		query := sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format: "SELECT {*}" +
+				" FROM files" +
+				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {sitePrefix})" +
+				" AND is_dir" +
+				" AND file_path NOT LIKE '%/notes'" +
+				" AND file_path NOT LIKE '%/pages'" +
+				" AND file_path NOT LIKE '%/posts'" +
+				" AND file_path NOT LIKE '%/output'",
+		}
+		from := r.FormValue("from")
+		if from != "" {
+			query = query.Append("AND file_path >= {}", path.Join(sitePrefix, from))
+		}
+		before := r.FormValue("before")
+		if before != "" {
+			query = query.Append("AND file_path <= {}", path.Join(sitePrefix, before))
+		} else {
+			query = query.Append("LIMIT 1001")
+		}
+		response.Sites, err = sq.FetchAll(r.Context(), remoteFS.filesDB, query, func(row *sq.Row) siteEntry {
+			return siteEntry{
+				Name:    path.Base(row.String("file_path")),
+				ModTime: row.Time("mod_time"),
+			}
+		})
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		if from != "" {
+			response.PreviousSite = from
+		}
+		if before != "" {
+			response.NextSite = before
+		} else if len(response.Sites) > 1000 {
+			response.NextSite = response.Sites[1000].Name
+			response.Sites = response.Sites[:1000]
+		}
 		// start = p1, next = p2
 		// from=p2: start = p2, next = p3, prev = p1 (next => from=p3) (prev => from=p1&before=p2 so we don't miss out on anything inserted in between)
-		_ = remoteFS // TODO: optimized routines for remoteFS.
 		// If no users database, just list everything that is either notes/pages/posts/output or is site folder.
 		// - but if it's a RemoteFS, we can paginate everything in the directory (1000 items per page). No reverse or inverse.
 		return

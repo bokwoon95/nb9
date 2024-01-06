@@ -121,7 +121,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			head, tail, _ = strings.Cut(filePath, "/")
 		}
 
-		// If the database is present, check if the user is authorized to
+		// If the users database is present, check if the user is authorized to
 		// access the files for this site.
 		var username string
 		if nbrew.UsersDB != nil {
