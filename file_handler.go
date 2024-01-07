@@ -822,6 +822,9 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 	// .html .css .js .md .txt .svg .ico .eot .otf .ttf .atom .webmanifest
 
 	if remoteFile, ok := file.(*RemoteFile); ok {
+		// If file is a RemoteFile and is not fulltext indexed, its contents
+		// are already gzipped. We can reach directly into its buffer and skip
+		// the gzipping step.
 		if !remoteFile.isFulltextIndexed {
 			hasher := hashPool.Get().(hash.Hash)
 			hasher.Reset()
@@ -847,7 +850,8 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 		hasher.Reset()
 		defer hashPool.Put(hasher)
 		var buf *bytes.Buffer
-		gzippedSize := fileInfo.Size() >> 1 // Estimate that gzip will halve the payload size.
+		// gzip will at least halve the size of what needs to be buffered
+		gzippedSize := fileInfo.Size() >> 1
 		if gzippedSize > maxPoolableBufferCapacity {
 			buf = bytes.NewBuffer(make([]byte, 0, fileInfo.Size()))
 		} else {

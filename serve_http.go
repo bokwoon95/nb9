@@ -17,7 +17,6 @@ import (
 	"strings"
 
 	"github.com/bokwoon95/nb9/sq"
-	"golang.org/x/crypto/blake2b"
 )
 
 func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +44,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	urlPath := strings.Trim(r.URL.Path, "/")
 
 	// Add request method and url to the logger.
 	logger := *nbrew.Logger.Load()
@@ -72,22 +72,44 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Special case: make these files available on the root path of the main
 	// domain.
 	if r.Host == nbrew.CMSDomain {
-		switch strings.Trim(r.URL.Path, "/") {
+		switch urlPath {
 		case "notebrew.webmanifest":
-			w.Header().Add("Cache-Control", "max-age: 2592000, stale-while-revalidate" /* 1 month */)
-			staticFile(w, r, rootFS, "static/notebrew.webmanifest")
+			file, err := rootFS.Open("static/notebrew.webmanifest")
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			defer file.Close()
+			fileInfo, err := file.Stat()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			serveFile(w, r, file, fileInfo, fileTypes[".webmanifest"], "max-age: 2592000, stale-while-revalidate" /* 1 month */)
 			return
 		case "apple-touch-icon.png":
-			w.Header().Add("Cache-Control", "max-age: 2592000, stale-while-revalidate" /* 1 month */)
-			staticFile(w, r, rootFS, "static/icons/apple-touch-icon.png")
+			file, err := rootFS.Open("static/icons/apple-touch-icon.png")
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			defer file.Close()
+			fileInfo, err := file.Stat()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			serveFile(w, r, file, fileInfo, fileTypes[".png"], "max-age: 2592000, stale-while-revalidate" /* 1 month */)
 			return
 		}
 	}
 
-	urlPath := strings.Trim(r.URL.Path, "/")
-	head, tail, _ := strings.Cut(urlPath, "/")
-
 	// Handle the /users/* route on the main domain.
+	head, tail, _ := strings.Cut(urlPath, "/")
 	if r.Host == nbrew.CMSDomain && head == "users" {
 		switch tail {
 		case "signup":
@@ -108,8 +130,29 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		filePath := tail
 		head, tail, _ := strings.Cut(filePath, "/")
 		if head == "static" {
-			w.Header().Add("Cache-Control", "max-age: 31536000, stale-while-revalidate" /* 1 year */)
-			staticFile(w, r, rootFS, filePath)
+			if r.Method != "GET" {
+				methodNotAllowed(w, r)
+				return
+			}
+			fileType, ok := fileTypes[path.Ext(filePath)]
+			if !ok {
+				notFound(w, r)
+				return
+			}
+			file, err := rootFS.Open(filePath)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			defer file.Close()
+			fileInfo, err := file.Stat()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			serveFile(w, r, file, fileInfo, fileType, "max-age: 2592000, stale-while-revalidate" /* 30 days */)
 			return
 		}
 
@@ -465,127 +508,4 @@ func MatchWildcard(subject, wildcard string) bool {
 		}
 	}
 	return false
-}
-
-func staticFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) {
-	if r.Method != "GET" {
-		methodNotAllowed(w, r)
-		return
-	}
-	fileType, ok := fileTypes[path.Ext(name)]
-	if !ok {
-		notFound(w, r)
-		return
-	}
-
-	file, err := fsys.Open(name)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			notFound(w, r)
-			return
-		}
-		getLogger(r.Context()).Error(err.Error())
-		internalServerError(w, r, err)
-		return
-	}
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		getLogger(r.Context()).Error(err.Error())
-		internalServerError(w, r, err)
-		return
-	}
-	if fileInfo.IsDir() {
-		notFound(w, r)
-		return
-	}
-
-	hasher := hashPool.Get().(hash.Hash)
-	hasher.Reset()
-	defer hashPool.Put(hasher)
-
-	if !fileType.IsGzippable {
-		if fileSeeker, ok := file.(io.ReadSeeker); ok {
-			_, err := io.Copy(hasher, fileSeeker)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			_, err = fileSeeker.Seek(0, io.SeekStart)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			var b [blake2b.Size256]byte
-			if _, ok := w.Header()["Content-Type"]; !ok {
-				w.Header().Set("Content-Type", fileType.ContentType)
-			}
-			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), fileSeeker)
-			return
-		}
-		if file, ok := file.(*RemoteFile); ok {
-			_, err := hasher.Write(file.buf.Bytes())
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			var b [blake2b.Size256]byte
-			if _, ok := w.Header()["Content-Type"]; !ok {
-				w.Header().Set("Content-Type", fileType.ContentType)
-			}
-			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(file.buf.Bytes()))
-			return
-		}
-	}
-
-	// TODO: calculate the ETag only if the fileInfo.Size() is less than or
-	// equal to 1 MB, then it is safe to buffer the file contents.
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer func() {
-		if buf.Cap() <= maxPoolableBufferCapacity {
-			bufPool.Put(buf)
-		}
-	}()
-
-	multiWriter := io.MultiWriter(hasher, buf)
-	if fileType.IsGzippable {
-		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-		gzipWriter.Reset(multiWriter)
-		defer gzipWriterPool.Put(gzipWriter)
-		_, err = io.Copy(gzipWriter, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		err = gzipWriter.Close()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-	} else {
-		_, err = io.Copy(multiWriter, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-	}
-	var b [blake2b.Size256]byte
-	if _, ok := w.Header()["Content-Type"]; !ok {
-		w.Header().Set("Content-Type", fileType.ContentType)
-	}
-	if fileType.IsGzippable {
-		w.Header().Set("Content-Encoding", "gzip")
-	}
-	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-	http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
 }

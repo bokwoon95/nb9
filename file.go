@@ -16,7 +16,7 @@ import (
 
 func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, fileInfo fs.FileInfo) {
 	type FileEntry struct {
-		Name string `json:"name,omitempty"`
+		Name        string    `json:"name,omitempty"`
 		ContentType string    `json:"contentType,omitempty"`
 		Size        int64     `json:"size,omitempty"`
 		ModTime     time.Time `json:"modTime,omitempty"`
@@ -262,10 +262,32 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		}
 
 		if !isEditableText {
-			// TODO: currently this is making us serve .html files always as
-			// text/html instead of text/plain, but once we switch over to
-			// fileHandler everything should work.
-			staticFile(w, r, nbrew.FS, path.Join(sitePrefix, filePath))
+			fileType := fileTypes[path.Ext(filePath)]
+			if fileType.Ext == ".html" {
+				fileType.ContentType = "text/plain; charset=utf-8"
+			}
+			file, err := nbrew.FS.WithContext(r.Context()).Open(path.Join(sitePrefix, filePath))
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					notFound(w, r)
+					return
+				}
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			defer file.Close()
+			fileInfo, err := file.Stat()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			if fileInfo.IsDir() {
+				notFound(w, r)
+				return
+			}
+			serveFile(w, r, file, fileInfo, fileType, "no-cache, must-revalidate")
 			return
 		}
 
