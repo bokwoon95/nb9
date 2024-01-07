@@ -1136,6 +1136,11 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		writeResponse(w, r, response)
 		return
 	}
+
+	// TODO: handle the case when neither from nor before are provided (also
+	// taking into account sort and order).
+	writeResponse(w, r, response)
+	return
 }
 
 func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, filePath, content string) error {
