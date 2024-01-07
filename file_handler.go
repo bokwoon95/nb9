@@ -51,6 +51,8 @@ type fileResponse struct {
 	IsDir       bool           `json:"isDir,omitempty"`
 	ModTime     time.Time      `json:"modTime,omitempty"`
 
+	Sort            string      `json:"sort,omitempty"`
+	Order           string      `json:"order,omitempty"`
 	Files           []fileEntry `json:"fileEntries,omitempty"`
 	HasPreviousFile bool        `json:"hasPreviousFile,omitempty"`
 	NextFile        string      `json:"nextFile,omitempty"`
@@ -90,11 +92,11 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			methodNotAllowed(w, r)
 			return
 		}
-		if filePath == "" {
-			nbrew.listRootDirectory(w, r, username, sitePrefix, fileInfo.ModTime())
+		if filePath != "" {
+			nbrew.listDirectory(w, r, username, sitePrefix, filePath, fileInfo.ModTime())
 			return
 		}
-		nbrew.listDirectory(w, r, username, sitePrefix, filePath, fileInfo.ModTime())
+		nbrew.listRootDirectory(w, r, username, sitePrefix, fileInfo.ModTime())
 		return
 	}
 	fileType, ok := fileTypes[path.Ext(filePath)]
@@ -664,8 +666,9 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		Dialect: remoteFS.filesDialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
-			" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
+			" WHERE parent_id IS NULL" +
 			" AND is_dir" +
+			" AND file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
 			" ORDER BY CASE file_path" +
 			" WHEN {notes} THEN 1" +
 			" WHEN {pages} THEN 2" +
@@ -742,7 +745,11 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		g.Go(func() error {
 			hasPreviousSite, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
-				Format:  "SELECT 1 FROM files WHERE file_path < {from}",
+				Format: "SELECT 1" +
+					" FROM files" +
+					" WHERE parent_id IS NULL" +
+					" AND is_dir" +
+					" AND file_path < {from}",
 				Values: []any{
 					sq.StringParam("from", from),
 				},
@@ -753,7 +760,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			response.HasPreviousSite = hasPreviousSite
 			return nil
 		})
-		err = g.Wait()
+		err := g.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -765,12 +772,6 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 
 	if before != "" {
 		g, ctx := errgroup.WithContext(r.Context())
-		err := g.Wait()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
 		g.Go(func() error {
 			response.Sites, err = sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
@@ -783,7 +784,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					" ORDER BY file_path" +
 					" LIMIT {limit} + 1",
 				Values: []any{
-					sq.StringParam("from", from),
+					sq.StringParam("before", before),
 					sq.IntParam("limit", response.Limit),
 				},
 			}, func(row *sq.Row) siteEntry {
@@ -804,20 +805,29 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		g.Go(func() error {
 			nextSite, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
-				Format:  "SELECT {*} FROM files WHERE file_path >= {before} ORDER BY file_path LIMIT 1",
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id IS NULL" +
+					" AND is_dir" +
+					" AND file_path >= {before}" +
+					" ORDER BY file_path" +
+					" LIMIT 1",
 				Values: []any{
-					sq.StringParam("from", from),
+					sq.StringParam("before", before),
 				},
 			}, func(row *sq.Row) string {
 				return row.String("file_path")
 			})
 			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return nil
+				}
 				return err
 			}
 			response.NextSite = nextSite
 			return nil
 		})
-		err = g.Wait()
+		err := g.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -859,9 +869,273 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	return
 }
 
-// TODO: copy over directory.go into listDirectory().
 func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
-	// sort=x&order=y&from=z
+	writeResponse := func(w http.ResponseWriter, r *http.Request, response fileResponse) {
+		if r.Form.Has("api") {
+			w.Header().Set("Content-Type", "application/json")
+			encoder := json.NewEncoder(w)
+			encoder.SetEscapeHTML(false)
+			err := encoder.Encode(&response)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+			}
+			return
+		}
+		referer := getReferer(r)
+		funcMap := map[string]any{
+			"join":             path.Join,
+			"dir":              path.Dir,
+			"base":             path.Base,
+			"ext":              path.Ext,
+			"hasPrefix":        strings.HasPrefix,
+			"hasSuffix":        strings.HasSuffix,
+			"trimPrefix":       strings.TrimPrefix,
+			"fileSizeToString": fileSizeToString,
+			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
+			"baselineJS":       func() template.JS { return template.JS(baselineJS) },
+			"referer":          func() string { return referer },
+			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
+			"head": func(s string) string {
+				head, _, _ := strings.Cut(s, "/")
+				return head
+			},
+			"tail": func(s string) string {
+				_, tail, _ := strings.Cut(s, "/")
+				return tail
+			},
+		}
+		tmpl, err := template.New("list_directory.html").Funcs(funcMap).ParseFS(rootFS, "embed/list_directory.html")
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		executeTemplate(w, r, modTime, tmpl, &response)
+	}
+
+	head, _, _ := strings.Cut(filePath, "/")
+	if head != "notes" && head != "pages" && head != "posts" && head != "output" {
+		notFound(w, r)
+		return
+	}
+
+	var response fileResponse
+	response.Sort = strings.ToLower(strings.TrimSpace(r.FormValue("sort")))
+	if response.Sort == "" {
+		cookie, _ := r.Cookie("sort")
+		if cookie != nil {
+			response.Sort = cookie.Value
+		}
+	}
+	switch response.Sort {
+	case "name", "edited":
+		break
+	case "created":
+		if head != "posts" {
+			response.Sort = "name"
+		}
+	default:
+		if head == "posts" {
+			response.Sort = "created"
+		} else {
+			response.Sort = "name"
+		}
+	}
+	response.Order = strings.ToLower(strings.TrimSpace(r.Form.Get("order")))
+	if response.Order == "" {
+		cookie, _ := r.Cookie("order")
+		if cookie != nil {
+			response.Order = cookie.Value
+		}
+	}
+	switch response.Order {
+	case "asc", "desc":
+		break
+	default:
+		if response.Sort == "created" || response.Sort == "edited" {
+			response.Order = "desc"
+		} else {
+			response.Order = "asc"
+		}
+	}
+
+	remoteFS, ok := nbrew.FS.(*RemoteFS)
+	if !ok {
+		dirEntries, err := nbrew.FS.WithContext(r.Context()).ReadDir(path.Join(sitePrefix, filePath))
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		for _, dirEntry := range dirEntries {
+			fileInfo, err := dirEntry.Info()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			file := fileEntry{
+				Name:    fileInfo.Name(),
+				Size:    fileInfo.Size(),
+				ModTime: fileInfo.ModTime(),
+				IsDir:   fileInfo.IsDir(),
+			}
+			if file.IsDir {
+				response.Files = append(response.Files, file)
+				continue
+			}
+			_, ok := fileTypes[path.Ext(file.Name)]
+			if !ok {
+				continue
+			}
+			response.Files = append(response.Files, file)
+		}
+		// TODO: based on response.Sort and response.Order, sort the
+		// response.Files slice before calling writeResponse().
+		writeResponse(w, r, response)
+		return
+	}
+
+	from := r.FormValue("from")
+	before := r.FormValue("before")
+	response.Limit, _ = strconv.Atoi(r.FormValue("limit"))
+	if response.Limit <= 0 {
+		response.Limit = 1000
+	}
+
+	// TODO: figure out how we are going to accomodate the additional
+	// dimensions of response.Sort and response.Order into our queries.
+
+	if from != "" {
+		g, ctx := errgroup.WithContext(r.Context())
+		g.Go(func() error {
+			files, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
+					" AND file_path >= {fromPath}" +
+					" ORDER BY file_path" +
+					" LIMIT {limit} + 1",
+				Values: []any{
+					sq.StringParam("filePath", filePath),
+					sq.StringParam("fromPath", path.Join(filePath, from)),
+					sq.IntParam("limit", response.Limit),
+				},
+			}, func(row *sq.Row) fileEntry {
+				return fileEntry{
+					Name:    row.String("files.file_path"),
+					Size:    row.Int64("size"),
+					ModTime: row.Time("mod_time"),
+					IsDir:   row.Bool("is_dir"),
+				}
+			})
+			if err != nil {
+				return err
+			}
+			response.Files = files
+			if len(response.Files) > response.Limit {
+				response.NextFile = response.Files[response.Limit].Name
+				response.Files = response.Files[:response.Limit]
+			}
+			return nil
+		})
+		g.Go(func() error {
+			hasPreviousFile, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT 1" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
+					" AND file_path < {fromPath}",
+				Values: []any{
+					sq.StringParam("filePath", filePath),
+					sq.StringParam("fromPath", path.Join(filePath, from)),
+				},
+			})
+			if err != nil {
+				return err
+			}
+			response.HasPreviousFile = hasPreviousFile
+			return nil
+		})
+		err := g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		writeResponse(w, r, response)
+		return
+	}
+
+	if before != "" {
+		g, ctx := errgroup.WithContext(r.Context())
+		err := g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		g.Go(func() error {
+			files, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
+					" AND file_path < {beforePath}" +
+					" ORDER BY file_path" +
+					" LIMIT {limit} + 1",
+				Values: []any{
+					sq.StringParam("filePath", filePath),
+					sq.StringParam("beforePath", path.Join(filePath, before)),
+					sq.IntParam("limit", response.Limit),
+				},
+			}, func(row *sq.Row) fileEntry {
+				return fileEntry{
+					Name:    row.String("files.file_path"),
+					Size:    row.Int64("size"),
+					ModTime: row.Time("mod_time"),
+					IsDir:   row.Bool("is_dir"),
+				}
+			})
+			if err != nil {
+				return err
+			}
+			response.Files = files
+			if len(response.Files) > response.Limit {
+				response.HasPreviousFile = true
+				response.Files = response.Files[1:]
+			}
+			return nil
+		})
+		g.Go(func() error {
+			nextFile, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
+					" AND file_path >= {beforePath}" +
+					" ORDER BY file_path" +
+					" LIMIT 1",
+				Values: []any{
+					sq.StringParam("beforePath", path.Join(filePath, before)),
+				},
+			}, func(row *sq.Row) string {
+				return row.String("file_path")
+			})
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return nil
+				}
+				return err
+			}
+			response.NextFile = nextFile
+			return nil
+		})
+		writeResponse(w, r, response)
+		return
+	}
 }
 
 func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, filePath, content string) error {
