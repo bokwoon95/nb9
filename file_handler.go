@@ -325,8 +325,6 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			switch fileType.Ext {
 			case ".html":
 				cacheControl = "no-cache, must-revalidate"
-				// Special case: display all .html files as plaintext so that their raw
-				// contents are shown instead of being rendered by the browser.
 				fileType.ContentType = "text/plain; charset=utf-8"
 			case ".eot", ".otf", ".ttf", ".woff", ".woff2":
 				cacheControl = "no-cache, stale-while-revalidate, max-age=2592000" /* 30 days */
