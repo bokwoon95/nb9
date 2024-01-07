@@ -91,7 +91,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			return
 		}
 		if filePath == "" {
-			nbrew.listRootDirectory(w, r, username, sitePrefix, filePath, fileInfo.ModTime())
+			nbrew.listRootDirectory(w, r, username, sitePrefix, fileInfo.ModTime())
 			return
 		}
 		nbrew.listDirectory(w, r, username, sitePrefix, filePath, fileInfo.ModTime())
@@ -522,24 +522,8 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 	}
 }
 
-func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
+func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix string, modTime time.Time) {
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response fileResponse) {
-		if sitePrefix == "" && nbrew.UsersDB != nil {
-			authorizedForRootSite := false
-			n := 0
-			for _, site := range response.Sites {
-				if site.Name == "" {
-					authorizedForRootSite = true
-					continue
-				}
-				response.Sites[n] = site
-				n++
-			}
-			response.Sites = response.Sites[:n]
-			if !authorizedForRootSite {
-				response.Files = response.Files[:0]
-			}
-		}
 		if r.Form.Has("api") {
 			w.Header().Set("Content-Type", "application/json")
 			encoder := json.NewEncoder(w)
@@ -820,7 +804,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		g.Go(func() error {
 			nextSite, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
-				Format:  "SELECT {*} FROM files WHERE file_path = {before} ORDER BY file_path LIMIT 1",
+				Format:  "SELECT {*} FROM files WHERE file_path >= {before} ORDER BY file_path LIMIT 1",
 				Values: []any{
 					sq.StringParam("from", from),
 				},
