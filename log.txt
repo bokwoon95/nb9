@@ -25,9 +25,6 @@ TODO: list_root_directory.html: separate the site folders into its own separate 
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
 TODO: main.go: for filesDB on SQLite, we should set the page size to 8192 instead for best blob performance (https://www.sqlite.org/intern-v-extern-blob.html)
 
-cdn.nbrew.io is used to display cdn sites
-never cache a page on the cdn as this would cause bokwoon.nbrew.io and www.nbrew.io/@bokwoon to display the same pages, which would make it confusing for the Google crawler/bad for SEO but also removes the sandboxing effect that subdomains have to separate site content. Hence, cdn.nbrew.io should only ever serves assets (URLs with extensions), and it will return 404 for pages (URLs without extensions). The cdn will never be able to pull page data from the www.nbrew.io, only asset data.
-
 notebrew-config/
 notebrew-users.db
 notebrew-files/

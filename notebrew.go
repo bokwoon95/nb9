@@ -525,6 +525,8 @@ func getReferer(r *http.Request) string {
 	uri.Host = r.Host
 	uri.Fragment = ""
 	uri.User = nil
+	// If the referer is same as the current page, return an empty string so
+	// that the user doesn't keep pressing back to the same page.
 	if referer == uri.String() {
 		return ""
 	}

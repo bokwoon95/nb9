@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,8 +38,8 @@ type fileEntry struct {
 }
 
 type siteEntry struct {
-	Name       string `json:"name"`
-	IsUsername bool   `json:"isUsername,omitempty"`
+	Name  string `json:"name"`
+	Owner string `json:"owner"`
 }
 
 type fileResponse struct {
@@ -50,10 +51,13 @@ type fileResponse struct {
 	IsDir       bool           `json:"isDir,omitempty"`
 	ModTime     time.Time      `json:"modTime,omitempty"`
 
-	Files        []fileEntry `json:"fileEntries,omitempty"`
-	Sites        []siteEntry `json:"sites,omitempty"`
-	PreviousSite string      `json:"previousSite,omitempty"`
-	NextSite     string      `json:"nextSite,omitempty"`
+	Files           []fileEntry `json:"fileEntries,omitempty"`
+	HasPreviousFile bool        `json:"hasPreviousFile,omitempty"`
+	NextFile        string      `json:"nextFile,omitempty"`
+	Sites           []siteEntry `json:"sites,omitempty"`
+	HasPreviousSite bool        `json:"hasPreviousSite,omitempty"`
+	NextSite        string      `json:"nextSite,omitempty"`
+	Limit           int         `json:"limit,omitempty"`
 
 	Content        string      `json:"content,omitempty"`
 	URL            string      `json:"url,omitempty"`
@@ -87,10 +91,10 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			return
 		}
 		if filePath == "" {
-			nbrew.listRootDirectory(w, r, username, sitePrefix, filePath)
+			nbrew.listRootDirectory(w, r, username, sitePrefix, filePath, fileInfo.ModTime())
 			return
 		}
-		nbrew.listDirectory(w, r, username, sitePrefix, filePath)
+		nbrew.listDirectory(w, r, username, sitePrefix, filePath, fileInfo.ModTime())
 		return
 	}
 	fileType, ok := fileTypes[path.Ext(filePath)]
@@ -518,235 +522,361 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 	}
 }
 
-func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
-	var response fileResponse
-	if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-		var err error
-		response.Files, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
-			Format: "SELECT {*}" +
-				" FROM files" +
-				" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
-				" AND is_dir" +
-				" ORDER BY CASE file_path" +
-				" WHEN {notes} THEN 1" +
-				" WHEN {pages} THEN 2" +
-				" WHEN {posts} THEN 3" +
-				" WHEN {themes} THEN 4" +
-				" WHEN {output} THEN 5" +
-				" END",
-			Values: []any{
-				sq.StringParam("notes", path.Join(sitePrefix, "notes")),
-				sq.StringParam("pages", path.Join(sitePrefix, "pages")),
-				sq.StringParam("posts", path.Join(sitePrefix, "posts")),
-				sq.StringParam("themes", path.Join(sitePrefix, "output/themes")),
-				sq.StringParam("output", path.Join(sitePrefix, "output")),
-			},
-		}, func(row *sq.Row) fileEntry {
-			return fileEntry{
-				Name:    strings.Trim(strings.TrimPrefix(row.String("file_path"), sitePrefix), "/"),
-				ModTime: row.Time("mod_time"),
-				IsDir:   true,
-			}
-		})
-		// listDirectory:
-		// sort=name&order=desc&from=xxxx&limit=1000
-		// sort=name&order=desc&before=xxxx&limit=1000
-		// listRootDirectory:
-		// from=xxxx&limit=1000
-		// before=xxxx&limit=1000
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		if nbrew.UsersDB != nil {
-		} else {
-		}
-		query := sq.Query{
-			Dialect: remoteFS.filesDialect,
-			Format: "SELECT {*}" +
-				" FROM files" +
-				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {sitePrefix})" +
-				" AND is_dir" +
-				" AND file_path NOT LIKE '%/notes'" +
-				" AND file_path NOT LIKE '%/pages'" +
-				" AND file_path NOT LIKE '%/posts'" +
-				" AND file_path NOT LIKE '%/output'",
-			Values: []any{
-				sq.StringParam("sitePrefix", sitePrefix),
-			},
-		}
-		from := r.FormValue("from")
-		if from != "" {
-			query = query.Append("AND file_path >= {}", path.Join(sitePrefix, from))
-		}
-		before := r.FormValue("before")
-		if before != "" {
-			query = query.Append("AND file_path <= {}", path.Join(sitePrefix, before))
-		} else {
-			query = query.Append("LIMIT 1001")
-		}
-		response.Sites, err = sq.FetchAll(r.Context(), remoteFS.filesDB, query,
-			func(row *sq.Row) siteEntry {
-				return siteEntry{
-					Name: path.Base(row.String("file_path")),
-				}
-			},
-		)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		if from != "" {
-			response.PreviousSite = from
-		}
-		if before != "" {
-			response.NextSite = before
-		} else if len(response.Sites) > 1000 {
-			response.NextSite = response.Sites[1000].Name
-			response.Sites = response.Sites[:1000]
-		}
-		// In the template:
-		// next => from=$.NextSite&previous=$firstSiteOnCurrentPage
-		// prev => from=$.PreviousSite&before=$firstSiteOnCurrentPage
-		return
-	}
-	if nbrew.UsersDB == nil {
-		remoteFS, ok := nbrew.FS.(*RemoteFS)
-		if !ok {
-			// TODO: do this in an errgroup.
-			for _, name := range []string{"notes", "pages", "posts", "output/themes", "output"} {
-				fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, name))
-				if err != nil {
-					if !errors.Is(err, fs.ErrNotExist) {
-						getLogger(r.Context()).Error(err.Error())
-						internalServerError(w, r, err)
-						return
-					}
-				}
-				if !fileInfo.IsDir() {
+func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
+	writeResponse := func(w http.ResponseWriter, r *http.Request, response fileResponse) {
+		if sitePrefix == "" && nbrew.UsersDB != nil {
+			authorizedForRootSite := false
+			n := 0
+			for _, site := range response.Sites {
+				if site.Name == "" {
+					authorizedForRootSite = true
 					continue
 				}
-				response.Files = append(response.Files, fileEntry{
-					Name:    name,
-					ModTime: fileInfo.ModTime(),
-					IsDir:   true,
-				})
+				response.Sites[n] = site
+				n++
 			}
-			dirEntries, err := nbrew.FS.ReadDir(filePath)
+			response.Sites = response.Sites[:n]
+			if !authorizedForRootSite {
+				response.Files = response.Files[:0]
+			}
+		}
+		if r.Form.Has("api") {
+			w.Header().Set("Content-Type", "application/json")
+			encoder := json.NewEncoder(w)
+			encoder.SetEscapeHTML(false)
+			err := encoder.Encode(&response)
 			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+			}
+			return
+		}
+		referer := getReferer(r)
+		funcMap := map[string]any{
+			"join":             path.Join,
+			"dir":              path.Dir,
+			"base":             path.Base,
+			"ext":              path.Ext,
+			"hasPrefix":        strings.HasPrefix,
+			"hasSuffix":        strings.HasSuffix,
+			"trimPrefix":       strings.TrimPrefix,
+			"fileSizeToString": fileSizeToString,
+			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
+			"baselineJS":       func() template.JS { return template.JS(baselineJS) },
+			"referer":          func() string { return referer },
+			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
+			"head": func(s string) string {
+				head, _, _ := strings.Cut(s, "/")
+				return head
+			},
+			"tail": func(s string) string {
+				_, tail, _ := strings.Cut(s, "/")
+				return tail
+			},
+		}
+		tmpl, err := template.New("list_root_directory.html").Funcs(funcMap).ParseFS(rootFS, "embed/list_root_directory.html")
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		executeTemplate(w, r, modTime, tmpl, &response)
+	}
+
+	var response fileResponse
+	if sitePrefix == "" && nbrew.UsersDB != nil {
+		sites, err := sq.FetchAll(r.Context(), nbrew.UsersDB, sq.Query{
+			Dialect: nbrew.UsersDialect,
+			Format: "SELECT {*}" +
+				" FROM site_user" +
+				" JOIN site ON site.site_id = site_user.site_id" +
+				" JOIN users ON users.user_id = site_user.site_id" +
+				" LEFT JOIN site_owner ON site_owner.site_id = site_user.site_id" +
+				" LEFT JOIN users AS owner ON owner.user_id = site_owner.user_id" +
+				" WHERE users.username = {username}" +
+				" ORDER BY site_prefix",
+			Values: []any{
+				sq.StringParam("username", username),
+			},
+		}, func(row *sq.Row) siteEntry {
+			return siteEntry{
+				Name: row.String("CASE"+
+					" WHEN site.site_name LIKE '%.%' THEN site.site_name"+
+					" WHEN site.site_name <> '' THEN {concatSiteName}"+
+					" ELSE ''"+
+					" END AS site_prefix",
+					sq.Param("concatSiteName", sq.DialectExpression{
+						Default: sq.Expr("'@' || site.site_name"),
+						Cases: []sq.DialectCase{{
+							Dialect: "mysql",
+							Result:  sq.Expr("concat('@', site.site_name)"),
+						}},
+					}),
+				),
+				Owner: row.String("owner.username"),
+			}
+		})
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		response.Sites = sites
+		n := slices.IndexFunc(response.Sites, func(site siteEntry) bool { return site.Name == "" })
+		if n < 0 {
+			writeResponse(w, r, response)
+			return
+		}
+		copy(response.Sites[n:], response.Sites[n+1:])
+		response.Sites = response.Sites[:len(response.Sites)-1]
+	}
+
+	remoteFS, ok := nbrew.FS.(*RemoteFS)
+	if !ok {
+		for _, name := range []string{"notes", "pages", "posts", "output/themes", "output"} {
+			fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, name))
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
-			for _, dirEntry := range dirEntries {
-				if !dirEntry.IsDir() {
-					continue
-				}
-				name := dirEntry.Name()
-				if !strings.HasPrefix(name, "@") && !strings.Contains(name, ".") {
-					continue
-				}
+			if !fileInfo.IsDir() {
+				continue
+			}
+			response.Files = append(response.Files, fileEntry{
+				Name:    name,
+				ModTime: fileInfo.ModTime(),
+				IsDir:   true,
+			})
+		}
+
+		if sitePrefix != "" || nbrew.UsersDB != nil {
+			writeResponse(w, r, response)
+			return
+		}
+
+		dirEntries, err := nbrew.FS.WithContext(r.Context()).ReadDir(".")
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		for _, dirEntry := range dirEntries {
+			if !dirEntry.IsDir() {
+				continue
+			}
+			name := dirEntry.Name()
+			if strings.HasPrefix(name, "@") || strings.Contains(name, ".") {
 				response.Sites = append(response.Sites, siteEntry{Name: name})
 			}
-			return
 		}
-		var err error
-		response.Files, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
-			Format: "SELECT {*}" +
-				" FROM files" +
-				" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
-				" AND is_dir" +
-				" ORDER BY CASE file_path" +
-				" WHEN {notes} THEN 1" +
-				" WHEN {pages} THEN 2" +
-				" WHEN {posts} THEN 3" +
-				" WHEN {themes} THEN 4" +
-				" WHEN {output} THEN 5" +
-				" END",
-			Values: []any{
-				sq.StringParam("notes", path.Join(sitePrefix, "notes")),
-				sq.StringParam("pages", path.Join(sitePrefix, "pages")),
-				sq.StringParam("posts", path.Join(sitePrefix, "posts")),
-				sq.StringParam("themes", path.Join(sitePrefix, "output/themes")),
-				sq.StringParam("output", path.Join(sitePrefix, "output")),
-			},
-		}, func(row *sq.Row) fileEntry {
-			return fileEntry{
-				Name:    strings.Trim(strings.TrimPrefix(row.String("file_path"), sitePrefix), "/"),
-				ModTime: row.Time("mod_time"),
-				IsDir:   true,
-			}
-		})
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		// TODO: in the case of users DB being present, we must paginate the
-		// users DB instead. The users DB does not offer any modTime, so the
-		// siteEntry should not contain any modTime.
-		// TODO: instead of handling whether usersDB is present or not present
-		// at the top level, handle whether FS is remoteFS or not at the top
-		// level. The check whether usersDB is present to handle how we should
-		// display the site folders to the user.
-		query := sq.Query{
-			Dialect: remoteFS.filesDialect,
-			Format: "SELECT {*}" +
-				" FROM files" +
-				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {sitePrefix})" +
-				" AND is_dir" +
-				" AND file_path NOT LIKE '%/notes'" +
-				" AND file_path NOT LIKE '%/pages'" +
-				" AND file_path NOT LIKE '%/posts'" +
-				" AND file_path NOT LIKE '%/output'",
-		}
-		from := r.FormValue("from")
-		if from != "" {
-			query = query.Append("AND file_path >= {}", path.Join(sitePrefix, from))
-		}
-		before := r.FormValue("before")
-		if before != "" {
-			query = query.Append("AND file_path <= {}", path.Join(sitePrefix, before))
-		} else {
-			query = query.Append("LIMIT 1001")
-		}
-		response.Sites, err = sq.FetchAll(r.Context(), remoteFS.filesDB, query,
-			func(row *sq.Row) siteEntry {
-				return siteEntry{
-					Name: path.Base(row.String("file_path")),
-				}
-			},
-		)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		if from != "" {
-			response.PreviousSite = from
-		}
-		if before != "" {
-			response.NextSite = before
-		} else if len(response.Sites) > 1000 {
-			response.NextSite = response.Sites[1000].Name
-			response.Sites = response.Sites[:1000]
-		}
-		// NextSite determines whether the next button exists (from=$.NextSite)
-		// PreviousSite determines whether the previous button exists (from=$.PreviousSite&before=$.FirstSiteOnCurrentPage)
-		// start = p1, next = p2
-		// from=p2: start = p2, next = p3, prev = p1 (next => from=p3) (prev => from=p1&before=p2 so we don't miss out on anything inserted in between)
-		// If no users database, just list everything that is either notes/pages/posts/output or is site folder.
-		// - but if it's a RemoteFS, we can paginate everything in the directory (1000 items per page). No reverse or inverse.
 		return
 	}
+
+	files, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
+		Dialect: remoteFS.filesDialect,
+		Format: "SELECT {*}" +
+			" FROM files" +
+			" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
+			" AND is_dir" +
+			" ORDER BY CASE file_path" +
+			" WHEN {notes} THEN 1" +
+			" WHEN {pages} THEN 2" +
+			" WHEN {posts} THEN 3" +
+			" WHEN {themes} THEN 4" +
+			" WHEN {output} THEN 5" +
+			" END",
+		Values: []any{
+			sq.StringParam("notes", path.Join(sitePrefix, "notes")),
+			sq.StringParam("pages", path.Join(sitePrefix, "pages")),
+			sq.StringParam("posts", path.Join(sitePrefix, "posts")),
+			sq.StringParam("themes", path.Join(sitePrefix, "output/themes")),
+			sq.StringParam("output", path.Join(sitePrefix, "output")),
+		},
+	}, func(row *sq.Row) fileEntry {
+		return fileEntry{
+			Name:    strings.Trim(strings.TrimPrefix(row.String("file_path"), sitePrefix), "/"),
+			ModTime: row.Time("mod_time"),
+			IsDir:   true,
+		}
+	})
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	response.Files = files
+
+	if sitePrefix != "" || nbrew.UsersDB != nil {
+		writeResponse(w, r, response)
+		return
+	}
+
+	from := r.FormValue("from")
+	before := r.FormValue("before")
+	response.Limit, _ = strconv.Atoi(r.FormValue("limit"))
+	if response.Limit <= 0 {
+		response.Limit = 1000
+	}
+
+	if from != "" {
+		g, ctx := errgroup.WithContext(r.Context())
+		g.Go(func() error {
+			sites, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id IS NULL" +
+					" AND is_dir" +
+					" AND (file_path LIKE '@%' OR file_path LIKE %.%')" +
+					" AND file_path >= {from}" +
+					" ORDER BY file_path" +
+					" LIMIT {limit} + 1",
+				Values: []any{
+					sq.StringParam("from", from),
+					sq.IntParam("limit", response.Limit),
+				},
+			}, func(row *sq.Row) siteEntry {
+				return siteEntry{
+					Name:  row.String("files.file_path"),
+					Owner: row.String("owner.username"),
+				}
+			})
+			if err != nil {
+				return err
+			}
+			response.Sites = sites
+			if len(response.Sites) > response.Limit {
+				response.NextSite = response.Sites[response.Limit].Name
+				response.Sites = response.Sites[:response.Limit]
+			}
+			return nil
+		})
+		g.Go(func() error {
+			hasPreviousSite, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format:  "SELECT 1 FROM files WHERE file_path < {from}",
+				Values: []any{
+					sq.StringParam("from", from),
+				},
+			})
+			if err != nil {
+				return err
+			}
+			response.HasPreviousSite = hasPreviousSite
+			return nil
+		})
+		err = g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		writeResponse(w, r, response)
+		return
+	}
+
+	if before != "" {
+		g, ctx := errgroup.WithContext(r.Context())
+		err := g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		g.Go(func() error {
+			response.Sites, err = sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id IS NULL" +
+					" AND is_dir" +
+					" AND (file_path LIKE '@%' OR file_path LIKE %.%')" +
+					" AND file_path < {before}" +
+					" ORDER BY file_path" +
+					" LIMIT {limit} + 1",
+				Values: []any{
+					sq.StringParam("from", from),
+					sq.IntParam("limit", response.Limit),
+				},
+			}, func(row *sq.Row) siteEntry {
+				return siteEntry{
+					Name:  row.String("files.file_path"),
+					Owner: row.String("owner.username"),
+				}
+			})
+			if err != nil {
+				return err
+			}
+			if len(response.Sites) > response.Limit {
+				response.HasPreviousFile = true
+				response.Sites = response.Sites[1:]
+			}
+			return nil
+		})
+		g.Go(func() error {
+			nextSite, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format:  "SELECT {*} FROM files WHERE file_path = {before} ORDER BY file_path LIMIT 1",
+				Values: []any{
+					sq.StringParam("from", from),
+				},
+			}, func(row *sq.Row) string {
+				return row.String("file_path")
+			})
+			if err != nil {
+				return err
+			}
+			response.NextSite = nextSite
+			return nil
+		})
+		err = g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		writeResponse(w, r, response)
+		return
+	}
+
+	sites, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
+		Dialect: remoteFS.filesDialect,
+		Format: "SELECT {*}" +
+			" FROM files" +
+			" WHERE parent_id IS NULL" +
+			" AND is_dir" +
+			" AND (file_path LIKE '@%' OR file_path LIKE %.%')" +
+			" ORDER BY file_path" +
+			" LIMIT {limit} + 1",
+		Values: []any{
+			sq.IntParam("limit", response.Limit),
+		},
+	}, func(row *sq.Row) siteEntry {
+		return siteEntry{
+			Name:  row.String("files.file_path"),
+			Owner: row.String("owner.username"),
+		}
+	})
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	response.Sites = sites
+	if len(response.Sites) > response.Limit {
+		response.NextSite = response.Sites[response.Limit].Name
+		response.Sites = response.Sites[:response.Limit]
+	}
+	writeResponse(w, r, response)
+	return
 }
 
 // TODO: copy over directory.go into listDirectory().
-func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
+func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
 	// sort=x&order=y&from=z
 }
 
