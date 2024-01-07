@@ -328,7 +328,16 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		nbrew.site404(w, r, sitePrefix)
 		return
 	}
-	serveFile(w, r, file, fileInfo, fileType)
+	var cacheControl string
+	switch fileType.Ext {
+	case ".html":
+		cacheControl = "no-cache, must-revalidate"
+	case ".eot", ".otf", ".ttf", ".woff", ".woff2":
+		cacheControl = "no-cache, stale-while-revalidate, max-age=2592000" /* 30 days */
+	default:
+		cacheControl = "no-cache, stale-while-revalidate, max-age=120" /* 2 minutes */
+	}
+	serveFile(w, r, file, fileInfo, fileType, cacheControl)
 }
 
 // site404 is a 404 handler that will use the site's 404 page if present,

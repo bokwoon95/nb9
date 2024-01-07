@@ -325,12 +325,19 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		}
 
 		if !isEditable {
-			// Special case: display all .html files as plaintext so that their raw
-			// contents are shown instead of being rendered by the browser.
-			if fileType.Ext == ".html" {
+			var cacheControl string
+			switch fileType.Ext {
+			case ".html":
+				cacheControl = "no-cache, must-revalidate"
+				// Special case: display all .html files as plaintext so that their raw
+				// contents are shown instead of being rendered by the browser.
 				fileType.ContentType = "text/plain; charset=utf-8"
+			case ".eot", ".otf", ".ttf", ".woff", ".woff2":
+				cacheControl = "no-cache, stale-while-revalidate, max-age=2592000" /* 30 days */
+			default:
+				cacheControl = "no-cache, stale-while-revalidate, max-age=120" /* 2 minutes */
 			}
-			serveFile(w, r, file, fileInfo, fileType)
+			serveFile(w, r, file, fileInfo, fileType, cacheControl)
 			return
 		}
 
@@ -749,24 +756,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	// sort=x&order=y&from=z
 }
 
-func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType) {
-	hasher := hashPool.Get().(hash.Hash)
-	hasher.Reset()
-	defer hashPool.Put(hasher)
-
-	var cacheControl string
-	switch fileType.Ext {
-	case ".html":
-		cacheControl = "no-cache, must-revalidate"
-	case ".eot", ".otf", ".ttf", ".woff", ".woff2":
-		cacheControl = "no-cache, stale-while-revalidate, max-age=2592000" /* 30 days */
-	default:
-		cacheControl = "no-cache, stale-while-revalidate, max-age=120" /* 2 minutes */
-	}
-
+func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs.FileInfo, fileType FileType, cacheControl string) {
 	// .jpeg .jpg .png .webp .gif .woff .woff2
 	if !fileType.IsGzippable {
 		if fileSeeker, ok := file.(io.ReadSeeker); ok {
+			hasher := hashPool.Get().(hash.Hash)
+			hasher.Reset()
+			defer hashPool.Put(hasher)
 			_, err := io.Copy(hasher, file)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -788,14 +784,18 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 		}
 
 		if fileInfo.Size() <= 1<<20 /* 1 MB */ {
-			buf := bufPool.Get().(*bytes.Buffer)
-			buf.Reset()
-			defer func() {
-				if buf.Cap() <= maxPoolableBufferCapacity {
-					bufPool.Put(buf)
-				}
-			}()
-			multiWriter := io.MultiWriter(buf, hasher)
+			hasher := hashPool.Get().(hash.Hash)
+			hasher.Reset()
+			defer hashPool.Put(hasher)
+			var buf *bytes.Buffer
+			if fileInfo.Size() > maxPoolableBufferCapacity {
+				buf = bytes.NewBuffer(make([]byte, 0, fileInfo.Size()))
+			} else {
+				buf = bufPool.Get().(*bytes.Buffer)
+				buf.Reset()
+				defer bufPool.Put(buf)
+			}
+			multiWriter := io.MultiWriter(hasher, buf)
 			_, err := io.Copy(multiWriter, file)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -823,6 +823,9 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 
 	if remoteFile, ok := file.(*RemoteFile); ok {
 		if !remoteFile.isFulltextIndexed {
+			hasher := hashPool.Get().(hash.Hash)
+			hasher.Reset()
+			defer hashPool.Put(hasher)
 			_, err := hasher.Write(remoteFile.buf.Bytes())
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -840,13 +843,18 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 	}
 
 	if fileInfo.Size() <= 1<<20 /* 1 MB */ {
-		buf := bufPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		defer func() {
-			if buf.Cap() <= maxPoolableBufferCapacity {
-				bufPool.Put(buf)
-			}
-		}()
+		hasher := hashPool.Get().(hash.Hash)
+		hasher.Reset()
+		defer hashPool.Put(hasher)
+		var buf *bytes.Buffer
+		gzippedSize := fileInfo.Size() >> 1 // Estimate that gzip will halve the payload size.
+		if gzippedSize > maxPoolableBufferCapacity {
+			buf = bytes.NewBuffer(make([]byte, 0, fileInfo.Size()))
+		} else {
+			buf = bufPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			defer bufPool.Put(buf)
+		}
 		multiWriter := io.MultiWriter(buf, hasher)
 		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
 		gzipWriter.Reset(multiWriter)
