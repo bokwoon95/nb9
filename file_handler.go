@@ -92,11 +92,11 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			methodNotAllowed(w, r)
 			return
 		}
-		if filePath != "" {
-			nbrew.listDirectory(w, r, username, sitePrefix, filePath, fileInfo.ModTime())
+		if filePath == "" {
+			nbrew.listRootDirectory(w, r, username, sitePrefix, fileInfo.ModTime())
 			return
 		}
-		nbrew.listRootDirectory(w, r, username, sitePrefix, fileInfo.ModTime())
+		nbrew.listDirectory(w, r, username, sitePrefix, filePath, fileInfo.ModTime())
 		return
 	}
 	fileType, ok := fileTypes[path.Ext(filePath)]
