@@ -870,6 +870,19 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	return
 }
 
+// copied from https://pkg.go.dev/github.com/mattn/go-sqlite3#pkg-variables
+var timestampFormats = []string{
+	"2006-01-02 15:04:05.999999999-07:00",
+	"2006-01-02T15:04:05.999999999-07:00",
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04:05",
+	"2006-01-02T15:04:05",
+	"2006-01-02 15:04",
+	"2006-01-02T15:04",
+	"2006-01-02",
+}
+
 func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response fileResponse) {
 		if r.Form.Has("api") {
@@ -993,36 +1006,99 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			}
 			response.Files = append(response.Files, file)
 		}
-		// TODO: based on response.Sort and response.Order, sort the
-		// response.Files slice before calling writeResponse().
+		switch response.Sort {
+		case "name", "created":
+			if response.Order == "desc" {
+				slices.Reverse(response.Files)
+			}
+		case "edited":
+			slices.SortFunc(response.Files, func(a, b fileEntry) int {
+				if a.ModTime.Equal(b.ModTime) {
+					return strings.Compare(a.Name, b.Name)
+				}
+				if a.ModTime.Before(b.ModTime) {
+					if response.Order == "asc" {
+						return -1
+					} else {
+						return 1
+					}
+				} else {
+					if response.Order == "asc" {
+						return 1
+					} else {
+						return -1
+					}
+				}
+			})
+		}
 		writeResponse(w, r, response)
 		return
 	}
 
 	from := r.FormValue("from")
 	before := r.FormValue("before")
+	var fromTime, beforeTime *time.Time
+	if response.Sort == "edited" {
+		if from != "" {
+			from = strings.TrimSuffix(from, "Z")
+			for _, format := range timestampFormats {
+				timeVal, err := time.ParseInLocation(format, from, time.UTC)
+				if err == nil {
+					fromTime = &timeVal
+					break
+				}
+			}
+		} else if before != "" {
+			before = strings.TrimSuffix(before, "Z")
+			for _, format := range timestampFormats {
+				timeVal, err := time.ParseInLocation(format, before, time.UTC)
+				if err == nil {
+					beforeTime = &timeVal
+					break
+				}
+			}
+		}
+	}
 	response.Limit, _ = strconv.Atoi(r.FormValue("limit"))
 	if response.Limit <= 0 {
 		response.Limit = 1000
 	}
 
-	// TODO: figure out how we are going to accomodate the additional
-	// dimensions of response.Sort and response.Order into our queries.
-
-	if from != "" {
+	sortFromName := from != "" && (response.Sort == "name" || response.Sort == "created")
+	sortFromTime := fromTime != nil && response.Sort == "edited"
+	if sortFromName || sortFromTime {
 		g, ctx := errgroup.WithContext(r.Context())
 		g.Go(func() error {
+			var filter, order sq.Expression
+			if sortFromName {
+				if response.Order == "asc" {
+					filter = sq.Expr("file_path >= {}", path.Join(filePath, from))
+					order = sq.Expr("file_path ASC")
+				} else {
+					filter = sq.Expr("file_path <= {}", path.Join(filePath, from))
+					order = sq.Expr("file_path DESC")
+				}
+			} else if sortFromTime {
+				if response.Order == "asc" {
+					filter = sq.Expr("mod_time >= {}", *fromTime)
+					order = sq.Expr("mod_time ASC, file_path")
+				} else {
+					filter = sq.Expr("mod_time <= {}", *fromTime)
+					order = sq.Expr("mod_time DESC, file_path")
+				}
+			}
 			files, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
-					" AND file_path >= {fromPath}" +
-					" ORDER BY file_path" +
+					" AND {filter}" +
+					" ORDER BY {order}" +
 					" LIMIT {limit} + 1",
 				Values: []any{
 					sq.StringParam("filePath", filePath),
-					sq.StringParam("fromPath", path.Join(filePath, from)),
+					sq.Param("filter", filter),
+					sq.Param("order", order),
 					sq.IntParam("limit", response.Limit),
 				},
 			}, func(row *sq.Row) fileEntry {
@@ -1044,15 +1120,29 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			return nil
 		})
 		g.Go(func() error {
+			var filter sq.Expression
+			if sortFromName {
+				if response.Order == "asc" {
+					filter = sq.Expr("file_path < {}", path.Join(filePath, from))
+				} else {
+					filter = sq.Expr("file_path > {}", path.Join(filePath, from))
+				}
+			} else if sortFromTime {
+				if response.Order == "asc" {
+					filter = sq.Expr("mod_time < {}", *fromTime)
+				} else {
+					filter = sq.Expr("mod_time > {}", *fromTime)
+				}
+			}
 			hasPreviousFile, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT 1" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
-					" AND file_path < {fromPath}",
+					" AND {filter}",
 				Values: []any{
 					sq.StringParam("filePath", filePath),
-					sq.StringParam("fromPath", path.Join(filePath, from)),
+					sq.Param("filter", filter),
 				},
 			})
 			if err != nil {
@@ -1071,7 +1161,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	if before != "" {
+	sortBeforeName := before != "" && (response.Sort == "name" || response.Sort == "created")
+	sortBeforeTime := beforeTime != nil && response.Sort == "edited"
+	if sortBeforeName || sortBeforeTime {
 		g, ctx := errgroup.WithContext(r.Context())
 		err := g.Wait()
 		if err != nil {
@@ -1080,17 +1172,36 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			return
 		}
 		g.Go(func() error {
+			var filter, order sq.Expression
+			if sortBeforeName {
+				if response.Order == "asc" {
+					filter = sq.Expr("file_path < {}", path.Join(filePath, before))
+					order = sq.Expr("file_path ASC")
+				} else {
+					filter = sq.Expr("file_path > {}", path.Join(filePath, before))
+					order = sq.Expr("file_path DESC")
+				}
+			} else if sortBeforeTime {
+				if response.Order == "asc" {
+					filter = sq.Expr("mod_time < {}", *beforeTime)
+					order = sq.Expr("mod_time ASC, file_path")
+				} else {
+					filter = sq.Expr("mod_time > {}", *beforeTime)
+					order = sq.Expr("mod_time DESC, file_path")
+				}
+			}
 			files, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
-					" AND file_path < {beforePath}" +
-					" ORDER BY file_path" +
+					" AND {filter}" +
+					" ORDER BY {order}" +
 					" LIMIT {limit} + 1",
 				Values: []any{
 					sq.StringParam("filePath", filePath),
-					sq.StringParam("beforePath", path.Join(filePath, before)),
+					sq.Param("filter", filter),
+					sq.Param("order", order),
 					sq.IntParam("limit", response.Limit),
 				},
 			}, func(row *sq.Row) fileEntry {
@@ -1112,16 +1223,36 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			return nil
 		})
 		g.Go(func() error {
+			var filter, order sq.Expression
+			if sortBeforeName {
+				if response.Order == "asc" {
+					filter = sq.Expr("file_path >= {}", path.Join(filePath, before))
+					order = sq.Expr("file_path ASC")
+				} else {
+					filter = sq.Expr("file_path <= {}", path.Join(filePath, before))
+					order = sq.Expr("file_path DESC")
+				}
+			} else if sortBeforeTime {
+				if response.Order == "asc" {
+					filter = sq.Expr("mod_time >= {}", *beforeTime)
+					order = sq.Expr("mod_time ASC, file_path")
+				} else {
+					filter = sq.Expr("mod_time <= {}", *beforeTime)
+					order = sq.Expr("mod_time DESC, file_path")
+				}
+			}
 			nextFile, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
-					" AND file_path >= {beforePath}" +
-					" ORDER BY file_path" +
+					" AND {filter}" +
+					" ORDER BY {order}" +
 					" LIMIT 1",
 				Values: []any{
-					sq.StringParam("beforePath", path.Join(filePath, before)),
+					sq.StringParam("filePath", filePath),
+					sq.Param("filter", filter),
+					sq.Param("order", order),
 				},
 			}, func(row *sq.Row) string {
 				return row.String("file_path")
