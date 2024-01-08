@@ -17,6 +17,9 @@ notebrew/main.go
 {{ template "/themes/brassica/post.html" $ }}
 
 TODO: list_root_directory.html show the sites UI.
+    TODO: consider making the more information button a question mark instead of an i sign.
+    TODO: consider making the delete site button a trash icon.
+
 TODO: list_root_directory.html: separate the site folders into its own separate section with a "sites" header (non-link).
     Move the "+ create site" button down to the site folders section.
     Now it becomes clear that pagination only works on the site folders, the normal folders are always on top. And when we are in a site folder the site folder section goes away entirely.

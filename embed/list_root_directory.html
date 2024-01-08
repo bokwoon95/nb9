@@ -28,6 +28,8 @@
   <div class='ml2'><button type='button' class='button ba br2 pv2 ph2'>paste</button></div>
   <div class='ml2'><button type='button' class='button-danger ba br2 b--dark-red pv2 ph2'>clear</button></div>
 </div>
+
+{{- if $.Files }}
 <div class='mv2 flex flex-wrap items-center'>
   <div class='flex-grow-1'></div>
   <div class='flex items-center'>
@@ -56,6 +58,151 @@
   </div>
 </div>
 <div class='bb pb2'><a href='/files/'>files</a> /{{ if $.SitePrefix }} <a href='/files/{{ $.SitePrefix }}/'>{{ $.SitePrefix }}</a> /{{ end }}</div>
+<ul class='mb4'>
+  {{- range $i, $file := $.Files }}
+    {{- if eq $file.Name "notes" }}
+    <li class='flex flex-wrap items-center bb pv2'>
+      <span class='flex items-center mr2'>{{ template "heroicons-folder-open" }}</span>
+      <a href='/{{ join "files" $.SitePrefix "notes" }}/'>notes/</a>
+      <div class='flex-grow-1'></div>
+      <details class='relative' data-autoclose-details>
+        <summary role='button' title='more information' class='flex items-center button ba br2 b--black h2 hide-marker ph1 pointer' data-disable-click-selection>
+          {{ template "heroicons-information-circle" }}
+          {{ template "octicons-triangle-down" }}
+        </summary>
+        <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black; min-width: 10rem'>
+          <div class='ma2'>
+            Notes are private files which can only be accessed by you.
+          </div>
+        </div>
+      </details>
+    </li>
+    {{- else if eq $file.Name "pages" }}
+    <li class='flex flex-wrap items-center bb pv2'>
+      <span class='flex items-center mr2'>{{ template "heroicons-folder-open" }}</span>
+      <a href='/{{ join "files" $.SitePrefix "pages" }}/'>pages/</a>
+      <div class='flex-grow-1'></div>
+      <details class='relative' data-autoclose-details>
+        <summary role='button' title='more information' class='flex items-center button ba br2 b--black h2 hide-marker ph1 pointer' data-disable-click-selection>
+          {{ template "heroicons-information-circle" }}
+          {{ template "octicons-triangle-down" }}
+        </summary>
+        <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black; min-width: 10rem;'>
+          <div class='ma2'>
+            Pages are HTML files hosted at <a href='{{ $.ContentSite }}'>{{ if hasPrefix $.ContentSite "https://" }}{{ trimPrefix $.ContentSite "https://" }}{{ else }}{{ trimPrefix $.ContentSite "http://" }}{{ end }}</a>.
+            <br><br>
+            HTML pages may invoke other HTML templates defined in the <a href='output/themes/'>themes</a> folder.
+            <br><br>
+            For the basics, visit <a href=''>The Definitive Guide to Writing HTML Pages in Notebrew</a>.
+          </div>
+        </div>
+      </details>
+    </li>
+    {{- else if eq $file.Name "posts" }}
+    <li class='flex flex-wrap items-center bb pv2'>
+      <span class='flex items-center mr2'>{{ template "heroicons-folder-open" }}</span>
+      <a href='/{{ join "files" $.SitePrefix "posts" }}/'>posts/</a>
+      <div class='flex-grow-1'></div>
+      <details class='relative' data-autoclose-details>
+        <summary role='button' title='more information' class='flex items-center button ba br2 b--black h2 hide-marker ph1 pointer' data-disable-click-selection>
+          {{ template "heroicons-information-circle" }}
+          {{ template "octicons-triangle-down" }}
+        </summary>
+        <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black; min-width: 10rem;'>
+          <div class='ma2'>
+            Posts are markdown files hosted at <a href='{{ $.ContentSite }}/posts/'>{{ if hasPrefix $.ContentSite "https://" }}{{ trimPrefix $.ContentSite "https://" }}{{ else }}{{ trimPrefix $.ContentSite "http://" }}{{ end }}/posts</a>.
+          </div>
+        </div>
+      </details>
+    </li>
+    {{- else if eq $file.Name "output/themes" }}
+    <li class='flex flex-wrap items-center bb pv2'>
+      <span class='flex items-center mr2'>{{ template "heroicons-folder-open" }}</span>
+      <a href='/{{ join "files" $.SitePrefix "output/themes" }}/'>themes/</a>
+      <div class='flex-grow-1'></div>
+      <details class='relative' data-autoclose-details>
+        <summary role='button' title='more information' class='flex items-center button ba br2 b--black h2 hide-marker ph1 pointer' data-disable-click-selection>
+          {{ template "heroicons-information-circle" }}
+          {{ template "octicons-triangle-down" }}
+        </summary>
+        <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+          <div class='ma2' style='min-width: 10rem;'>
+            Contains HTML templates and other global site assets.
+            <br><br>
+            For the basics, visit <a href=''>The Definitive Guide to Writing HTML Pages in Notebrew</a>.
+          </div>
+        </div>
+      </details>
+    </li>
+    {{- else if eq $file.Name "output" }}
+    <li class='flex flex-wrap items-center bb pv2'>
+      <span class='flex items-center mr2'>{{ template "heroicons-folder-open" }}</span>
+      <a href='/{{ join "files" $.SitePrefix "output" }}/'>output/</a>
+      <div class='flex-grow-1'></div>
+      <details class='relative' data-autoclose-details>
+        <summary role='button' title='more information' class='flex items-center button ba br2 b--black h2 hide-marker ph1 pointer' data-disable-click-selection>
+          {{ template "heroicons-information-circle" }}
+          {{ template "octicons-triangle-down" }}
+        </summary>
+        <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+          <div class='ma2' style='min-width: 10rem;'>
+            Contains your site's output files.
+            <br><br>
+            <div class='f6' style='font-style: italic;'>For the tech-savvy: Notebrew is a static site generator that converts your pages and posts into static files. This is where the files are kept.</div>
+          </div>
+        </div>
+      </details>
+    </li>
+    {{- end }}
+  {{- end }}
+</ul>
+{{- end }}
+
+{{- if $.Sites }}
+<div class='mt2 pb2 bb'>
+  <div class='flex flex-wrap items-center'>
+    <div class='b'>Sites</div>
+    <div class='flex-grow-1'></div>
+    <div class='flex items-center'>
+      <details class='relative ml2' data-autoclose-details>
+        <summary role='button' title='Create' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
+          {{ template "octicons-plus" }}
+          {{ template "octicons-triangle-down" }}
+        </summary>
+        <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+          <div class='ma2 tr'><a href='/files/createsite/' class='nowrap'>create site</a></div>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+<ul>
+  {{- range $site := $.Sites }}
+  <li class='flex flex-wrap items-center bb pv2'>
+    <a href='{{ $site.Name }}/'>{{ $site.Name }}/</a>
+    {{- if or (not $.Username.Valid) (eq $.Username.String $site.Owner) }}
+    <div class='flex-grow-1'></div>
+    <details class='relative' data-autoclose-details>
+      <summary role='button' title='more actions' class='flex items-center button ba br2 b--black h2 hide-marker ph2 pointer' data-disable-click-selection>
+        {{ template "heroicons-ellipsis-horizontal" }}
+        {{ template "octicons-triangle-down" }}
+      </summary>
+      <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+        <div class='ma2'><a href='/files/deletesite/?name={{ trimPrefix $site.Name "@" }}' class='dark-red nowrap'>delete site</a></div>
+      </div>
+    </details>
+    {{- end }}
+  </li>
+  {{- end }}
+</ul>
+<div class='mv3 flex flex-wrap items-center'>
+  <div><button type='button' class='button ba br2 pv1 ph2'>&larr; previous</button></div>
+  <div class='flex-grow-1'></div>
+  <div><button type='button' class='button ba br2 pv1 ph2'>next &rarr;</button></div>
+</div>
+{{- else }}
+<div class='mv2 tc'>- No other sites -</div>
+{{- end }}
 
 {{- define "octicons-plus" }}
 <svg aria-hidden='true' height='16' viewBox='0 0 16 16' version='1.1' width='16' data-view-component='true' class='octicon octicon-plus'>

@@ -81,12 +81,17 @@ ul { margin: 0; padding: 0; list-style: none; }
 /* padding vertical */
 .pv1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
 .pv2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.pv3 { padding-top: 1rem; padding-bottom: 1rem; }
+.pv4 { padding-top: 2rem; padding-bottom: 2rem; }
 
 /* padding horizontal */
 .ph1 { padding-left: 0.25rem; padding-right: 0.25rem; }
 .ph2 { padding-left: 0.5rem; padding-right: 0.5rem; }
 .ph3 { padding-left: 1rem; padding-right: 1rem; }
 .ph4 { padding-left: 2rem; padding-right: 2rem; }
+
+/* padding top */
+.pt4 { padding-top: 2rem; }
 
 /* padding bottom */
 .pb2 { padding-bottom: 0.5rem; }
