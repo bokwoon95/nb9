@@ -1270,8 +1270,50 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	// TODO: handle the case when neither from nor before are provided (also
-	// taking into account sort and order).
+	var order sq.Expression
+	if sortFromName {
+		if response.Order == "asc" {
+			order = sq.Expr("file_path ASC")
+		} else {
+			order = sq.Expr("file_path DESC")
+		}
+	} else if sortFromTime {
+		if response.Order == "asc" {
+			order = sq.Expr("mod_time ASC, file_path")
+		} else {
+			order = sq.Expr("mod_time DESC, file_path")
+		}
+	}
+	files, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
+		Dialect: remoteFS.filesDialect,
+		Format: "SELECT {*}" +
+			" FROM files" +
+			" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
+			" ORDER BY {order}" +
+			" LIMIT {limit} + 1",
+		Values: []any{
+			sq.StringParam("filePath", filePath),
+			sq.Param("order", order),
+			sq.IntParam("limit", response.Limit),
+		},
+	}, func(row *sq.Row) fileEntry {
+		return fileEntry{
+			Name:    row.String("files.file_path"),
+			Size:    row.Int64("size"),
+			ModTime: row.Time("mod_time"),
+			IsDir:   row.Bool("is_dir"),
+		}
+	})
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	response.Files = files
+	if len(response.Files) > response.Limit {
+		response.NextFile = response.Files[response.Limit].Name
+		response.Files = response.Files[:response.Limit]
+	}
 	writeResponse(w, r, response)
 	return
 }
