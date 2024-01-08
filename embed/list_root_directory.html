@@ -30,7 +30,6 @@
 </div>
 <div class='mv2 flex flex-wrap items-center'>
   <div class='flex-grow-1'></div>
-  {{- if or (not $.FilePath) (eq (head $.FilePath) "pages" "posts") }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
       <summary role='button' title='Misc' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
@@ -38,38 +37,11 @@
         {{ template "octicons-triangle-down" }}
       </summary>
       <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
-        {{- if not $.FilePath }}
         <div class='ma2 tr'><a href='' class='nowrap'>site settings</a></div>
         <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate site</button></div>
-        {{- else if eq (head $.FilePath) "pages" }}
-        <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate folder</button></div>
-        {{- else if eq (head $.FilePath) "posts" }}
-        <div class='ma2 tr'><a href='' class='nowrap'>list settings</a></div>
-        <div class='ma2 tr'><a href='' class='nowrap'>view list</a></div>
-        <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate list</button></div>
-        {{- end }}
       </div>
     </details>
   </div>
-  {{- end }}
-  {{- if and $.FilePath (ne (head $.FilePath) "output") }}
-  <div class='flex items-center'>
-    <details class='relative ml2' data-autoclose-details>
-      <summary role='button' title='Sort' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
-        {{ template "octicons-sort-desc" }}
-        {{ template "octicons-triangle-down" }}
-      </summary>
-      <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
-        <div class='ma2 tr'><a href='' class='nowrap arrow-before'>name</a></div>
-        <div class='ma2 tr'><a href='' class='nowrap'>date created</a></div>
-        <div class='ma2 tr'><a href='' class='nowrap'>date updated</a></div>
-        <hr>
-        <div class='ma2 tr'><a href='' class='nowrap arrow-before'>ascending</a></div>
-        <div class='ma2 tr'><a href='' class='nowrap'>descending</a></div>
-      </div>
-    </details>
-  </div>
-  {{- end }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
       <summary role='button' title='Search' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>

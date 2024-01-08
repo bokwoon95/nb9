@@ -72,9 +72,14 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Special case: make these files available on the root path of the main
 	// domain.
 	if r.Host == nbrew.CMSDomain {
-		switch urlPath {
-		case "notebrew.webmanifest":
-			file, err := rootFS.Open("static/notebrew.webmanifest")
+		var filePath string
+		if urlPath == "notebrew.webmanifest" {
+			filePath = "static/notebrew.webmanifest"
+		} else if urlPath == "apple-touch-icon.png" {
+			filePath = "static/icons/apple-touch-icon.png"
+		}
+		if filePath != "" {
+			file, err := rootFS.Open(filePath)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
@@ -87,23 +92,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				internalServerError(w, r, err)
 				return
 			}
-			serveFile(w, r, file, fileInfo, fileTypes[".webmanifest"], "max-age: 2592000, stale-while-revalidate" /* 1 month */)
-			return
-		case "apple-touch-icon.png":
-			file, err := rootFS.Open("static/icons/apple-touch-icon.png")
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			defer file.Close()
-			fileInfo, err := file.Stat()
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			serveFile(w, r, file, fileInfo, fileTypes[".png"], "max-age: 2592000, stale-while-revalidate" /* 1 month */)
+			serveFile(w, r, file, fileInfo, fileTypes[path.Ext(filePath)], "max-age: 2592000, stale-while-revalidate" /* 1 month */)
 			return
 		}
 	}
