@@ -38,18 +38,18 @@ type fileEntry struct {
 }
 
 type siteEntry struct {
-	Name  string `json:"name"`
-	Owner string `json:"owner"`
+	Name  string `json:"name,omitempty"`
+	Owner string `json:"owner,omitempty"`
 }
 
 type fileResponse struct {
-	Status      string         `json:"status"`
-	ContentSite string         `json:"contentSite,omitempty"`
-	Username    sql.NullString `json:"username,omitempty"`
-	SitePrefix  string         `json:"sitePrefix,omitempty"`
-	FilePath    string         `json:"filePath"`
-	IsDir       bool           `json:"isDir,omitempty"`
-	ModTime     time.Time      `json:"modTime,omitempty"`
+	Status      string     `json:"status"`
+	ContentSite string     `json:"contentSite,omitempty"`
+	Username    NullString `json:"username,omitempty"`
+	SitePrefix  string     `json:"sitePrefix,omitempty"`
+	FilePath    string     `json:"filePath"`
+	IsDir       bool       `json:"isDir,omitempty"`
+	ModTime     time.Time  `json:"modTime,omitempty"`
 
 	Sort            string      `json:"sort,omitempty"`
 	Order           string      `json:"order,omitempty"`
@@ -92,6 +92,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			methodNotAllowed(w, r)
 			return
 		}
+		r.ParseForm()
 		if filePath == "" {
 			nbrew.listRootDirectory(w, r, username, sitePrefix, fileInfo.ModTime())
 			return
@@ -156,7 +157,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		}
 		nbrew.clearSession(w, r, "flash")
 		response.ContentSite = nbrew.contentSite(sitePrefix)
-		response.Username = sql.NullString{String: username, Valid: nbrew.UsersDB != nil}
+		response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 		response.SitePrefix = sitePrefix
 		response.FilePath = filePath
 		response.IsDir = fileInfo.IsDir()
@@ -420,7 +421,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 
 		response := fileResponse{
 			ContentSite: nbrew.contentSite(sitePrefix),
-			Username:    sql.NullString{String: username, Valid: nbrew.UsersDB != nil},
+			Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
 			SitePrefix:  sitePrefix,
 			FilePath:    filePath,
 			IsDir:       fileInfo.IsDir(),
@@ -546,7 +547,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			"hasSuffix":               strings.HasSuffix,
 			"trimPrefix":              strings.TrimPrefix,
 			"fileSizeToString":        fileSizeToString,
-			"generateBreadcrumbLinks": generateBreadcrumbLinks,
+			"generateBreadcrumbLinks": generateBreadcrumbLinks(sitePrefix),
 			"stylesCSS":               func() template.CSS { return template.CSS(stylesCSS) },
 			"directoryJS":             func() template.JS { return template.JS(directoryJS) },
 			"referer":                 func() string { return referer },
@@ -570,7 +571,13 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		executeTemplate(w, r, modTime, tmpl, &response)
 	}
 
-	var response fileResponse
+	response := fileResponse{
+		ContentSite: nbrew.contentSite(sitePrefix),
+		Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
+		SitePrefix:  sitePrefix,
+		IsDir:       true,
+		ModTime:     modTime,
+	}
 	if sitePrefix == "" && nbrew.UsersDB != nil {
 		sites, err := sq.FetchAll(r.Context(), nbrew.UsersDB, sq.Query{
 			Dialect: nbrew.UsersDialect,
@@ -660,6 +667,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				response.Sites = append(response.Sites, siteEntry{Name: name})
 			}
 		}
+		writeResponse(w, r, response)
 		return
 	}
 
@@ -905,7 +913,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			"hasSuffix":               strings.HasSuffix,
 			"trimPrefix":              strings.TrimPrefix,
 			"fileSizeToString":        fileSizeToString,
-			"generateBreadcrumbLinks": generateBreadcrumbLinks,
+			"generateBreadcrumbLinks": generateBreadcrumbLinks(sitePrefix),
 			"stylesCSS":               func() template.CSS { return template.CSS(stylesCSS) },
 			"directoryJS":             func() template.JS { return template.JS(directoryJS) },
 			"referer":                 func() string { return referer },
@@ -935,7 +943,14 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	var response fileResponse
+	response := fileResponse{
+		ContentSite: nbrew.contentSite(sitePrefix),
+		Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
+		SitePrefix:  sitePrefix,
+		FilePath:    filePath,
+		IsDir:       true,
+		ModTime:     modTime,
+	}
 	response.Sort = strings.ToLower(strings.TrimSpace(r.FormValue("sort")))
 	if response.Sort == "" {
 		cookie, _ := r.Cookie("sort")
@@ -1343,7 +1358,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	return
 }
 
-func generateBreadcrumbLinks(sitePrefix string, isDir bool) func(string) template.HTML {
+func generateBreadcrumbLinks(sitePrefix string) func(string) template.HTML {
 	return func(filePath string) template.HTML {
 		var b strings.Builder
 		b.WriteString(`<a href="/files/">files</a>`)
@@ -1356,14 +1371,9 @@ func generateBreadcrumbLinks(sitePrefix string, isDir bool) func(string) templat
 				continue
 			}
 			href := `/files/` + path.Join(segments[:i+1]...) + `/`
-			if i == len(segments)-1 && !isDir {
-				href = strings.TrimSuffix(href, `/`)
-			}
 			b.WriteString(` / <a href="` + href + `">` + segments[i] + `</a>`)
 		}
-		if isDir {
-			b.WriteString(` /`)
-		}
+		b.WriteString(` /`)
 		return template.HTML(b.String())
 	}
 }
