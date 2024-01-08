@@ -54,35 +54,8 @@
       </form>
     </details>
   </div>
-  {{- if or (and (eq $.SitePrefix "") (eq $.FilePath "")) (eq (head $.FilePath) "notes" "pages" "posts" "output") }}
-  <div class='flex items-center'>
-    <details class='relative ml2' data-autoclose-details>
-      <summary role='button' title='Create' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
-        {{ template "octicons-plus" }}
-        {{ template "octicons-triangle-down" }}
-      </summary>
-      <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
-        {{- if and (eq $.SitePrefix "") (eq $.FilePath "") }}
-        <div class='ma2 tr'><a href='/files/createsite/' class='nowrap'>create site</a></div>
-        {{- else if eq (head $.FilePath) "notes" }}
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}&ext=md' class='nowrap'>create file</a></div>
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>create folder</a></div>
-        {{- else if eq (head $.FilePath) "pages" }}
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createpage" }}/?parent={{ $.FilePath }}' class='nowrap'>create page</a></div>
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>create folder</a></div>
-        {{- else if eq (head $.FilePath) "posts" }}
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createpost" }}/{{ if tail $.FilePath }}?category={{ head (tail $.FilePath) }}{{ end }}' class='nowrap'>create post</a></div>
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>create category</a></div>
-        {{- else if eq (head $.FilePath) "output" }}
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}&ext=html' class='nowrap'>create file</a></div>
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>create folder</a></div>
-        {{- end }}
-      </div>
-    </details>
-  </div>
-  {{- end }}
 </div>
-<div class='bb pb2'>{{ generateBreadcrumbLinks $.FilePath }}</div>
+<div class='bb pb2'><a href='/files/'>files</a> /{{ if $.SitePrefix }} <a href='/files/{{ $.SitePrefix }}/'>{{ $.SitePrefix }}</a> /{{ end }}</div>
 
 {{- define "octicons-plus" }}
 <svg aria-hidden='true' height='16' viewBox='0 0 16 16' version='1.1' width='16' data-view-component='true' class='octicon octicon-plus'>

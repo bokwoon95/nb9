@@ -44,12 +44,12 @@ type siteEntry struct {
 
 type fileResponse struct {
 	Status      string     `json:"status"`
-	ContentSite string     `json:"contentSite,omitempty"`
-	Username    NullString `json:"username,omitempty"`
-	SitePrefix  string     `json:"sitePrefix,omitempty"`
+	ContentSite string     `json:"contentSite"`
+	Username    NullString `json:"username"`
+	SitePrefix  string     `json:"sitePrefix"`
 	FilePath    string     `json:"filePath"`
-	IsDir       bool       `json:"isDir,omitempty"`
-	ModTime     time.Time  `json:"modTime,omitempty"`
+	IsDir       bool       `json:"isDir"`
+	ModTime     time.Time  `json:"modTime"`
 
 	Sort            string      `json:"sort,omitempty"`
 	Order           string      `json:"order,omitempty"`
@@ -539,19 +539,18 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		}
 		referer := getReferer(r)
 		funcMap := map[string]any{
-			"join":                    path.Join,
-			"dir":                     path.Dir,
-			"base":                    path.Base,
-			"ext":                     path.Ext,
-			"hasPrefix":               strings.HasPrefix,
-			"hasSuffix":               strings.HasSuffix,
-			"trimPrefix":              strings.TrimPrefix,
-			"fileSizeToString":        fileSizeToString,
-			"generateBreadcrumbLinks": generateBreadcrumbLinks(sitePrefix),
-			"stylesCSS":               func() template.CSS { return template.CSS(stylesCSS) },
-			"directoryJS":             func() template.JS { return template.JS(directoryJS) },
-			"referer":                 func() string { return referer },
-			"safeHTML":                func(s string) template.HTML { return template.HTML(s) },
+			"join":             path.Join,
+			"dir":              path.Dir,
+			"base":             path.Base,
+			"ext":              path.Ext,
+			"hasPrefix":        strings.HasPrefix,
+			"hasSuffix":        strings.HasSuffix,
+			"trimPrefix":       strings.TrimPrefix,
+			"fileSizeToString": fileSizeToString,
+			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
+			"directoryJS":      func() template.JS { return template.JS(directoryJS) },
+			"referer":          func() string { return referer },
+			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
 			"head": func(s string) string {
 				head, _, _ := strings.Cut(s, "/")
 				return head
