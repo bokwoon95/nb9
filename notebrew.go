@@ -1008,6 +1008,6 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 }
 
 type NullString struct {
-	String string `json:"string,omitempty"`
-	Valid  bool   `json:"valid,omitempty"`
+	String string `json:"string"`
+	Valid  bool   `json:"valid"`
 }
