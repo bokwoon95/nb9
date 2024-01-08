@@ -16,8 +16,7 @@ notebrew/main.go
 
 {{ template "/themes/brassica/post.html" $ }}
 
-TODO: work on listDirectory so that we can switch over to fileHandler() asap and remove file.go/directory.go.
-    TODO: listRootDirectory: use from=xxx&limit=1000 and before=xxxx&limit=1000
+TODO: list_root_directory.html show the sites UI.
 TODO: list_root_directory.html: separate the site folders into its own separate section with a "sites" header (non-link).
     Move the "+ create site" button down to the site folders section.
     Now it becomes clear that pagination only works on the site folders, the normal folders are always on top. And when we are in a site folder the site folder section goes away entirely.
