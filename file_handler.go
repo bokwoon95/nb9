@@ -47,7 +47,7 @@ type fileResponse struct {
 	ContentSite string         `json:"contentSite,omitempty"`
 	Username    sql.NullString `json:"username,omitempty"`
 	SitePrefix  string         `json:"sitePrefix,omitempty"`
-	Path        string         `json:"path"`
+	FilePath    string         `json:"filePath"`
 	IsDir       bool           `json:"isDir,omitempty"`
 	ModTime     time.Time      `json:"modTime,omitempty"`
 
@@ -158,7 +158,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 		response.ContentSite = nbrew.contentSite(sitePrefix)
 		response.Username = sql.NullString{String: username, Valid: nbrew.UsersDB != nil}
 		response.SitePrefix = sitePrefix
-		response.Path = filePath
+		response.FilePath = filePath
 		response.IsDir = fileInfo.IsDir()
 		response.ModTime = fileInfo.ModTime()
 		if response.Status == "" {
@@ -422,7 +422,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			ContentSite: nbrew.contentSite(sitePrefix),
 			Username:    sql.NullString{String: username, Valid: nbrew.UsersDB != nil},
 			SitePrefix:  sitePrefix,
-			Path:        filePath,
+			FilePath:    filePath,
 			IsDir:       fileInfo.IsDir(),
 			ModTime:     fileInfo.ModTime(),
 			Content:     request.Content,
@@ -548,7 +548,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			"fileSizeToString":        fileSizeToString,
 			"generateBreadcrumbLinks": generateBreadcrumbLinks,
 			"stylesCSS":               func() template.CSS { return template.CSS(stylesCSS) },
-			"baselineJS":              func() template.JS { return template.JS(baselineJS) },
+			"directoryJS":             func() template.JS { return template.JS(directoryJS) },
 			"referer":                 func() string { return referer },
 			"safeHTML":                func(s string) template.HTML { return template.HTML(s) },
 			"head": func(s string) string {
@@ -907,7 +907,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			"fileSizeToString":        fileSizeToString,
 			"generateBreadcrumbLinks": generateBreadcrumbLinks,
 			"stylesCSS":               func() template.CSS { return template.CSS(stylesCSS) },
-			"baselineJS":              func() template.JS { return template.JS(baselineJS) },
+			"directoryJS":             func() template.JS { return template.JS(directoryJS) },
 			"referer":                 func() string { return referer },
 			"safeHTML":                func(s string) template.HTML { return template.HTML(s) },
 			"head": func(s string) string {

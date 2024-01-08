@@ -273,7 +273,7 @@ func (nbrew *Notebrew) directory_Old(w http.ResponseWriter, r *http.Request, use
 		"contains":              strings.Contains,
 		"fileSizeToString":      fileSizeToString,
 		"stylesCSS":             func() template.CSS { return template.CSS(stylesCSS) },
-		"folderJS":              func() template.JS { return template.JS(folderJS) },
+		"folderJS":              func() template.JS { return template.JS(directoryJS) },
 		"contentURL":            func() string { return contentURL },
 		"hasDatabase":           func() bool { return nbrew.UsersDB != nil },
 		"referer":               func() string { return r.Referer() },

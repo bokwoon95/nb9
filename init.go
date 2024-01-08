@@ -22,7 +22,7 @@ var (
 	commonPasswordHashes         = make(map[string]struct{})
 	stylesCSS                    string
 	baselineJS                   string
-	folderJS                     string
+	directoryJS                  string
 	contentSecurityPolicy        string
 	contentSecurityPolicyCaptcha string
 )
@@ -69,16 +69,16 @@ func init() {
 	baselineJS = string(b)
 	baselineJSHash := "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
 	// folder.js
-	b, err = fs.ReadFile(embedFS, "static/folder.js")
+	b, err = fs.ReadFile(embedFS, "static/directory.js")
 	if err != nil {
 		return
 	}
 	hash = sha256.Sum256(b)
-	folderJS = string(b)
-	folderJSHash := "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
+	directoryJS = string(b)
+	directoryJSHash := "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
 	// contentSecurityPolicy
 	contentSecurityPolicy = "default-src 'none';" +
-		" script-src 'self' 'unsafe-hashes' " + baselineJSHash + " " + folderJSHash + ";" +
+		" script-src 'self' 'unsafe-hashes' " + baselineJSHash + " " + directoryJSHash + ";" +
 		" connect-src 'self';" +
 		" img-src 'self' data:;" +
 		" style-src 'self' 'unsafe-inline';" +
@@ -87,7 +87,7 @@ func init() {
 		" manifest-src 'self';"
 	// contentSecurityPolicyCaptcha
 	contentSecurityPolicyCaptcha = "default-src 'none';" +
-		" script-src 'self' 'unsafe-hashes' " + baselineJSHash + " " + folderJSHash + " https://hcaptcha.com https://*.hcaptcha.com;" +
+		" script-src 'self' 'unsafe-hashes' " + baselineJSHash + " " + directoryJSHash + " https://hcaptcha.com https://*.hcaptcha.com;" +
 		" connect-src 'self' https://hcaptcha.com https://*.hcaptcha.com;" +
 		" img-src 'self' data:;" +
 		" style-src 'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com;" +

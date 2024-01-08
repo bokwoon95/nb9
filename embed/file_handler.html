@@ -8,7 +8,7 @@
 {{- if le (len $.Content) 50000 }}
 <script type='module' src='/files/static/codemirror.js'></script>
 {{- end }}
-<title>{{ base $.Path }}{{ if $.SitePrefix }} | {{ $.SitePrefix }}{{ end }}</title>
+<title>{{ base $.FilePath }}{{ if $.SitePrefix }} | {{ $.SitePrefix }}{{ end }}</title>
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
   <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
@@ -26,60 +26,60 @@
   <span>&boxv;</span>
   {{- end }}
   <a href='/{{ join "files" $.SitePrefix }}/'>files</a>
-  {{- if eq (head $.Path) "notes" }}
+  {{- if eq (head $.FilePath) "notes" }}
   <span>&boxv;</span>
   <a href='/{{ join "files" $.SitePrefix "notes" }}/'>notes</a>
-    {{- if ne (dir $.Path) "notes" }}
+    {{- if ne (dir $.FilePath) "notes" }}
     <span>&boxv;</span>
-    <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
+    <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
     {{- end }}
-  {{- else if eq (head $.Path) "pages" }}
+  {{- else if eq (head $.FilePath) "pages" }}
   <span>&boxv;</span>
   <a href='/{{ join "files" $.SitePrefix "pages" }}/'>pages</a>
-    {{- if ne (dir $.Path) "pages" }}
+    {{- if ne (dir $.FilePath) "pages" }}
     <span>&boxv;</span>
-    <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
+    <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
     {{- end }}
   <span>&boxv;</span>
   url: <a href='{{ $.URL }}'>{{ trimPrefix $.URL $.ContentSite }}</a>
-  {{- else if eq (head $.Path) "posts" }}
+  {{- else if eq (head $.FilePath) "posts" }}
   <span>&boxv;</span>
   <a href='/{{ join "files" $.SitePrefix "posts" }}/'>posts</a>
-    {{- if ne (dir $.Path) "posts" }}
+    {{- if ne (dir $.FilePath) "posts" }}
     <span>&boxv;</span>
-    <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
+    <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
     {{- end }}
   <span>&boxv;</span>
   url: <a href='{{ $.URL }}'>{{ trimPrefix $.URL $.ContentSite }}</a>
-  {{- else if eq (head $.Path) "output" }}
+  {{- else if eq (head $.FilePath) "output" }}
     {{- if $.BelongsTo }}
     <span>&boxv;</span>
     belongs to: <a href='/{{ join "files" $.SitePrefix $.BelongsTo }}/'>{{ $.BelongsTo }}</a>
     {{- else }}
-      {{- if eq (head (tail $.Path)) "themes" }}
+      {{- if eq (head (tail $.FilePath)) "themes" }}
       <span>&boxv;</span>
       <a href='/{{ join "files" $.SitePrefix "output/themes" }}/'>themes</a>
       {{- end }}
-      {{- if ne (dir $.Path) "output/themes" }}
+      {{- if ne (dir $.FilePath) "output/themes" }}
       <span>&boxv;</span>
-      <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
+      <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
       {{- end }}
     {{- end }}
   {{- end }}
 </div>
 <form method='post' enctype='multipart/form-data' class='mv2'>
   <div class='flex mv2'>
-    <label for='content' class='b'>{{ base $.Path }}</label>
+    <label for='content' class='b'>{{ base $.FilePath }}</label>
     <div class='flex-grow-1'></div>
     <button id='bottom' type='submit' class='button ba ph3 br2'>save</button>
   </div>
-  <div data-codemirror='{{ if hasSuffix $.Path ".html" }}html{{ else if hasSuffix $.Path ".css" }}css{{ else if hasSuffix $.Path ".js" }}javascript {{ else if hasSuffix $.Path ".md" }}markdown{{ end }}'>
+  <div data-codemirror='{{ if hasSuffix $.FilePath ".html" }}html{{ else if hasSuffix $.FilePath ".css" }}css{{ else if hasSuffix $.FilePath ".js" }}javascript {{ else if hasSuffix $.FilePath ".md" }}markdown{{ end }}'>
     <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code' autofocus>{{ $.Content }}</textarea>
   </div>
   <button id='bottom' type='submit' class='button ba br2 pa2 mv2 w-100'>save</button>
 </form>
 <div class='mv2'>
-  {{- if eq (head $.Path) "posts" }}
+  {{- if eq (head $.FilePath) "posts" }}
   <span class='b'>Images</span>
   <a href='' class='ml2'>upload image</a>
   {{- else }}
@@ -92,7 +92,7 @@
   <ul class='grid grid-cols-auto-150px grid-gap-3 mv2'>
     {{- range $i, $asset := $.Assets }}
     <li class='h-100'>
-      {{- if eq (ext $.Path) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
+      {{- if eq (ext $.FilePath) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
       <img src='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='w-100' loading='lazy'>
       {{- else }}
       <div class='flex justify-center items-center'>
@@ -111,7 +111,7 @@
         <a href='' class='dark-red ml2'>delete</a>
       </div>
       <div class='mv2'>
-        {{- if eq (head $.Path) "posts" }}
+        {{- if eq (head $.FilePath) "posts" }}
         <button type='button' value='{{ $asset.Name }}' class='button ba br2 pa2 w-100'>insert into post</button>
         {{- else }}
         <button type='button' value='{{ $asset.Name }}' class='button ba br2 pa2 w-100'>insert into page</button>
@@ -121,7 +121,7 @@
     {{- end }}
   </ul>
   {{- else }}
-  <div class='mv2 tc'>{{ if eq (head $.Path) "posts" }}- No images -{{ else }}- No assets -{{ end }}</div>
+  <div class='mv2 tc'>{{ if eq (head $.FilePath) "posts" }}- No images -{{ else }}- No assets -{{ end }}</div>
   {{- end }}
 {{- end }}
 
