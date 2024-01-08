@@ -6,6 +6,9 @@ init.go
 notebrew.go
 template_parser.go
 file_handler.go
+createsite.go
+deletesite.go
+delete.go
 ...
 serve_http.go
 notebrew/main.go
