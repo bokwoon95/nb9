@@ -1064,13 +1064,17 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		response.Limit = 1000
 	}
 
-	sortFromName := from != "" && (response.Sort == "name" || response.Sort == "created")
-	sortFromTime := fromTime != nil && response.Sort == "edited"
-	if sortFromName || sortFromTime {
+	var sortFrom bool
+	if response.Sort == "name" || response.Sort == "created" {
+		sortFrom = from != ""
+	} else if response.Sort == "edited" {
+		sortFrom = fromTime != nil
+	}
+	if sortFrom {
 		g, ctx := errgroup.WithContext(r.Context())
 		g.Go(func() error {
 			var filter, order sq.Expression
-			if sortFromName {
+			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path >= {}", path.Join(filePath, from))
 					order = sq.Expr("file_path ASC")
@@ -1078,7 +1082,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					filter = sq.Expr("file_path <= {}", path.Join(filePath, from))
 					order = sq.Expr("file_path DESC")
 				}
-			} else if sortFromTime {
+			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
 					filter = sq.Expr("mod_time >= {}", *fromTime)
 					order = sq.Expr("mod_time ASC, file_path")
@@ -1116,9 +1120,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			if len(response.Files) > response.Limit {
 				nextFile := response.Files[response.Limit]
 				response.Files = response.Files[:response.Limit]
-				if sortFromName {
+				if response.Sort == "name" || response.Sort == "created" {
 					response.NextFile = nextFile.Name
-				} else if sortFromTime {
+				} else if response.Sort == "edited" {
 					response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
 				}
 			}
@@ -1126,13 +1130,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		})
 		g.Go(func() error {
 			var filter sq.Expression
-			if sortFromName {
+			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path < {}", path.Join(filePath, from))
 				} else {
 					filter = sq.Expr("file_path > {}", path.Join(filePath, from))
 				}
-			} else if sortFromTime {
+			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
 					filter = sq.Expr("mod_time < {}", *fromTime)
 				} else {
@@ -1166,9 +1170,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	sortBeforeName := before != "" && (response.Sort == "name" || response.Sort == "created")
-	sortBeforeTime := beforeTime != nil && response.Sort == "edited"
-	if sortBeforeName || sortBeforeTime {
+	var sortBefore bool
+	if response.Sort == "name" || response.Sort == "created" {
+		sortBefore = before != ""
+	} else if response.Sort == "edited" {
+		sortBefore = beforeTime != nil
+	}
+	if sortBefore {
 		g, ctx := errgroup.WithContext(r.Context())
 		err := g.Wait()
 		if err != nil {
@@ -1178,7 +1186,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		}
 		g.Go(func() error {
 			var filter, order sq.Expression
-			if sortBeforeName {
+			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path < {}", path.Join(filePath, before))
 					order = sq.Expr("file_path ASC")
@@ -1186,7 +1194,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					filter = sq.Expr("file_path > {}", path.Join(filePath, before))
 					order = sq.Expr("file_path DESC")
 				}
-			} else if sortBeforeTime {
+			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
 					filter = sq.Expr("mod_time < {}", *beforeTime)
 					order = sq.Expr("mod_time ASC, file_path")
@@ -1229,7 +1237,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		})
 		g.Go(func() error {
 			var filter, order sq.Expression
-			if sortBeforeName {
+			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path >= {}", path.Join(filePath, before))
 					order = sq.Expr("file_path ASC")
@@ -1237,7 +1245,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					filter = sq.Expr("file_path <= {}", path.Join(filePath, before))
 					order = sq.Expr("file_path DESC")
 				}
-			} else if sortBeforeTime {
+			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
 					filter = sq.Expr("mod_time >= {}", *beforeTime)
 					order = sq.Expr("mod_time ASC, file_path")
@@ -1271,9 +1279,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 				return err
 			}
-			if sortBeforeName {
+			if response.Sort == "name" || response.Sort == "created" {
 				response.NextFile = nextFile.Name
-			} else if sortBeforeTime {
+			} else if response.Sort == "edited" {
 				response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
 			}
 			return nil
