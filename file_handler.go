@@ -667,9 +667,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		Dialect: remoteFS.filesDialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
-			" WHERE parent_id IS NULL" +
+			" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
 			" AND is_dir" +
-			" AND file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
 			" ORDER BY CASE file_path" +
 			" WHEN {notes} THEN 1" +
 			" WHEN {pages} THEN 2" +
@@ -750,6 +749,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					" FROM files" +
 					" WHERE parent_id IS NULL" +
 					" AND is_dir" +
+					" AND (file_path LIKE '@%' OR file_path LIKE %.%')" +
 					" AND file_path < {from}",
 				Values: []any{
 					sq.StringParam("from", from),
@@ -1103,7 +1103,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				},
 			}, func(row *sq.Row) fileEntry {
 				return fileEntry{
-					Name:    row.String("files.file_path"),
+					Name:    path.Base(row.String("files.file_path")),
 					Size:    row.Int64("size"),
 					ModTime: row.Time("mod_time"),
 					IsDir:   row.Bool("is_dir"),
@@ -1114,8 +1114,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			}
 			response.Files = files
 			if len(response.Files) > response.Limit {
-				response.NextFile = response.Files[response.Limit].Name
+				nextFile := response.Files[response.Limit]
 				response.Files = response.Files[:response.Limit]
+				if sortFromName {
+					response.NextFile = nextFile.Name
+				} else if sortFromTime {
+					response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
+				}
 			}
 			return nil
 		})
@@ -1206,7 +1211,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				},
 			}, func(row *sq.Row) fileEntry {
 				return fileEntry{
-					Name:    row.String("files.file_path"),
+					Name:    path.Base(row.String("files.file_path")),
 					Size:    row.Int64("size"),
 					ModTime: row.Time("mod_time"),
 					IsDir:   row.Bool("is_dir"),
@@ -1254,8 +1259,11 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					sq.Param("filter", filter),
 					sq.Param("order", order),
 				},
-			}, func(row *sq.Row) string {
-				return row.String("file_path")
+			}, func(row *sq.Row) fileEntry {
+				return fileEntry{
+					Name:    path.Base(row.String("file_path")),
+					ModTime: row.Time("mod_time"),
+				}
 			})
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
@@ -1263,7 +1271,11 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 				return err
 			}
-			response.NextFile = nextFile
+			if sortBeforeName {
+				response.NextFile = nextFile.Name
+			} else if sortBeforeTime {
+				response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
+			}
 			return nil
 		})
 		writeResponse(w, r, response)
@@ -1298,7 +1310,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		},
 	}, func(row *sq.Row) fileEntry {
 		return fileEntry{
-			Name:    row.String("files.file_path"),
+			Name:    path.Base(row.String("files.file_path")),
 			Size:    row.Int64("size"),
 			ModTime: row.Time("mod_time"),
 			IsDir:   row.Bool("is_dir"),
@@ -1311,8 +1323,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	}
 	response.Files = files
 	if len(response.Files) > response.Limit {
-		response.NextFile = response.Files[response.Limit].Name
+		nextFile := response.Files[response.Limit]
 		response.Files = response.Files[:response.Limit]
+		if response.Sort == "name" || response.Sort == "created" {
+			response.NextFile = nextFile.Name
+		} else if response.Sort == "edited" {
+			response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
+		}
 	}
 	writeResponse(w, r, response)
 	return
