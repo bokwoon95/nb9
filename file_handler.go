@@ -53,7 +53,7 @@ type fileResponse struct {
 
 	Sort            string      `json:"sort,omitempty"`
 	Order           string      `json:"order,omitempty"`
-	Files           []fileEntry `json:"fileEntries,omitempty"`
+	Files           []fileEntry `json:"files,omitempty"`
 	HasPreviousFile bool        `json:"hasPreviousFile,omitempty"`
 	NextFile        string      `json:"nextFile,omitempty"`
 	Sites           []siteEntry `json:"sites,omitempty"`

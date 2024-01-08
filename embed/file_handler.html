@@ -78,6 +78,7 @@
   </div>
   <button id='bottom' type='submit' class='button ba br2 pa2 mv2 w-100'>save</button>
 </form>
+{{- if eq (head $.FilePath) "pages" "posts" }}
 <div class='mv2'>
   {{- if eq (head $.FilePath) "posts" }}
   <span class='b'>Images</span>
