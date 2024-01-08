@@ -41,7 +41,7 @@
     <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
     {{- end }}
   <span>&boxv;</span>
-  url: <a href='{{ $.URL }}'>{{ trimPrefix $.URL $.ContentSite }}</a>
+  view: <a href='{{ $.URL }}'>page</a>
   {{- else if eq (head $.FilePath) "posts" }}
   <span>&boxv;</span>
   <a href='/{{ join "files" $.SitePrefix "posts" }}/'>posts</a>
@@ -50,11 +50,11 @@
     <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
     {{- end }}
   <span>&boxv;</span>
-  url: <a href='{{ $.URL }}'>{{ trimPrefix $.URL $.ContentSite }}</a>
+  view: <a href='{{ $.URL }}'>page</a>
   {{- else if eq (head $.FilePath) "output" }}
     {{- if $.BelongsTo }}
     <span>&boxv;</span>
-    belongs to: <a href='/{{ join "files" $.SitePrefix $.BelongsTo }}/'>{{ $.BelongsTo }}</a>
+    belongs to: <a href='/{{ join "files" $.SitePrefix $.BelongsTo }}/'>{{ base $.BelongsTo }}</a>
     {{- else }}
       {{- if eq (head (tail $.FilePath)) "themes" }}
       <span>&boxv;</span>
@@ -93,7 +93,7 @@
   <ul class='grid grid-cols-auto-150px grid-gap-3 mv2'>
     {{- range $i, $asset := $.Assets }}
     <li class='h-100'>
-      {{- if eq (ext $.FilePath) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
+      {{- if eq (ext $asset.Name) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
       <img src='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='w-100' loading='lazy'>
       {{- else }}
       <div class='flex justify-center items-center'>

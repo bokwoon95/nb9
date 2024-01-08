@@ -150,7 +150,15 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 
 	switch r.Method {
 	case "GET":
-		var response fileResponse
+		r.ParseForm()
+		response := fileResponse{
+			ContentSite: nbrew.contentSite(sitePrefix),
+			Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
+			SitePrefix:  sitePrefix,
+			FilePath:    filePath,
+			IsDir:       fileInfo.IsDir(),
+			ModTime:     fileInfo.ModTime(),
+		}
 		_, err = nbrew.getSession(r, "flash", &response)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -351,6 +359,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			"hasPrefix":        strings.HasPrefix,
 			"hasSuffix":        strings.HasSuffix,
 			"trimPrefix":       strings.TrimPrefix,
+			"trimSuffix":       strings.TrimSuffix,
 			"fileSizeToString": fileSizeToString,
 			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
 			"baselineJS":       func() template.JS { return template.JS(baselineJS) },
