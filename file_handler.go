@@ -1271,13 +1271,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	}
 
 	var order sq.Expression
-	if sortFromName {
+	if response.Sort == "name" || response.Sort == "created" {
 		if response.Order == "asc" {
 			order = sq.Expr("file_path ASC")
 		} else {
 			order = sq.Expr("file_path DESC")
 		}
-	} else if sortFromTime {
+	} else if response.Sort == "edited" {
 		if response.Order == "asc" {
 			order = sq.Expr("mod_time ASC, file_path")
 		} else {
