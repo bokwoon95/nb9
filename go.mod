@@ -23,7 +23,6 @@ require (
 	github.com/yuin/goldmark v1.4.13
 	github.com/yuin/goldmark-highlighting v0.0.0-20220208100518-594be1970594
 	golang.org/x/crypto v0.16.0
-	golang.org/x/exp v0.0.0-20231226003508-02704c960a9b
 	golang.org/x/sync v0.5.0
 	modernc.org/sqlite v1.28.0
 )
