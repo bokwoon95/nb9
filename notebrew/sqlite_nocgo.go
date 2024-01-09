@@ -45,6 +45,9 @@ func sqliteQueryString(params map[string]string) string {
 	if _, ok := params["synchronous"]; !ok {
 		values.Add("_pragma", "synchronous(NORMAL)")
 	}
+	// 8192 is the optimal page size for blobs up to 100 KB.
+	// https://www.sqlite.org/intern-v-extern-blob.html
+	values.Add("_pragma", "page_size(8192)")
 	values.Set("_txlock", "immediate")
 	return strings.NewReplacer("%28", "(", "%29", ")").Replace(values.Encode())
 }
