@@ -69,7 +69,7 @@ type fileResponse struct {
 	TemplateErrors []string    `json:",omitempty"`
 }
 
-func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
+func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
 	file, err := nbrew.FS.Open(path.Join(".", sitePrefix, filePath))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -378,7 +378,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 				return tail
 			},
 		}
-		tmpl, err := template.New("file_handler.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/file_handler.html")
+		tmpl, err := template.New("file.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/file.html")
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -1446,7 +1446,8 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 				},
 			}, func(row *sq.Row) *RemoteFile {
 				file := &RemoteFile{
-					ctx: ctx1,
+					ctx:  ctx1,
+					info: &RemoteFileInfo{},
 				}
 				file.info.filePath = row.String("file_path")
 				buf := bufPool.Get().(*bytes.Buffer)
@@ -1559,6 +1560,9 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 					" AND NOT is_dir" +
 					" AND file_path LIKE '%.html'" +
 					" ORDER BY file_path",
+				Values: []any{
+					sq.StringParam("pageDir", pageDir),
+				},
 			}, func(row *sq.Row) Page {
 				page := Page{
 					Parent: urlPath,

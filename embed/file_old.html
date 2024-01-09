@@ -5,18 +5,18 @@
 <link rel='icon' href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>☕</text></svg>'>
 <style>{{ stylesCSS }}</style>
 <script type='module'>{{ baselineJS }}</script>
-{{- if le (len $.Content) 50000 }}
+{{- if le $.Size 50000 }}
 <script type='module' src='/files/static/codemirror.js'></script>
 {{- end }}
-<title>{{ base $.FilePath }}{{ if $.SitePrefix }} | {{ $.SitePrefix }}{{ end }}</title>
+<title>{{ base $.Path }}{{ if $.SitePrefix }} | {{ $.SitePrefix }}{{ end }}</title>
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
   <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
   &bull;
-  <a href='{{ $.ContentSite }}' class='ma2 white'>{{ if hasPrefix $.ContentSite "https://" }}{{ trimPrefix $.ContentSite "https://" }}{{ else }}{{ trimPrefix $.ContentSite "http://" }}{{ end }}</a>
+  <a href='{{ contentURL }}' class='ma2 white'>{{ if hasPrefix contentURL "https://" }}{{ trimPrefix contentURL "https://" }}{{ else }}{{ trimPrefix contentURL "http://" }}{{ end }}</a>
   <span class='flex-grow-1'></span>
-  {{- if $.Username.Valid }}
-  <a href='' class='ma2'>{{ if $.Username.String }}@{{ $.Username.String }}{{ else }}user{{ end }}</a>
+  {{- if hasDatabase }}
+  <a href='' class='ma2'>{{ if $.Username }}@{{ $.Username }}{{ else }}user{{ end }}</a>
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
@@ -26,61 +26,61 @@
   <span>&boxv;</span>
   {{- end }}
   <a href='/{{ join "files" $.SitePrefix }}/'>files</a>
-  {{- if eq (head $.FilePath) "notes" }}
+  {{- if eq (head $.Path) "notes" }}
   <span>&boxv;</span>
   <a href='/{{ join "files" $.SitePrefix "notes" }}/'>notes</a>
-    {{- if ne (dir $.FilePath) "notes" }}
+    {{- if ne (dir $.Path) "notes" }}
     <span>&boxv;</span>
-    <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
+    <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
     {{- end }}
-  {{- else if eq (head $.FilePath) "pages" }}
+  {{- else if eq (head $.Path) "pages" }}
   <span>&boxv;</span>
   <a href='/{{ join "files" $.SitePrefix "pages" }}/'>pages</a>
-    {{- if ne (dir $.FilePath) "pages" }}
+    {{- if ne (dir $.Path) "pages" }}
     <span>&boxv;</span>
-    <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
+    <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
     {{- end }}
   <span>&boxv;</span>
-  view: <a href='{{ $.URL }}'>page</a>
-  {{- else if eq (head $.FilePath) "posts" }}
+  view: <a href='{{ pageURL }}'>page</a>
+  {{- else if eq (head $.Path) "posts" }}
   <span>&boxv;</span>
   <a href='/{{ join "files" $.SitePrefix "posts" }}/'>posts</a>
-    {{- if ne (dir $.FilePath) "posts" }}
+    {{- if ne (dir $.Path) "posts" }}
     <span>&boxv;</span>
-    <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
+    <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
     {{- end }}
   <span>&boxv;</span>
-  view: <a href='{{ $.URL }}'>page</a>
-  {{- else if eq (head $.FilePath) "output" }}
-    {{- if $.BelongsTo }}
+  view: <a href='{{ postURL }}'>post</a>
+  {{- else if eq (head $.Path) "output" }}
+    {{- if pagePath }}
     <span>&boxv;</span>
-    belongs to: <a href='/{{ join "files" $.SitePrefix $.BelongsTo }}/'>{{ base $.BelongsTo }}</a>
+    belongs to page: <a href='/{{ join "files" $.SitePrefix pagePath }}/'>{{ base pagePath }}</a>
     {{- else }}
-      {{- if eq (head (tail $.FilePath)) "themes" }}
+      {{- if eq (head (tail $.Path)) "themes" }}
       <span>&boxv;</span>
       <a href='/{{ join "files" $.SitePrefix "output/themes" }}/'>themes</a>
       {{- end }}
-      {{- if ne (dir $.FilePath) "output/themes" }}
+      {{- if ne (dir $.Path) "output/themes" }}
       <span>&boxv;</span>
-      <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>{{ base (dir $.FilePath) }}</a>
+      <a href='/{{ join "files" $.SitePrefix (dir $.Path) }}/'>{{ base (dir $.Path) }}</a>
       {{- end }}
     {{- end }}
   {{- end }}
 </div>
 <form method='post' enctype='multipart/form-data' class='mv2'>
   <div class='flex mv2'>
-    <label for='content' class='b'>{{ base $.FilePath }}</label>
+    <label for='content' class='b'>{{ base $.Path }}</label>
     <div class='flex-grow-1'></div>
     <button id='bottom' type='submit' class='button ba ph3 br2'>save</button>
   </div>
-  <div data-codemirror='{{ if hasSuffix $.FilePath ".html" }}html{{ else if hasSuffix $.FilePath ".css" }}css{{ else if hasSuffix $.FilePath ".js" }}javascript {{ else if hasSuffix $.FilePath ".md" }}markdown{{ end }}'>
+  <div data-codemirror='{{ if hasPrefix $.ContentType "text/html" }}html{{ else if hasPrefix $.ContentType "text/css" }}css{{ else if hasPrefix $.ContentType "text/javascript" }}javascript {{ else if hasPrefix $.ContentType "text/markdown" }}markdown{{ end }}'>
     <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code' autofocus>{{ $.Content }}</textarea>
   </div>
   <button id='bottom' type='submit' class='button ba br2 pa2 mv2 w-100'>save</button>
 </form>
-{{- if eq (head $.FilePath) "pages" "posts" }}
+{{- if eq (head $.Path) "pages" "posts" }}
 <div class='mv2'>
-  {{- if eq (head $.FilePath) "posts" }}
+  {{- if eq (head $.Path) "posts" }}
   <span class='b'>Images</span>
   <a href='' class='ml2'>upload image</a>
   {{- else }}
@@ -89,40 +89,40 @@
   <a href='' class='ml2'>Upload file</a>
   {{- end }}
 </div>
-  {{- if $.Assets }}
+  {{- if $.AssetEntries }}
   <ul class='grid grid-cols-auto-150px grid-gap-3 mv2'>
-    {{- range $i, $asset := $.Assets }}
+    {{- range $i, $assetEntry := $.AssetEntries }}
     <li class='h-100'>
-      {{- if eq (ext $asset.Name) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
-      <img src='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='w-100' loading='lazy'>
+      {{- if eq (head $assetEntry.ContentType) "image" }}
+      <img src='/{{ join "files" $.SitePrefix $.AssetDir $assetEntry.Name }}' class='w-100' loading='lazy'>
       {{- else }}
       <div class='flex justify-center items-center'>
         {{ template "octicons-file-code" }}
       </div>
       {{- end }}
       <div class='mv2'>
-        <span class='b'>{{ $asset.Name }}</span>
-        <span class='ml1 f6 mid-gray nowrap'>{{ fileSizeToString $asset.Size }}</span>
-        {{- if eq (ext $asset.Name) ".css" ".js" }}
-        <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='ml2'>edit</a>
+        <span class='b'>{{ $assetEntry.Name }}</span>
+        <span class='ml1 f6 mid-gray nowrap'>{{ fileSizeToString $assetEntry.Size }}</span>
+        {{- if eq (ext $assetEntry.Name) ".css" ".js" }}
+        <a href='/{{ join "files" $.SitePrefix $.AssetDir $assetEntry.Name }}' class='ml2'>edit</a>
         {{- else }}
-        <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='ml2'>view</a>
+        <a href='/{{ join "files" $.SitePrefix $.AssetDir $assetEntry.Name }}' class='ml2'>view</a>
         {{- end }}
         <a href='' class='ml2'>rename</a>
         <a href='' class='dark-red ml2'>delete</a>
       </div>
       <div class='mv2'>
-        {{- if eq (head $.FilePath) "posts" }}
-        <button type='button' value='{{ $asset.Name }}' class='button ba br2 pa2 w-100'>insert into post</button>
+        {{- if eq (head $.Path) "posts" }}
+        <button type='button' value='{{ $assetEntry.Name }}' class='button ba br2 pa2 w-100'>insert into post</button>
         {{- else }}
-        <button type='button' value='{{ $asset.Name }}' class='button ba br2 pa2 w-100'>insert into page</button>
+        <button type='button' value='{{ $assetEntry.Name }}' class='button ba br2 pa2 w-100'>insert into page</button>
         {{- end }}
       </div>
     </li>
     {{- end }}
   </ul>
   {{- else }}
-  <div class='mv2 tc'>{{ if eq (head $.FilePath) "posts" }}- No images -{{ else }}- No assets -{{ end }}</div>
+  <div class='mv2 tc'>{{ if eq (head $.Path) "posts" }}- No images -{{ else }}- No assets -{{ end }}</div>
   {{- end }}
 {{- end }}
 

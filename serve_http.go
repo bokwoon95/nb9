@@ -233,7 +233,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if head == "" || head == "notes" || head == "pages" || head == "posts" || head == "output" {
-			nbrew.fileHandler(w, r, username, sitePrefix, filePath)
+			nbrew.files(w, r, username, sitePrefix, filePath)
 			return
 		}
 

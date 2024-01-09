@@ -126,7 +126,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	}
 	file.isFulltextIndexed = isFulltextIndexed(file.info.filePath)
 	if fileType.IsGzippable && !file.isFulltextIndexed {
-		file.gzipReader = gzipReaderPool.Get().(*gzip.Reader)
+		file.gzipReader, _ = gzipReaderPool.Get().(*gzip.Reader)
 		if file.gzipReader != nil {
 			err = file.gzipReader.Reset(file.buf)
 			if err != nil {

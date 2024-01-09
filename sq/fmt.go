@@ -148,6 +148,9 @@ func writef(ctx context.Context, dialect string, buf *bytes.Buffer, args *[]any,
 		// is it a named placeholder? e.g. {name}, {age}, {email}
 		index, ok := namedIndex[paramName]
 		if !ok {
+			if len(namedIndex) == 0 {
+				return fmt.Errorf("named parameter {%s} not provided", paramName)
+			}
 			availableParams := make([]string, 0, len(namedIndex))
 			for name := range namedIndex {
 				availableParams = append(availableParams, name)
