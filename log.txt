@@ -26,8 +26,6 @@ notebrew-files/
 notebrew-files.db
 notebrew-objects/
 
-TODO: because PWA Web Share Target API is so gimped, I'll probably have to forget the PWA route entirely (that means forgoing the notebtrew.webmanifest and apple-touch-icon.png special handling in serve_http.go -- and we can remove .webmanifest from the fileTypes map entirely) and resorting to an app wrapper in the future instead.
-
 notebrew-config/metrics.json (site-specific metrics? or not, since we are aiming to put everything on one server at first)
 notebrew-config/metrics.txt
 Requests per second (mean) = xxx
