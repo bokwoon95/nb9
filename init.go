@@ -65,6 +65,7 @@ func init() {
 	if err != nil {
 		return
 	}
+	b = bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
 	hash = sha256.Sum256(b)
 	baselineJS = string(b)
 	baselineJSHash := "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
@@ -73,6 +74,7 @@ func init() {
 	if err != nil {
 		return
 	}
+	b = bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
 	hash = sha256.Sum256(b)
 	directoryJS = string(b)
 	directoryJSHash := "'sha256-" + base64.StdEncoding.EncodeToString(hash[:]) + "'"
