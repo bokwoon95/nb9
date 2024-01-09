@@ -20,23 +20,23 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 
 func (nbrew *Notebrew) directory_Old(w http.ResponseWriter, r *http.Request, username, sitePrefix, folderPath string, fileInfo fs.FileInfo) {
 	type FileEntry struct {
-		Name    string    `json:"name,omitempty"`
-		IsDir   bool      `json:"isDir,omitempty"`
-		IsSite  bool      `json:"isSite,omitempty"`
-		IsUser  bool      `json:"isUser,omitempty"`
-		Size    int64     `json:"size,omitempty"`
-		ModTime time.Time `json:"modTime,omitempty"`
+		Name    string
+		IsDir   bool
+		IsSite  bool
+		IsUser  bool
+		Size    int64
+		ModTime time.Time
 	}
 	type Response struct {
-		Status         string      `json:"status"`
-		ContentDomain  string      `json:"contentDomain,omitempty"`
-		Username       string      `json:"username,omitempty"`
-		SitePrefix     string      `json:"sitePrefix,omitempty"`
-		Path           string      `json:"path"`
-		IsDir          bool        `json:"isDir,omitempty"`
-		ModTime        time.Time   `json:"modTime,omitempty"`
-		FileEntries    []FileEntry `json:"fileEntries,omitempty"`
-		TemplateErrors []string    `json:"templateErrors,omitempty"`
+		Status         string
+		ContentDomain  string
+		Username       string
+		SitePrefix     string
+		Path           string
+		IsDir          bool
+		ModTime        time.Time
+		FileEntries    []FileEntry
+		TemplateErrors []string
 	}
 	if r.Method != "GET" {
 		methodNotAllowed(w, r)

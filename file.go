@@ -16,25 +16,25 @@ import (
 
 func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, fileInfo fs.FileInfo) {
 	type FileEntry struct {
-		Name        string    `json:"name,omitempty"`
-		ContentType string    `json:"contentType,omitempty"`
-		Size        int64     `json:"size,omitempty"`
-		ModTime     time.Time `json:"modTime,omitempty"`
+		Name        string
+		ContentType string
+		Size        int64
+		ModTime     time.Time
 	}
 	type Response struct {
-		Status         string      `json:"status"`
-		ContentDomain  string      `json:"contentDomain,omitempty"`
-		Username       string      `json:"username,omitempty"`
-		SitePrefix     string      `json:"sitePrefix,omitempty"`
-		Path           string      `json:"path"`
-		IsDir          bool        `json:"isDir,omitempty"`
-		ModTime        time.Time   `json:"modTime,omitempty"`
-		Size           int64       `json:"size,omitempty"`
-		Content        string      `json:"content,omitempty"`
-		ContentType    string      `json:"contentType,omitempty"`
-		AssetDir       string      `json:"assetDir,omitempty"`
-		AssetEntries   []FileEntry `json:"assetEntries,omitempty"`
-		TemplateErrors []string    `json:"templateErrors,omitempty"`
+		Status         string
+		ContentDomain  string
+		Username       string
+		SitePrefix     string
+		Path           string
+		IsDir          bool
+		ModTime        time.Time
+		Size           int64
+		Content        string
+		ContentType    string
+		AssetDir       string
+		AssetEntries   []FileEntry
+		TemplateErrors []string
 	}
 	fileType, ok := fileTypes[path.Ext(filePath)]
 	if !ok {
@@ -355,7 +355,7 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		}
 
 		var request struct {
-			Content string `json:"content"`
+			Content string
 		}
 		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		switch contentType {

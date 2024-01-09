@@ -36,15 +36,15 @@ import (
 )
 
 type SMTPConfig struct {
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
-	Host     string `json:"host,omitempty"`
-	Port     string `json:"port,omitempty"`
+	Username string
+	Password string
+	Host     string
+	Port     string
 }
 
 type CaptchaConfig struct {
-	SecretKey string `json:"secretKey,omitempty"`
-	SiteKey   string `json:"siteKey,omitempty"`
+	SecretKey string
+	SiteKey   string
 }
 
 var (
@@ -59,22 +59,22 @@ var (
 // - dynamic public: allowsignup.txt, 503.html
 
 type DatabaseConfig struct {
-	Dialect  string            `json:"dialect,omitempty"`
-	Filepath string            `json:"filepath,omitempty"`
-	User     string            `json:"user,omitempty"`
-	Password string            `json:"password,omitempty"`
-	Host     string            `json:"host,omitempty"`
-	Port     string            `json:"port,omitempty"`
-	DBName   string            `json:"dbname,omitempty"`
-	Params   map[string]string `json:"params,omitempty"`
+	Dialect  string
+	Filepath string
+	User     string
+	Password string
+	Host     string
+	Port     string
+	DBName   string
+	Params   map[string]string
 }
 
 type S3Config struct {
-	Endpoint        string `json:"endpoint,omitempty"`
-	Region          string `json:"region,omitempty"`
-	Bucket          string `json:"bucket,omitempty"`
-	AccessKeyID     string `json:"accessKeyID,omitempty"`
-	SecretAccessKey string `json:"secretAccessKey,omitempty"`
+	Endpoint        string
+	Region          string
+	Bucket          string
+	AccessKeyID     string
+	SecretAccessKey string
 }
 
 func main() {
@@ -465,11 +465,11 @@ func main() {
 			b = bytes.TrimSpace(b)
 			if len(b) > 0 {
 				var s3Config struct {
-					Endpoint        string `json:"endpoint,omitempty"`
-					Region          string `json:"region,omitempty"`
-					Bucket          string `json:"bucket,omitempty"`
-					AccessKeyID     string `json:"accessKeyID,omitempty"`
-					SecretAccessKey string `json:"secretAccessKey,omitempty"`
+					Endpoint        string
+					Region          string
+					Bucket          string
+					AccessKeyID     string
+					SecretAccessKey string
 				}
 				decoder := json.NewDecoder(bytes.NewReader(b))
 				decoder.DisallowUnknownFields()

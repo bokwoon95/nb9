@@ -1081,11 +1081,11 @@ type S3Storage struct {
 var _ Storage = (*S3Storage)(nil)
 
 type S3StorageConfig struct {
-	Endpoint        string `json:"endpoint,omitempty"`
-	Region          string `json:"region,omitempty"`
-	Bucket          string `json:"bucket,omitempty"`
-	AccessKeyID     string `json:"accessKeyID,omitempty"`
-	SecretAccessKey string `json:"secretAccessKey,omitempty"`
+	Endpoint        string
+	Region          string
+	Bucket          string
+	AccessKeyID     string
+	SecretAccessKey string
 }
 
 func NewS3Storage(ctx context.Context, config S3StorageConfig) (*S3Storage, error) {

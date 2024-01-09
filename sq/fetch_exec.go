@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 )
@@ -13,6 +14,7 @@ type Query struct {
 	Dialect string
 	Format  string
 	Values  []any
+	Debug   bool
 }
 
 func (query Query) Append(format string, values ...any) Query {
@@ -85,7 +87,10 @@ func FetchCursor[T any](ctx context.Context, db DB, query Query, rowmapper func(
 	if err != nil {
 		return nil, err
 	}
-	for _, expr := range cursor.row.fetchExprs {
+	for i, expr := range cursor.row.fetchExprs {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
 		err = expr.WriteSQL(ctx, query.Dialect, buf, args, nil)
 		if err != nil {
 			return nil, err
@@ -94,6 +99,36 @@ func FetchCursor[T any](ctx context.Context, db DB, query Query, rowmapper func(
 	err = writef(ctx, query.Dialect, buf, args, nil, query.Format[splitAt+3:], query.Values, &runningValuesIndex, ordinalIndex)
 	if err != nil {
 		return nil, err
+	}
+
+	if query.Debug {
+		var b strings.Builder
+		b.Grow(buf.Len() * 3)
+		b.Write(buf.Bytes())
+		b.WriteString(";")
+		str, _ := Sprintf(query.Dialect, b.String(), *args)
+		for i, arg := range *args {
+			if i == 0 {
+				b.WriteString(" [")
+			} else {
+				b.WriteString(", ")
+			}
+			if namedArg, ok := arg.(sql.NamedArg); ok {
+				b.WriteString(namedArg.Name + "=")
+				arg = namedArg.Value
+			}
+			switch arg := arg.(type) {
+			case string:
+				b.WriteString(arg)
+			default:
+				b.WriteString(fmt.Sprintf("%+v", arg))
+			}
+			if i == len(*args)-1 {
+				b.WriteString("]")
+			}
+		}
+		b.WriteString("\n" + str)
+		os.Stderr.WriteString(b.String())
 	}
 
 	cursor.row.sqlRows, err = db.QueryContext(ctx, buf.String(), *args...)

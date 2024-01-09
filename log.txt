@@ -20,9 +20,6 @@ notebrew/main.go
 {{ template "/themes/brassica/post.html" $ }}
 
 TODO: I think... I think this is it. We can finally delete file.go and directory.go.
-TODO: list_root_directory.html show the sites UI.
-    TODO: consider making the more information button a question mark instead of an i sign.
-    TODO: consider making the delete site button a trash icon.
 TODO: before moving off file_handler, experiment with the SQLite backend for RemoteFS.
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
 TODO: main.go: for filesDB on SQLite, we should set the page size to 8192 instead for best blob performance (https://www.sqlite.org/intern-v-extern-blob.html)

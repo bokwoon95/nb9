@@ -55,11 +55,11 @@ func NewServer(nbrew *nb9.Notebrew, configDir, addr string) (*http.Server, error
 	b = bytes.TrimSpace(b)
 	if len(b) > 0 {
 		var dnsConfig struct {
-			Provider  string `json:"provider,omitempty"`
-			Username  string `json:"username,omitempty"`
-			APIKey    string `json:"apiKey,omitempty"`
-			APIToken  string `json:"apiToken,omitempty"`
-			SecretKey string `json:"secretKey,omitempty"`
+			Provider  string
+			Username  string
+			APIKey    string
+			APIToken  string
+			SecretKey string
 		}
 		decoder := json.NewDecoder(bytes.NewReader(b))
 		decoder.DisallowUnknownFields()

@@ -9,20 +9,20 @@ import (
 )
 
 type rawTable struct {
-	Table      string   `json:"table"`
-	PrimaryKey []string `json:"primarykey"`
+	Table      string
+	PrimaryKey []string
 	Columns    []struct {
-		Column     string            `json:"column"`
-		Type       map[string]string `json:"type"`
-		Index      bool              `json:"index"`
-		PrimaryKey bool              `json:"primarykey"`
-		Unique     bool              `json:"unique"`
-		NotNull    bool              `json:"notnull"`
+		Column     string
+		Type       map[string]string
+		Index      bool
+		PrimaryKey bool
+		Unique     bool
+		NotNull    bool
 		References struct {
-			Table  string `json:"table"`
-			Column string `json:"column"`
-		} `json:"references"`
-	} `json:"columns"`
+			Table  string
+			Column string
+		}
+	}
 }
 
 //go:embed catalog_files.json
