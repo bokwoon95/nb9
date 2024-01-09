@@ -237,44 +237,24 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		switch head {
-		case "", "notes", "pages", "posts", "output":
-			fileInfo, err := fs.Stat(nbrew.FS, path.Join(".", sitePrefix, filePath))
-			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					notFound(w, r)
-					return
-				}
-				logger.Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			if fileInfo.IsDir() {
-				nbrew.directory_Old(w, r, username, sitePrefix, filePath, fileInfo)
-				return
-			}
-			nbrew.file(w, r, username, sitePrefix, filePath, fileInfo)
-			return
+		switch filePath {
+		case "createsite":
+		case "deletesite":
+		case "delete":
+		case "createnote":
+		case "createpost":
+		case "createcategory":
+		case "createfolder":
+		case "createpage":
+		case "createfile":
+		case "cut":
+		case "copy":
+		case "paste":
+		case "rename":
 		default:
-			switch filePath {
-			case "createsite":
-			case "deletesite":
-			case "delete":
-			case "createnote":
-			case "createpost":
-			case "createcategory":
-			case "createfolder":
-			case "createpage":
-			case "createfile":
-			case "cut":
-			case "copy":
-			case "paste":
-			case "rename":
-			default:
-				notFound(w, r)
-			}
-			return
+			notFound(w, r)
 		}
+		return
 	}
 
 	// If we reach here, we are serving generated site content. Only GET
