@@ -38,7 +38,7 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
     <a href='{{ $.Pagination.First }}/' class='mr1'>first</a>
     {{- end }}
     {{- if $.Pagination.Previous }}
-    <a href='{{ $.Pagination.Previous }}/' class='mr1'>prev</a>
+    <a href='{{ $.Pagination.Previous }}/' class='mr1'>previous</a>
     {{- end }}
     {{- range $number := $.Pagination.Numbers }}
     <a href='{{ $number }}/' class='mr1{{ if eq $number $.Pagination.Current }} b{{ end }}'>{{ $number }}</a>
