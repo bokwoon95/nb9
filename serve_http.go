@@ -88,19 +88,19 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Handle the /files/* route on the main domain.
 	if r.Host == nbrew.CMSDomain && head == "files" {
-		filePath := tail
-		head, tail, _ := strings.Cut(filePath, "/")
+		urlPath := tail
+		head, tail, _ := strings.Cut(urlPath, "/")
 		if head == "static" {
 			if r.Method != "GET" {
 				methodNotAllowed(w, r)
 				return
 			}
-			fileType, ok := fileTypes[path.Ext(filePath)]
+			fileType, ok := fileTypes[path.Ext(urlPath)]
 			if !ok {
 				notFound(w, r)
 				return
 			}
-			file, err := RuntimeFS.Open(filePath)
+			file, err := RuntimeFS.Open(urlPath)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
@@ -120,8 +120,8 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Figure out the sitePrefix of the site we are serving.
 		var sitePrefix string
 		if strings.HasPrefix(head, "@") || strings.Contains(head, ".") {
-			sitePrefix, filePath = head, tail
-			head, tail, _ = strings.Cut(filePath, "/")
+			sitePrefix, urlPath = head, tail
+			head, tail, _ = strings.Cut(urlPath, "/")
 		}
 
 		// If the users database is present, check if the user is authorized to
@@ -197,7 +197,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// 3. deletesite (needed to delete their sites)
 				//
 				// If not any of the three, then notAuthorized.
-				if filePath != "" && filePath != "createsite" && filePath != "deletesite" {
+				if urlPath != "" && urlPath != "createsite" && urlPath != "deletesite" {
 					notAuthorized(w, r)
 					return
 				}
@@ -205,11 +205,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if head == "" || head == "notes" || head == "pages" || head == "posts" || head == "output" {
-			nbrew.files(w, r, username, sitePrefix, filePath)
+			nbrew.files(w, r, username, sitePrefix, urlPath)
 			return
 		}
 
-		switch filePath {
+		switch urlPath {
 		case "createsite":
 		case "deletesite":
 		case "delete":
