@@ -1,4 +1,3 @@
-// who is this
 document.body.parentElement.addEventListener("click", (event) => {
     let activeDetails = null;
     let element = event.target;

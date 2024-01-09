@@ -13,6 +13,7 @@ delete.go
 serve_http.go
 notebrew/main.go
 
+TODO: our implementation of transparent gzipping in RemoteFS is likely buggy (or SQLite isn't saving our bytes properly).
 TODO: investigate why sq is dumping repeated sql.NamedArgs into the args slice.
 TODO: Implement the "undeleteable files" index.html, post.html and postlist.html. When are they created? How are they maintained?
 TODO: before moving off file_handler, experiment with the SQLite backend for RemoteFS.
