@@ -130,18 +130,20 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 			return
 		}
 	case "output":
-		n := strings.Index(tail, "/")
-		if n < 0 {
-			notFound(w, r)
-			return
-		}
-		switch tail[:n] {
-		case "posts":
-			isEditable = false
-		case "themes":
-			isEditable = fileType.Ext == ".html" || fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md" || fileType.Ext == ".txt"
-		default:
-			isEditable = fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md"
+		if tail != "index.html" {
+			n := strings.Index(tail, "/")
+			if n < 0 {
+				notFound(w, r)
+				return
+			}
+			switch tail[:n] {
+			case "posts":
+				isEditable = false
+			case "themes":
+				isEditable = fileType.Ext == ".html" || fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md" || fileType.Ext == ".txt"
+			default:
+				isEditable = fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md"
+			}
 		}
 	default:
 		notFound(w, r)
@@ -318,9 +320,11 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 				}
 			}
 		case "output":
-			n := strings.Index(tail, "/")
-			if tail[:n] != "posts" && tail[:n] != "themes" && isEditable {
-				response.BelongsTo = path.Join("pages", path.Dir(tail)+".html")
+			if tail != "index.html" {
+				n := strings.Index(tail, "/")
+				if tail[:n] != "posts" && tail[:n] != "themes" && isEditable {
+					response.BelongsTo = path.Join("pages", path.Dir(tail)+".html")
+				}
 			}
 		}
 
