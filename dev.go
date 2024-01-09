@@ -8,5 +8,5 @@ import (
 )
 
 func init() {
-	rootFS = os.DirFS(".")
+	RuntimeFS = os.DirFS(".")
 }

@@ -378,7 +378,7 @@ func (nbrew *Notebrew) fileHandler(w http.ResponseWriter, r *http.Request, usern
 				return tail
 			},
 		}
-		tmpl, err := template.New("file_handler.html").Funcs(funcMap).ParseFS(rootFS, "embed/file_handler.html")
+		tmpl, err := template.New("file_handler.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/file_handler.html")
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -573,7 +573,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				return tail
 			},
 		}
-		tmpl, err := template.New("list_root_directory.html").Funcs(funcMap).ParseFS(rootFS, "embed/list_root_directory.html")
+		tmpl, err := template.New("list_root_directory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/list_root_directory.html")
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -937,7 +937,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				return tail
 			},
 		}
-		tmpl, err := template.New("list_directory.html").Funcs(funcMap).ParseFS(rootFS, "embed/list_directory.html")
+		tmpl, err := template.New("list_directory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/list_directory.html")
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -1769,7 +1769,7 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 			}
 		}
 		if !text.Valid {
-			file, err := rootFS.Open("embed/post.html")
+			file, err := RuntimeFS.Open("embed/post.html")
 			if err != nil {
 				return err
 			}

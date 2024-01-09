@@ -145,6 +145,10 @@ func (cursor *Cursor[T]) Next() bool {
 
 // Result returns the cursor result.
 func (cursor *Cursor[T]) Result() (result T, err error) {
+	err = cursor.row.sqlRows.Scan(cursor.row.scanDest...)
+	if err != nil {
+		return result, err
+	}
 	cursor.row.index = 0
 	defer func() {
 		if r := recover(); r != nil {

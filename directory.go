@@ -310,7 +310,7 @@ func (nbrew *Notebrew) directory_Old(w http.ResponseWriter, r *http.Request, use
 			return template.HTML(b.String())
 		},
 	}
-	tmpl, err := template.New("directory.html").Funcs(funcMap).ParseFS(rootFS, "embed/directory.html")
+	tmpl, err := template.New("directory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/directory.html")
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
 		internalServerError(w, r, err)

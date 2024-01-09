@@ -29,7 +29,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bokwoon95/nb9"
 	"github.com/bokwoon95/sqddl/ddl"
-	"github.com/fsnotify/fsnotify"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -530,62 +529,54 @@ func main() {
 				UsersDialect:   nbrew.UsersDialect,
 			})
 		}
-		dirs := []string{
+		for _, dir := range []string{
 			"notes",
 			"output",
 			"output/posts",
 			"output/themes",
 			"pages",
 			"posts",
-		}
-		for _, dir := range dirs {
+		} {
 			err = nbrew.FS.Mkdir(dir, 0755)
 			if err != nil && !errors.Is(err, fs.ErrExist) {
 				return err
 			}
 		}
-
-		reloadableConfigFiles := map[string]func(nbrew *nb9.Notebrew, configDir string) error{}
-		for name, reloadFunc := range reloadableConfigFiles {
-			err := reloadFunc(nbrew, configDir)
+		for _, pair := range [][2]string{
+			{"pages/index.html", "embed/index.html"},
+			{"output/themes/post.html", "embed/post.html"},
+			{"output/themes/postlist.html", "embed/postlist.html"},
+		} {
+			name, fallback := pair[0], pair[1]
+			_, err := fs.Stat(nbrew.FS, name)
+			if err == nil {
+				continue
+			}
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			file, err := nb9.RuntimeFS.Open(fallback)
 			if err != nil {
-				return fmt.Errorf("%s: %w", filepath.Join(configDir, name), err)
+				return err
+			}
+			writer, err := nbrew.FS.OpenWriter(name, 0644)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(writer, file)
+			if err != nil {
+				return err
+			}
+			err = writer.Close()
+			if err != nil {
+				return err
+			}
+			err = file.Close()
+			if err != nil {
+				return err
 			}
 		}
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
-			return err
-		}
-		defer watcher.Close()
-		err = watcher.Add(configDir)
-		if err != nil {
-			return err
-		}
-		timer := time.NewTimer(0)
-		timer.Stop()
-		go func() {
-			for {
-				select {
-				case err := <-watcher.Errors:
-					if err != nil {
-						fmt.Println(err)
-					}
-				case event := <-watcher.Events:
-					if event.Op == fsnotify.Chmod {
-						continue
-					}
-					timer.Reset(500 * time.Millisecond)
-				case <-timer.C:
-					timestamp := time.Now().UTC().Format("2006-01-02 15:04:05Z")
-					for name, reloadFunc := range reloadableConfigFiles {
-						err := reloadFunc(nbrew, configDir)
-						if err != nil {
-							fmt.Printf("%s: reloading %s: %s", timestamp, filepath.Join(configDir, name), err)
-						}
-					}
-				}
-			}
-		}()
+		// pages/index.html, themes/post.html, themes/postlist.html
 
 		// TODO:
 		// go install github.com/notebrew/notebrew/notebrew

@@ -79,7 +79,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			filePath = "static/icons/apple-touch-icon.png"
 		}
 		if filePath != "" {
-			file, err := rootFS.Open(filePath)
+			file, err := RuntimeFS.Open(filePath)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
@@ -128,7 +128,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				notFound(w, r)
 				return
 			}
-			file, err := rootFS.Open(filePath)
+			file, err := RuntimeFS.Open(filePath)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)

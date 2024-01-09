@@ -543,7 +543,7 @@ var errorTemplate = template.Must(template.
 			return ""
 		},
 	}).
-	ParseFS(rootFS, "embed/error.html"),
+	ParseFS(RuntimeFS, "embed/error.html"),
 )
 
 func fileSizeToString(size int64) string {

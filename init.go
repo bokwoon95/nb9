@@ -16,7 +16,7 @@ import (
 //go:embed embed static
 var embedFS embed.FS
 
-var rootFS fs.FS = embedFS
+var RuntimeFS fs.FS = embedFS
 
 var (
 	commonPasswordHashes         = make(map[string]struct{})
