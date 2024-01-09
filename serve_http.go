@@ -252,7 +252,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if tail != "" {
 					sitePrefix, urlPath = head, tail
 				} else {
-					_, ok := fileTypes[path.Ext(head)] // differentiate between file extension and TLD
+					_, ok := fileTypes[path.Ext(head)] // if it's not a file extension, then it's a TLD
 					if !ok {
 						sitePrefix, urlPath = head, tail
 					}
