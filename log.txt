@@ -13,12 +13,7 @@ delete.go
 serve_http.go
 notebrew/main.go
 
-/themes/path-to-image.png
-/themes/path-to-template.html
-/themes/path-to-font.ttf
-
-{{ template "/themes/brassica/post.html" $ }}
-
+TODO: investigate why sq is dumping repeated sql.NamedArgs into the args slice.
 TODO: debug why listRootDirectory is showing every entry as a zero value. The SQL query is alright, it returns 5 non-empty results. But the JSON is showing 5 empty fileEntries. Something is wrong with the sq library.
 TODO: Implement the "undeleteable files" index.html, post.html and postlist.html. When are they created? How are they maintained?
 TODO: before moving off file_handler, experiment with the SQLite backend for RemoteFS.
