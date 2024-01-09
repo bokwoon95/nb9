@@ -348,22 +348,26 @@ func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefi
 	}
 
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
 
 	hasher := hashPool.Get().(hash.Hash)
-	hasher.Reset()
-	defer hashPool.Put(hasher)
+	defer func() {
+		hasher.Reset()
+		hashPool.Put(hasher)
+	}()
 
 	// TODO: rewrite this to no longer need bufio.Reader because whether a file
 	// is gzipped is an implementation detail of the underlying filesystem.
 	reader := readerPool.Get().(*bufio.Reader)
-	reader.Reset(file)
-	defer readerPool.Put(reader)
+	defer func() {
+		reader.Reset(file)
+		readerPool.Put(reader)
+	}()
 
 	// TODO: instead of peeking to check if the file is gzipped, type assert it
 	// to a *RemoteFile and check its isFulltextIndexed field (must be false)
@@ -393,7 +397,10 @@ func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefi
 	} else {
 		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
 		gzipWriter.Reset(multiWriter)
-		defer gzipWriterPool.Put(gzipWriter)
+		defer func() {
+			gzipWriter.Reset(io.Discard)
+			gzipWriterPool.Put(gzipWriter)
+		}()
 		_, err := io.Copy(gzipWriter, reader)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())

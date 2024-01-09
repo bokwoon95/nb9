@@ -110,9 +110,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		file.info.size = row.Int64("size")
 		file.info.modTime = row.Time("mod_time")
 		if fileType.IsGzippable {
-			buf := bufPool.Get().(*bytes.Buffer)
-			buf.Reset()
-			b := buf.Bytes()
+			b := bufPool.Get().(*bytes.Buffer).Bytes()
 			row.Scan(&b, "COALESCE(text, data)")
 			file.buf = bytes.NewBuffer(b)
 		}
@@ -215,6 +213,12 @@ func (file *RemoteFile) Read(p []byte) (n int, err error) {
 	}
 }
 
+type emptyReader struct{}
+
+var empty = (*emptyReader)(nil)
+
+func (empty *emptyReader) Read(p []byte) (n int, err error) { return 0, io.EOF }
+
 func (file *RemoteFile) Close() error {
 	if file.info.isDir {
 		return nil
@@ -225,6 +229,7 @@ func (file *RemoteFile) Close() error {
 				return fs.ErrClosed
 			}
 			if file.buf.Cap() <= maxPoolableBufferCapacity {
+				file.buf.Reset()
 				bufPool.Put(file.buf)
 			}
 			file.buf = nil
@@ -232,9 +237,11 @@ func (file *RemoteFile) Close() error {
 			if file.gzipReader == nil {
 				return fs.ErrClosed
 			}
+			file.gzipReader.Reset(empty)
 			gzipReaderPool.Put(file.gzipReader)
 			file.gzipReader = nil
 			if file.buf.Cap() <= maxPoolableBufferCapacity {
+				file.buf.Reset()
 				bufPool.Put(file.buf)
 			}
 			file.buf = nil
@@ -347,10 +354,8 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 	if fileType.IsGzippable {
 		if file.isFulltextIndexed {
 			file.buf = bufPool.Get().(*bytes.Buffer)
-			file.buf.Reset()
 		} else {
 			file.buf = bufPool.Get().(*bytes.Buffer)
-			file.buf.Reset()
 			file.gzipWriter = gzipWriterPool.Get().(*gzip.Writer)
 			file.gzipWriter.Reset(file.buf)
 		}
@@ -415,6 +420,7 @@ func (file *RemoteFileWriter) Close() error {
 			}
 			defer func() {
 				if file.buf.Cap() <= maxPoolableBufferCapacity {
+					file.buf.Reset()
 					bufPool.Put(file.buf)
 				}
 				file.buf = nil
@@ -428,9 +434,11 @@ func (file *RemoteFileWriter) Close() error {
 				return err
 			}
 			defer func() {
+				file.gzipWriter.Reset(io.Discard)
 				gzipWriterPool.Put(file.gzipWriter)
 				file.gzipWriter = nil
 				if file.buf.Cap() <= maxPoolableBufferCapacity {
+					file.buf.Reset()
 					bufPool.Put(file.buf)
 				}
 				file.buf = nil

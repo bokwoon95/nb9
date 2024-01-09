@@ -1461,9 +1461,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 					info: &RemoteFileInfo{},
 				}
 				file.info.filePath = row.String("file_path")
-				buf := bufPool.Get().(*bytes.Buffer)
-				buf.Reset()
-				b := buf.Bytes()
+				b := bufPool.Get().(*bytes.Buffer).Bytes()
 				row.Scan(&b, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
 				if b != nil {
 					file.buf = bytes.NewBuffer(b)
@@ -1531,9 +1529,9 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 						}
 						defer file.Close()
 						buf := bufPool.Get().(*bytes.Buffer)
-						buf.Reset()
 						defer func() {
 							if buf.Cap() <= maxPoolableBufferCapacity {
+								buf.Reset()
 								bufPool.Put(buf)
 							}
 						}()
@@ -1636,8 +1634,10 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 					}
 					defer file.Close()
 					reader := readerPool.Get().(*bufio.Reader)
-					reader.Reset(file)
-					defer readerPool.Put(reader)
+					defer func() {
+						reader.Reset(file)
+						readerPool.Put(reader)
+					}()
 					done := false
 					for !done {
 						line, err := reader.ReadSlice('\n')

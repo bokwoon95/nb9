@@ -124,9 +124,9 @@ func getLogger(ctx context.Context) *slog.Logger {
 // payload.
 func (nbrew *Notebrew) setSession(w http.ResponseWriter, r *http.Request, name string, value any) error {
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
@@ -291,9 +291,9 @@ var goldmarkMarkdown = func() goldmark.Markdown {
 
 func stripMarkdownStyles(src []byte) string {
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
@@ -456,21 +456,26 @@ var readerPool = sync.Pool{
 
 func executeTemplate(w http.ResponseWriter, r *http.Request, modtime time.Time, tmpl *template.Template, data any) {
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
 
 	hasher := hashPool.Get().(hash.Hash)
-	hasher.Reset()
-	defer hashPool.Put(hasher)
+	defer func() {
+		hasher.Reset()
+		hashPool.Put(hasher)
+	}()
 
 	multiWriter := io.MultiWriter(buf, hasher)
 	gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
 	gzipWriter.Reset(multiWriter)
-	defer gzipWriterPool.Put(gzipWriter)
+	defer func() {
+		gzipWriter.Reset(io.Discard)
+		gzipWriterPool.Put(gzipWriter)
+	}()
 
 	err := tmpl.Execute(gzipWriter, data)
 	if err != nil {
@@ -596,9 +601,9 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 		return
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
@@ -632,9 +637,9 @@ func notAuthenticated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
@@ -676,9 +681,9 @@ func notAuthorized(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
@@ -713,9 +718,9 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
@@ -750,9 +755,9 @@ func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
@@ -793,9 +798,9 @@ func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
@@ -829,9 +834,9 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 		return
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
+			buf.Reset()
 			bufPool.Put(buf)
 		}
 	}()
@@ -867,8 +872,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 	if !fileType.IsGzippable {
 		if fileSeeker, ok := file.(io.ReadSeeker); ok {
 			hasher := hashPool.Get().(hash.Hash)
-			hasher.Reset()
-			defer hashPool.Put(hasher)
+			defer func() {
+				hasher.Reset()
+				hashPool.Put(hasher)
+			}()
 			_, err := io.Copy(hasher, file)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -891,15 +898,19 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 
 		if fileInfo.Size() <= 1<<20 /* 1 MB */ {
 			hasher := hashPool.Get().(hash.Hash)
-			hasher.Reset()
-			defer hashPool.Put(hasher)
+			defer func() {
+				hasher.Reset()
+				hashPool.Put(hasher)
+			}()
 			var buf *bytes.Buffer
 			if fileInfo.Size() > maxPoolableBufferCapacity {
 				buf = bytes.NewBuffer(make([]byte, 0, fileInfo.Size()))
 			} else {
 				buf = bufPool.Get().(*bytes.Buffer)
-				buf.Reset()
-				defer bufPool.Put(buf)
+				defer func() {
+					buf.Reset()
+					bufPool.Put(buf)
+				}()
 			}
 			multiWriter := io.MultiWriter(hasher, buf)
 			_, err := io.Copy(multiWriter, file)
@@ -933,8 +944,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 		// the gzipping step.
 		if !remoteFile.isFulltextIndexed {
 			hasher := hashPool.Get().(hash.Hash)
-			hasher.Reset()
-			defer hashPool.Put(hasher)
+			defer func() {
+				hasher.Reset()
+				hashPool.Put(hasher)
+			}()
 			_, err := hasher.Write(remoteFile.buf.Bytes())
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -953,8 +966,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 
 	if fileInfo.Size() <= 1<<20 /* 1 MB */ {
 		hasher := hashPool.Get().(hash.Hash)
-		hasher.Reset()
-		defer hashPool.Put(hasher)
+		defer func() {
+			hasher.Reset()
+			hashPool.Put(hasher)
+		}()
 		var buf *bytes.Buffer
 		// gzip will at least halve the size of what needs to be buffered
 		gzippedSize := fileInfo.Size() >> 1
@@ -962,13 +977,18 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 			buf = bytes.NewBuffer(make([]byte, 0, fileInfo.Size()))
 		} else {
 			buf = bufPool.Get().(*bytes.Buffer)
-			buf.Reset()
-			defer bufPool.Put(buf)
+			defer func() {
+				buf.Reset()
+				bufPool.Put(buf)
+			}()
 		}
 		multiWriter := io.MultiWriter(buf, hasher)
 		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
 		gzipWriter.Reset(multiWriter)
-		defer gzipWriterPool.Put(gzipWriter)
+		defer func() {
+			gzipWriter.Reset(io.Discard)
+			gzipWriterPool.Put(gzipWriter)
+		}()
 		_, err := io.Copy(gzipWriter, file)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -995,7 +1015,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 	w.Header().Set("Cache-Control", cacheControl)
 	gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
 	gzipWriter.Reset(w)
-	defer gzipWriterPool.Put(gzipWriter)
+	defer func() {
+		gzipWriter.Reset(io.Discard)
+		gzipWriterPool.Put(gzipWriter)
+	}()
 	_, err := io.Copy(gzipWriter, file)
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())

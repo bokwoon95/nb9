@@ -210,9 +210,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 					ctx: ctx2,
 				}
 				file.info.filePath = row.String("file_path")
-				buf := bufPool.Get().(*bytes.Buffer)
-				buf.Reset()
-				b := buf.Bytes()
+				b := bufPool.Get().(*bytes.Buffer).Bytes()
 				row.Scan(&b, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
 				if b != nil {
 					file.buf = bytes.NewBuffer(b)
@@ -270,8 +268,10 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 						}
 						defer file.Close()
 						buf := bufPool.Get().(*bytes.Buffer)
-						buf.Reset()
-						defer bufPool.Put(buf)
+						defer func() {
+							buf.Reset()
+							bufPool.Put(buf)
+						}()
 						_, err = buf.ReadFrom(file)
 						if err != nil {
 							return err
@@ -361,8 +361,10 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 					}
 					defer file.Close()
 					reader := readerPool.Get().(*bufio.Reader)
-					reader.Reset(file)
-					defer readerPool.Put(reader)
+					defer func() {
+						reader.Reset(file)
+						readerPool.Put(reader)
+					}()
 					done := false
 					for !done {
 						line, err := reader.ReadSlice('\n')
@@ -430,7 +432,10 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, name string, fil
 	if siteGen.gzipGeneratedContent {
 		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
 		gzipWriter.Reset(writer)
-		defer gzipWriterPool.Put(gzipWriter)
+		defer func() {
+			gzipWriter.Reset(io.Discard)
+			gzipWriterPool.Put(gzipWriter)
+		}()
 		err = tmpl.Execute(gzipWriter, &pageData)
 		if err != nil {
 			return err
