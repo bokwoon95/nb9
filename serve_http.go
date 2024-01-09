@@ -241,8 +241,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var subdomain string
 	if MatchWildcard(r.Host, "*."+nbrew.ContentDomain) {
 		subdomain = strings.TrimSuffix(r.Host, "."+nbrew.ContentDomain)
-		switch subdomain {
-		case "cdn", "www":
+		if subdomain == "cdn" || subdomain == "www" {
 			// examples:
 			// cdn.nbrew.io/foo/bar.jpg             => sitePrefix: <none>,      urlPath: foo/bar.jpg
 			// cdn.nbrew.io/@username/foo/bar.jpg   => sitePrefix: @username,   urlPath: foo/bar.jpg
@@ -259,7 +258,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-		default:
+		} else {
 			sitePrefix = "@" + subdomain
 		}
 	} else if r.Host != nbrew.ContentDomain {
