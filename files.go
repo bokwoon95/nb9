@@ -684,7 +684,6 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	}
 
 	files, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-		Debug:   true,
 		Dialect: remoteFS.filesDialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
