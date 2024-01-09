@@ -19,7 +19,8 @@ notebrew/main.go
 
 {{ template "/themes/brassica/post.html" $ }}
 
-TODO: implement the "undeleteable files" index.html, post.html and postlist.html.
+TODO: debug why listRootDirectory is showing every entry as a zero value. The SQL query is alright, it returns 5 non-empty results. But the JSON is showing 5 empty fileEntries. Something is wrong with the sq library.
+TODO: Implement the "undeleteable files" index.html, post.html and postlist.html. When are they created? How are they maintained?
 TODO: before moving off file_handler, experiment with the SQLite backend for RemoteFS.
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
 TODO: main.go: for filesDB on SQLite, we should set the page size to 8192 instead for best blob performance (https://www.sqlite.org/intern-v-extern-blob.html)

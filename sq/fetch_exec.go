@@ -127,7 +127,7 @@ func FetchCursor[T any](ctx context.Context, db DB, query Query, rowmapper func(
 				b.WriteString("]")
 			}
 		}
-		b.WriteString("\n" + str)
+		b.WriteString("\n" + str + "\n")
 		os.Stderr.WriteString(b.String())
 	}
 
