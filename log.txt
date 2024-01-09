@@ -13,11 +13,8 @@ delete.go
 serve_http.go
 notebrew/main.go
 
-TODO: change the sync.Pool usage pattern from cleaning up after taking it out of the pool to cleaning up before putting it back in the pool. That way we have more consistency between how we clean up bytes.Buffers vs gzipReaders/gzipWriters.
-TODO: Implement the "undeleteable files" index.html, post.html and postlist.html. When are they created? How are they maintained?
-TODO: before moving off file_handler, experiment with the SQLite backend for RemoteFS.
+TODO: createsite.go, deletesite.go, createfile.go (?)
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
-TODO: main.go: for filesDB on SQLite, we should set the page size to 8192 instead for best blob performance (https://www.sqlite.org/intern-v-extern-blob.html)
 TODO: under what circumstances do we rewrite user links to CDN links? I can think of two scenarios where it is undesirable: when you're hosting the CMS on localhost and rewriting relative links to CDN links would break local preview, and when you're targeting a static site and any reference to an external host is likely to break unless you also set that up as well.
     I think the resolution is, keep CDN links manual first (don't automatically rewrite anything). That way when we finally deploy to live we can experiment with fetching a page without CDN links and fetching a page with CDN links and seeing which does better (and by how much).
 
