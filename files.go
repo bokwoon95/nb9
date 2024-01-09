@@ -1408,7 +1408,19 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 	var tmpl *template.Template
 	g1, ctx1 := errgroup.WithContext(ctx)
 	g1.Go(func() error {
-		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, strings.TrimPrefix(filePath, "pages/"), content, nil)
+		const doctype = "<!doctype html>"
+		text := strings.TrimSpace(content)
+		if len(text) > len(doctype) {
+			if !strings.EqualFold(text[:len(doctype)], doctype) {
+				text = "<!doctype html>" +
+					"\n<html lang='{{ $.Site.Lang }}'>" +
+					"\n<meta charset='utf-8'>" +
+					"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+					"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+					"\n" + text
+			}
+		}
+		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, strings.TrimPrefix(filePath, "pages/"), text, nil)
 		if err != nil {
 			return err
 		}
@@ -1567,6 +1579,10 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 					Parent: urlPath,
 					Name:   path.Base(row.String("file_path")),
 				}
+				// TODO: oh my god we do title detection here but what if the
+				// user wants to use 1. set a custom lang or 2. use a custom
+				// favicon? Then <!doctype> has to come first :/ and we can't
+				// use <!-- #title --> anymore
 				line := strings.TrimSpace(row.String("{}", sq.DialectExpression{
 					Default: sq.Expr("substr(text, 1, instr(text, char(10))-1)"),
 					Cases: []sq.DialectCase{{
@@ -1794,6 +1810,18 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 				return err
 			}
 			text = sql.NullString{String: b.String(), Valid: true}
+		}
+		const doctype = "<!doctype html>"
+		text.String = strings.TrimSpace(text.String)
+		if len(text.String) > len(doctype) {
+			if !strings.EqualFold(text.String[:len(doctype)], doctype) {
+				text.String = "<!doctype html>" +
+					"\n<html lang='{{ $.Site.Lang }}'>" +
+					"\n<meta charset='utf-8'>" +
+					"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+					"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+					"\n" + text.String
+			}
 		}
 		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, "/themes/post.html", text.String, []string{"/themes/post.html"})
 		if err != nil {
