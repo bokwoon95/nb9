@@ -79,11 +79,14 @@ func FetchCursor[T any](ctx context.Context, db DB, query Query, rowmapper func(
 	args := argsPool.Get().(*[]any)
 	*args = (*args)[:0]
 	defer argsPool.Put(args)
+	params := paramsPool.Get().(map[string][]int)
+	clear(params)
+	defer paramsPool.Put(params)
 	ordinalIndex := ordinalIndexPool.Get().(map[int]int)
 	clear(ordinalIndex)
 	defer ordinalIndexPool.Put(ordinalIndex)
 	runningValuesIndex := 0
-	err = writef(ctx, query.Dialect, buf, args, nil, query.Format[:splitAt], query.Values, &runningValuesIndex, ordinalIndex)
+	err = writef(ctx, query.Dialect, buf, args, params, query.Format[:splitAt], query.Values, &runningValuesIndex, ordinalIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -91,12 +94,12 @@ func FetchCursor[T any](ctx context.Context, db DB, query Query, rowmapper func(
 		if i > 0 {
 			buf.WriteString(", ")
 		}
-		err = expr.WriteSQL(ctx, query.Dialect, buf, args, nil)
+		err = expr.WriteSQL(ctx, query.Dialect, buf, args, params)
 		if err != nil {
 			return nil, err
 		}
 	}
-	err = writef(ctx, query.Dialect, buf, args, nil, query.Format[splitAt+3:], query.Values, &runningValuesIndex, ordinalIndex)
+	err = writef(ctx, query.Dialect, buf, args, params, query.Format[splitAt+3:], query.Values, &runningValuesIndex, ordinalIndex)
 	if err != nil {
 		return nil, err
 	}
