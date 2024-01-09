@@ -69,34 +69,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 	}
 
-	// Special case: make these files available on the root path of the main
-	// domain.
-	if r.Host == nbrew.CMSDomain {
-		var filePath string
-		if urlPath == "notebrew.webmanifest" {
-			filePath = "static/notebrew.webmanifest"
-		} else if urlPath == "apple-touch-icon.png" {
-			filePath = "static/icons/apple-touch-icon.png"
-		}
-		if filePath != "" {
-			file, err := RuntimeFS.Open(filePath)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			defer file.Close()
-			fileInfo, err := file.Stat()
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			serveFile(w, r, file, fileInfo, fileTypes[path.Ext(filePath)], "max-age: 2592000, stale-while-revalidate" /* 1 month */)
-			return
-		}
-	}
-
 	// Handle the /users/* route on the main domain.
 	head, tail, _ := strings.Cut(urlPath, "/")
 	if r.Host == nbrew.CMSDomain && head == "users" {
