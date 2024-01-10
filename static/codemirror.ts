@@ -159,7 +159,6 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
     } else {
       checked = ext != "html" && ext != "css" && ext != "js";
     }
-    console.log(`checked: ${checked}`);
     if (checked) {
       wordwrap.reconfigure(EditorView.lineWrapping);
     }
@@ -167,16 +166,13 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
     if (wordwrapInput) {
       wordwrapInput.checked = checked;
       wordwrapInput.addEventListener("change", function() {
-        console.log(`change checked: ${wordwrapInput.checked}`);
         if (wordwrapInput.checked) {
           localStorage.setItem(`wordwrap:${ext}`, "true");
-          console.log(`setItem: wordwrap:${ext}: true`);
           editorView.dispatch({
             effects: wordwrap.reconfigure(EditorView.lineWrapping),
           });
         } else {
           localStorage.setItem(`wordwrap:${ext}`, "false");
-          console.log(`setItem: wordwrap:${ext}: false`);
           editorView.dispatch({
             effects: wordwrap.reconfigure([]),
           });
