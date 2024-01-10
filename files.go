@@ -413,6 +413,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		var request struct {
 			Content string
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
 		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		switch contentType {
 		case "application/json":
@@ -424,6 +425,19 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				return
 			}
 		case "application/x-www-form-urlencoded", "multipart/form-data":
+			if contentType == "multipart/form-data" {
+				err := r.ParseMultipartForm(1 << 20 /* 1 MB */)
+				if err != nil {
+					badRequest(w, r, err)
+					return
+				}
+			} else {
+				err := r.ParseForm()
+				if err != nil {
+					badRequest(w, r, err)
+					return
+				}
+			}
 			request.Content = r.FormValue("content")
 		default:
 			unsupportedContentType(w, r)
