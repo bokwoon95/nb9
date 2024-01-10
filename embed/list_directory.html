@@ -6,11 +6,11 @@
 <style>{{ stylesCSS }}</style>
 <script type='module'>{{ directoryJS }}</script>
 <title>
-  {{ if $.FilePath }}
+  {{- if $.FilePath }}
   {{ base $.FilePath }}{{ if $.SitePrefix }} | {{ $.SitePrefix }}{{ end }}
-  {{ else }}
+  {{- else }}
   files{{ if $.SitePrefix }} | {{ $.SitePrefix }}{{ end }}
-  {{ end }}
+  {{- end }}
 </title>
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
