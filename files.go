@@ -92,7 +92,6 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			methodNotAllowed(w, r)
 			return
 		}
-		r.ParseForm()
 		if filePath == "" {
 			nbrew.listRootDirectory(w, r, username, sitePrefix, fileInfo.ModTime())
 			return
@@ -152,7 +151,6 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 
 	switch r.Method {
 	case "GET":
-		r.ParseForm()
 		response := fileResponse{
 			ContentSite: nbrew.contentSite(sitePrefix),
 			Username:    sql.NullString{String: username, Valid: nbrew.UsersDB != nil},
