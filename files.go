@@ -320,7 +320,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		case "output":
 			if tail != "index.html" {
 				n := strings.Index(tail, "/")
-				if tail[:n] != "posts" && tail[:n] != "themes" && isEditable {
+				if isEditable && tail[:n] != "posts" && tail[:n] != "themes" {
 					response.BelongsTo = path.Join("pages", path.Dir(tail)+".html")
 				}
 			}
