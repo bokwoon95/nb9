@@ -15,6 +15,7 @@ notebrew/main.go
 
 TODO: createsite.go, deletesite.go, createfile.go (?)
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
+    NOTE: for languages don't parse all the language json files and keep them in memory, instead implement a TTL using timers and timer.Reset everytime someone requests for that language file. Once the timer expires, delete it from the map.
 TODO: if CMSDomain is not localhost && the CDN link is configured in cdn.txt, we will intercept all generated links and rewrite relative links to CDN links. This means if you're generating pages on localhost, the links are always relative (since GitHub pages etc already host files on their own CDN). And if the user runs their own server but doesn't want to set up the CDN, they can skip configuring the CDN and all the links will stay relative (for max flexibility). Whenever links are rewritten to CDN links you do lose some file flexibility as it means they can no longer be plopped anywhere and just work, it assumes a cdn is up and available as well.
 
 https://www.cs.umd.edu/~ben/goldenrules.html
