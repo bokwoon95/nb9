@@ -1243,7 +1243,17 @@ func (storage *FileStorage) Put(ctx context.Context, key string, reader io.Reade
 	if runtime.GOOS == "windows" {
 		file, err := os.OpenFile(filepath.Join(storage.rootDir, key[:4], key), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
-			return err
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			err = os.Mkdir(filepath.Join(storage.rootDir, key[:4]), 0755)
+			if err != nil && !errors.Is(err, fs.ErrExist) {
+				return err
+			}
+			file, err = os.OpenFile(filepath.Join(storage.rootDir, key[:4], key), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+			if err != nil {
+				return err
+			}
 		}
 		_, err = io.Copy(file, reader)
 		if err != nil {
