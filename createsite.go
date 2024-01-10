@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/bokwoon95/nb9/sq"
 )
@@ -84,7 +83,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 			w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
-			executeTemplate(w, r, time.Time{}, tmpl, &response)
+			executeTemplate(w, r, tmpl, &response)
 		}
 
 		var response Response

@@ -454,7 +454,7 @@ var readerPool = sync.Pool{
 	},
 }
 
-func executeTemplate(w http.ResponseWriter, r *http.Request, modtime time.Time, tmpl *template.Template, data any) {
+func executeTemplate(w http.ResponseWriter, r *http.Request, tmpl *template.Template, data any) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer func() {
 		if buf.Cap() <= maxPoolableBufferCapacity {
@@ -495,7 +495,7 @@ func executeTemplate(w http.ResponseWriter, r *http.Request, modtime time.Time, 
 	w.Header().Set("Content-Encoding", "gzip")
 	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 	w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-	http.ServeContent(w, r, "", modtime, bytes.NewReader(buf.Bytes()))
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(buf.Bytes()))
 }
 
 func (nbrew *Notebrew) contentSite(sitePrefix string) string {

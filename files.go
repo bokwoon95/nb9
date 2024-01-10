@@ -383,7 +383,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			return
 		}
 		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
-		executeTemplate(w, r, response.ModTime, tmpl, &response)
+		executeTemplate(w, r, tmpl, &response)
 	case "POST":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response fileResponse) {
 			if r.Form.Has("api") {
@@ -592,7 +592,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			return
 		}
 		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
-		executeTemplate(w, r, modTime, tmpl, &response)
+		executeTemplate(w, r, tmpl, &response)
 	}
 
 	response := fileResponse{
@@ -955,7 +955,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			return
 		}
 		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
-		executeTemplate(w, r, modTime, tmpl, &response)
+		executeTemplate(w, r, tmpl, &response)
 	}
 
 	head, _, _ := strings.Cut(filePath, "/")
