@@ -1408,11 +1408,11 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 	var tmpl *template.Template
 	g1, ctx1 := errgroup.WithContext(ctx)
 	g1.Go(func() error {
-		const doctype = "<!doctype html>"
+		const doctype = "<!DOCTYPE html>"
 		text := strings.TrimSpace(content)
 		if len(text) > len(doctype) {
 			if !strings.EqualFold(text[:len(doctype)], doctype) {
-				text = "<!doctype html>" +
+				text = "<!DOCTYPE html>" +
 					"\n<html lang='{{ $.Site.Lang }}'>" +
 					"\n<meta charset='utf-8'>" +
 					"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
@@ -1579,7 +1579,7 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 				}
 				// TODO: oh my god we do title detection here but what if the
 				// user wants to use 1. set a custom lang or 2. use a custom
-				// favicon? Then <!doctype> has to come first :/ and we can't
+				// favicon? Then <!DOCTYPE> has to come first :/ and we can't
 				// use <!-- #title --> anymore
 				line := strings.TrimSpace(row.String("{}", sq.DialectExpression{
 					Default: sq.Expr("substr(text, 1, instr(text, char(10))-1)"),
@@ -1811,11 +1811,11 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 			}
 			text = sql.NullString{String: b.String(), Valid: true}
 		}
-		const doctype = "<!doctype html>"
+		const doctype = "<!DOCTYPE html>"
 		text.String = strings.TrimSpace(text.String)
 		if len(text.String) > len(doctype) {
 			if !strings.EqualFold(text.String[:len(doctype)], doctype) {
-				text.String = "<!doctype html>" +
+				text.String = "<!DOCTYPE html>" +
 					"\n<html lang='{{ $.Site.Lang }}'>" +
 					"\n<meta charset='utf-8'>" +
 					"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
