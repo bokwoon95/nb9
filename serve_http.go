@@ -71,11 +71,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "GET" {
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
-	}
-	err := r.ParseForm()
-	if err != nil {
-		badRequest(w, r, err)
-		return
+		err := r.ParseForm()
+		if err != nil {
+			badRequest(w, r, err)
+			return
+		}
 	}
 
 	// Handle the /users/* route on the CMS domain.
