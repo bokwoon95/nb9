@@ -78,7 +78,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle the /users/* route on the main domain.
+	// Handle the /users/* route on the CMS domain.
 	head, tail, _ := strings.Cut(urlPath, "/")
 	if r.Host == nbrew.CMSDomain && head == "users" {
 		switch tail {
@@ -95,7 +95,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle the /files/* route on the main domain.
+	// Handle the /files/* route on the CMS domain.
 	if r.Host == nbrew.CMSDomain && head == "files" {
 		urlPath := tail
 		head, tail, _ := strings.Cut(urlPath, "/")
@@ -337,7 +337,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // otherwise it falls back to http.Error().
 //
 // We fall back to http.Error() instead of notFound() because notFound()
-// depends on CSS/JS files hosted on the main domain and we don't want that
+// depends on CSS/JS files hosted on the CMS domain and we don't want that
 // dependency.
 func (nbrew *Notebrew) site404(w http.ResponseWriter, r *http.Request, sitePrefix string) {
 	// Check if the user's custom 404 page is available.
