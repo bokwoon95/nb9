@@ -160,7 +160,9 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
       checked = ext != ".html" && ext != ".css" && ext != ".js";
     }
     if (checked) {
-      wordwrap.reconfigure(EditorView.lineWrapping);
+      editorView.dispatch({
+        effects: wordwrap.reconfigure(EditorView.lineWrapping),
+      });
     }
     const wordwrapInput = document.querySelector<HTMLInputElement>(`input[type=checkbox]#wordwrap\\:${index}`);
     if (wordwrapInput) {
