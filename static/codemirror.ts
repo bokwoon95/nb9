@@ -130,19 +130,19 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
 
   // Configure language.
   const ext = dataCodemirror.getAttribute("data-codemirror")?.trim();
-  if (ext == "html") {
+  if (ext == ".html") {
     editorView.dispatch({
       effects: language.reconfigure(html()),
     });
-  } else if (ext == "css") {
+  } else if (ext == ".css") {
     editorView.dispatch({
       effects: language.reconfigure(css()),
     });
-  } else if (ext == "js") {
+  } else if (ext == ".js") {
     editorView.dispatch({
       effects: language.reconfigure(javascript()),
     });
-  } else if (ext == "md") {
+  } else if (ext == ".md") {
     editorView.dispatch({
       effects: language.reconfigure(markdown({
         base: markdownLanguage,
@@ -157,12 +157,12 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
     if (localStorage.getItem(`wordwrap:${ext}`) == "true") {
       checked = true;
     } else {
-      checked = ext != "html" && ext != "css" && ext != "js";
+      checked = ext != ".html" && ext != ".css" && ext != ".js";
     }
     if (checked) {
       wordwrap.reconfigure(EditorView.lineWrapping);
     }
-    const wordwrapInput = document.querySelector<HTMLInputElement>(`input[type=checkbox]#wordwrap\\:${ext}`);
+    const wordwrapInput = document.querySelector<HTMLInputElement>(`input[type=checkbox]#wordwrap\\:${index}`);
     if (wordwrapInput) {
       wordwrapInput.checked = checked;
       wordwrapInput.addEventListener("change", function() {
