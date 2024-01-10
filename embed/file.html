@@ -71,6 +71,7 @@
   <div class='flex mv2'>
     <label for='content' class='b'>{{ base $.FilePath }}</label>
     <div class='flex-grow-1'></div>
+    <label for='wordwrap' class='flex items-center pointer mh2'><input id='wordwrap' type='checkbox' class='pointer mh1'>Word wrap</label>
     <button id='bottom' type='submit' class='button ba ph3 br2'>save</button>
   </div>
   <div data-codemirror='{{ if hasSuffix $.FilePath ".html" }}html{{ else if hasSuffix $.FilePath ".css" }}css{{ else if hasSuffix $.FilePath ".js" }}javascript {{ else if hasSuffix $.FilePath ".md" }}markdown{{ end }}'>
