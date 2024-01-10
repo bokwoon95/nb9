@@ -34,106 +34,78 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
     continue;
   }
 
-  const extensions = [
-    // basic extensions copied from basicSetup in
-    // https://github.com/codemirror/basic-setup/blob/main/src/codemirror.ts.
-    lineNumbers(),
-    history(),
-    indentUnit.of("  "),
-    indentOnInput(),
-    autocompletion(),
-    keymap.of([
-      indentWithTab,
-      ...defaultKeymap,
-      ...historyKeymap,
-      ...completionKeymap,
-    ]),
-    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-    // Custom theme.
-    EditorView.theme({
-      "&": {
-        fontSize: "11.5pt",
-        border: "1px solid black",
-        backgroundColor: "white",
-      },
-      ".cm-content": {
-        fontFamily: "Menlo, Monaco, Lucida Console, monospace",
-        minHeight: "16rem"
-      },
-      ".cm-scroller": {
-        overflow: "auto",
-      }
-    }),
-    // Custom keymaps.
-    Prec.high(keymap.of([
-      {
-        // Ctrl-s/Cmd-s to save.
-        key: "Mod-s",
-        run: function(_: EditorView): boolean {
-          if (form) {
-            // Trigger all submit events on the form, so that the
-            // codemirror instances have a chance to sychronize
-            // with the textarea instances.
-            form.dispatchEvent(new Event("submit"));
-            // Actually submit the form.
-            form.submit();
-          }
-          return true;
-        },
-      },
-    ])),
-  ];
-
-  // Add the language extension.
-  const ext = dataCodemirror.getAttribute("data-codemirror")?.trim();
-  if (ext == "html") {
-    extensions.push(html());
-  } else if (ext == "css") {
-    extensions.push(css());
-  } else if (ext == "javascript") {
-    extensions.push(javascript());
-  } else if (ext == "markdown") {
-    extensions.push(markdown({
-      base: markdownLanguage,
-      // codeLanguages: languages,
-    }));
-  }
-
-  // Configure word wrap.
-  let key = `wordwrap:${index}`;
-  let value = localStorage.getItem(key);
-  let wordwrap = false;
-  if (value) {
-    wordwrap = Boolean(value);
-  } else {
-    wordwrap = ext != "html" && ext != "css" && ext != "javascript";
-  }
-  const wordwrapCompartment = new Compartment();
-  extensions.push(wordwrapCompartment.of(wordwrap ? EditorView.lineWrapping : []));
-  document.querySelector(".css");
-
   // Create the codemirror editor.
+  const language = new Compartment();
+  const wordwrap = new Compartment();
   const editorView = new EditorView({
     state: EditorState.create({
       doc: textarea.value,
-      extensions: extensions,
+      extensions: [
+        // Basic extensions copied from basicSetup in
+        // https://github.com/codemirror/basic-setup/blob/main/src/codemirror.ts.
+        lineNumbers(),
+        history(),
+        indentUnit.of("  "),
+        indentOnInput(),
+        autocompletion(),
+        keymap.of([
+          indentWithTab,
+          ...defaultKeymap,
+          ...historyKeymap,
+          ...completionKeymap,
+        ]),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        // Dynamic settings.
+        language.of([]),
+        wordwrap.of([]),
+        // Custom theme.
+        EditorView.theme({
+          "&": {
+            fontSize: "11.5pt",
+            border: "1px solid black",
+            backgroundColor: "white",
+          },
+          ".cm-content": {
+            fontFamily: "Menlo, Monaco, Lucida Console, monospace",
+            minHeight: "16rem"
+          },
+          ".cm-scroller": {
+            overflow: "auto",
+          }
+        }),
+        // Custom keymaps.
+        Prec.high(keymap.of([
+          {
+            // Ctrl-s/Cmd-s to save.
+            key: "Mod-s",
+            run: function(_: EditorView): boolean {
+              if (form) {
+                // Trigger all submit events on the form, so that the
+                // codemirror instances have a chance to sychronize
+                // with the textarea instances.
+                form.dispatchEvent(new Event("submit"));
+                // Actually submit the form.
+                form.submit();
+              }
+              return true;
+            },
+          },
+        ])),
+      ],
     }),
   });
+
+  // Replace the textarea with the codemirror editor.
+  textarea.style.display = "none";
+  textarea.after(editorView.dom);
 
   // Restore cursor position from localStorage.
   const position = Number(localStorage.getItem(`${window.location.pathname}:${index}`));
   if (position && position <= textarea.value.length) {
     editorView.dispatch({
-      selection: {
-        anchor: position,
-        head: position,
-      },
+      selection: { anchor: position, head: position },
     });
   }
-
-  // Replace the textarea with the codemirror editor.
-  textarea.style.display = "none";
-  textarea.after(editorView.dom);
 
   // If the textarea has autofocus on, shift focus to the codemirror editor.
   if (textarea.hasAttribute("autofocus")) {
@@ -155,4 +127,61 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
     // Copy the codemirror editor's contents to the textarea.
     textarea.value = editorView.state.doc.toString();
   });
+
+  // Configure language.
+  const ext = dataCodemirror.getAttribute("data-codemirror")?.trim();
+  if (ext == "html") {
+    editorView.dispatch({
+      effects: language.reconfigure(html()),
+    });
+  } else if (ext == "css") {
+    editorView.dispatch({
+      effects: language.reconfigure(css()),
+    });
+  } else if (ext == "js") {
+    editorView.dispatch({
+      effects: language.reconfigure(javascript()),
+    });
+  } else if (ext == "md") {
+    editorView.dispatch({
+      effects: language.reconfigure(markdown({
+        base: markdownLanguage,
+        // codeLanguages: languages,
+      })),
+    });
+  }
+
+  // Configure word wrap.
+  if (ext) {
+    let checked = false;
+    if (localStorage.getItem(`wordwrap:${ext}`) == "true") {
+      checked = true;
+    } else {
+      checked = ext != "html" && ext != "css" && ext != "js";
+    }
+    console.log(`checked: ${checked}`);
+    if (checked) {
+      wordwrap.reconfigure(EditorView.lineWrapping);
+    }
+    const wordwrapInput = document.querySelector<HTMLInputElement>(`input[type=checkbox]#wordwrap\\:${ext}`);
+    if (wordwrapInput) {
+      wordwrapInput.checked = checked;
+      wordwrapInput.addEventListener("change", function() {
+        console.log(`change checked: ${wordwrapInput.checked}`);
+        if (wordwrapInput.checked) {
+          localStorage.setItem(`wordwrap:${ext}`, "true");
+          console.log(`setItem: wordwrap:${ext}: true`);
+          editorView.dispatch({
+            effects: wordwrap.reconfigure(EditorView.lineWrapping),
+          });
+        } else {
+          localStorage.setItem(`wordwrap:${ext}`, "false");
+          console.log(`setItem: wordwrap:${ext}: false`);
+          editorView.dispatch({
+            effects: wordwrap.reconfigure([]),
+          });
+        }
+      });
+    }
+  }
 }

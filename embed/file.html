@@ -72,14 +72,14 @@
     <label for='content' class='b'>{{ base $.FilePath }}</label>
     <div class='flex-grow-1'></div>
     <button type='button' class='button ba br2 mh2 pointer'>
-      <label for='wordwrap:0' class='pointer flex items-center'>
-        <input id='wordwrap:0' type='checkbox' class='pointer'>
+      <label for='wordwrap:{{ trimPrefix (ext $.FilePath) "." }}' class='pointer flex items-center'>
+        <input id='wordwrap:{{ trimPrefix (ext $.FilePath) "." }}' type='checkbox' class='pointer'>
         <span class='mh1'>word wrap</span>
       </label>
     </button>
     <button id='bottom' type='submit' class='button ba ph3 br2'>save</button>
   </div>
-  <div data-codemirror='{{ if hasSuffix $.FilePath ".html" }}html{{ else if hasSuffix $.FilePath ".css" }}css{{ else if hasSuffix $.FilePath ".js" }}javascript{{ else if hasSuffix $.FilePath ".md" }}markdown{{ end }}'>
+  <div data-codemirror='{{ trimPrefix (ext $.FilePath) "." }}'>
     <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code' autofocus>{{ $.Content }}</textarea>
   </div>
   <button id='bottom' type='submit' class='button ba br2 pa2 mv2 w-100'>save</button>
