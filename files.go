@@ -31,42 +31,43 @@ import (
 )
 
 type fileEntry struct {
-	Name    string
-	Size    int64
-	ModTime time.Time
-	IsDir   bool
+	Name    string    `json:"name"`
+	IsDir   bool      `json:"isDir"`
+	ModTime time.Time `json:"modTime"`
+	Size    int64     `json:"size,omitempty"`
 }
 
 type siteEntry struct {
-	Name  string
-	Owner string
+	Name  string `json:"name"`
+	Owner string `json:"owner,omitempty"`
 }
 
 type fileResponse struct {
-	Status      string
-	ContentSite string
-	Username    sql.NullString
-	SitePrefix  string
-	FilePath    string
-	IsDir       bool
-	ModTime     time.Time
+	Status        string            `json:"status"`
+	ContentSite   string            `json:"contentSite"`
+	Username      NullString        `json:"username"`
+	SitePrefix    string            `json:"sitePrefix"`
+	FilePath      string            `json:"filePath"`
+	IsDir         bool              `json:"isDir"`
+	ModTime       time.Time         `json:"modTime"`
+	SessionParams map[string]string `json:"sessionParams,omitempty"`
 
-	Sort            string      `json:",omitempty"`
-	Order           string      `json:",omitempty"`
-	Files           []fileEntry `json:",omitempty"`
-	HasPreviousFile bool        `json:",omitempty"`
-	NextFile        string      `json:",omitempty"`
-	Sites           []siteEntry `json:",omitempty"`
-	HasPreviousSite bool        `json:",omitempty"`
-	NextSite        string      `json:",omitempty"`
-	Limit           int         `json:",omitempty"`
+	Sort            string      `json:"sort,omitempty"`
+	Order           string      `json:"order,omitempty"`
+	Files           []fileEntry `json:"files,omitempty"`
+	HasPreviousFile bool        `json:"hasPreviousFile,omitempty"`
+	NextFile        string      `json:"nextFile,omitempty"`
+	Sites           []siteEntry `json:"sites,omitempty"`
+	HasPreviousSite bool        `json:"hasPreviousSite,omitempty"`
+	NextSite        string      `json:"nextSite,omitempty"`
+	Limit           int         `json:"limit,omitempty"`
 
-	Content        string      `json:",omitempty"`
-	URL            string      `json:",omitempty"`
-	BelongsTo      string      `json:",omitempty"`
-	AssetDir       string      `json:",omitempty"`
-	Assets         []fileEntry `json:",omitempty"`
-	TemplateErrors []string    `json:",omitempty"`
+	Content        string      `json:"content,omitempty"`
+	URL            string      `json:"url,omitempty"`
+	BelongsTo      string      `json:"belongsTo,omitempty"`
+	AssetDir       string      `json:"assetDir,omitempty"`
+	Assets         []fileEntry `json:"assets,omitempty"`
+	TemplateErrors []string    `json:"templateErrors,omitempty"`
 }
 
 func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
@@ -153,7 +154,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 	case "GET":
 		response := fileResponse{
 			ContentSite: nbrew.contentSite(sitePrefix),
-			Username:    sql.NullString{String: username, Valid: nbrew.UsersDB != nil},
+			Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
 			SitePrefix:  sitePrefix,
 			FilePath:    filePath,
 			IsDir:       fileInfo.IsDir(),
@@ -165,7 +166,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		}
 		nbrew.clearSession(w, r, "flash")
 		response.ContentSite = nbrew.contentSite(sitePrefix)
-		response.Username = sql.NullString{String: username, Valid: nbrew.UsersDB != nil}
+		response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 		response.SitePrefix = sitePrefix
 		response.FilePath = filePath
 		response.IsDir = fileInfo.IsDir()
@@ -446,7 +447,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 
 		response := fileResponse{
 			ContentSite: nbrew.contentSite(sitePrefix),
-			Username:    sql.NullString{String: username, Valid: nbrew.UsersDB != nil},
+			Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
 			SitePrefix:  sitePrefix,
 			FilePath:    filePath,
 			IsDir:       fileInfo.IsDir(),
@@ -597,7 +598,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 
 	response := fileResponse{
 		ContentSite: nbrew.contentSite(sitePrefix),
-		Username:    sql.NullString{String: username, Valid: nbrew.UsersDB != nil},
+		Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
 		SitePrefix:  sitePrefix,
 		IsDir:       true,
 		ModTime:     modTime,
@@ -966,7 +967,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 
 	response := fileResponse{
 		ContentSite: nbrew.contentSite(sitePrefix),
-		Username:    sql.NullString{String: username, Valid: nbrew.UsersDB != nil},
+		Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
 		SitePrefix:  sitePrefix,
 		FilePath:    filePath,
 		IsDir:       true,

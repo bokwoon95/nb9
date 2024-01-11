@@ -9,41 +9,34 @@
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
   <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
-  &bull;
-  <a href='{{ $.ContentSite }}' class='ma2 white'>{{ if hasPrefix $.ContentSite "https://" }}{{ trimPrefix $.ContentSite "https://" }}{{ else }}{{ trimPrefix $.ContentSite "http://" }}{{ end }}</a>
-  <span class='flex-grow-1'></span>
-  {{- if $.Username.Valid }}
-  <a href='' class='ma2'>{{ if $.Username.String }}@{{ $.Username.String }}{{ else }}user{{ end }}</a>
-  <a href='/users/logout/' class='ma2'>logout</a>
-  {{- end }}
 </nav>
 {{- if eq $.Status "MaxSitesReached" }}
 <div class='mv5 w-80 w-70-m w-60-l center'>
-    {{- if referer }}
-    <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- if referer }}
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- end }}
+  <div class='mv3 b'>You have reached the maximum of {{ maxSites }} sites, cannot create any more.</div>
+  <ul class='ph3'>
+    {{- range $siteName := $.UserSiteNames }}
+    <li><a href='/files/{{ if not (contains $siteName ".") }}@{{ end }}{{ $siteName }}/'>{{ $siteName }}</a></li>
     {{- end }}
-    <div class='mv3 b'>You have reached the maximum of {{ maxSites }} sites, cannot create any more.</div>
-    <ul class='ph3'>
-        {{- range $siteName := $.SiteNames }}
-        <li><a href='/{{ join `admin` (toSitePrefix $siteName) }}/'>{{ $siteName }}</a></li>
-        {{- end }}
-    </ul>
+  </ul>
 </div>
 {{- else }}
-<form method='post' action='/admin/createsite/' class='mv5 w-80 w-70-m w-60-l center'>
-    {{- if referer }}
-    <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
-    {{- end }}
-    <h1 class='f3 mv3 b'>Create a new site</h1>
-    <div class='mv3'>
-        <div><label for='siteName' class='b'>Site name:</label></div>
-        <input id='siteName' name='siteName' value='{{ $.SiteName }}' class='pv1 ph2 br2 ba w-100{{ if index $.Errors `siteName` }} b--invalid-red{{ end }}' autocomplete='on' autofocus required>
-        <ul>
-            {{- range $i, $error := index $.Errors "siteName" }}
-            <li class='f6 invalid-red list-style-disc'>{{ $error.Message }}</li>
-            {{- end }}
-        </ul>
-    </div>
-    <button type='submit' class='button ba br2 pa2 mv3 w-100'>Create site</button>
+<form method='post' action='/files/createsite/' class='mv5 w-80 w-70-m w-60-l center'>
+  {{- if referer }}
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- end }}
+  <h1 class='f3 mv3 b'>Create a new site</h1>
+  <div class='mv3'>
+    <div><label for='siteName' class='b'>Site name:</label></div>
+    <input id='siteName' name='siteName' value='{{ $.SiteName }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "siteName" }} b--invalid-red{{ end }}' autocomplete='on' autofocus required>
+    <ul>
+      {{- range $error := index $.FormErrors "siteName" }}
+      <li class='f6 invalid-red list-style-disc'>{{ $error }}</li>
+      {{- end }}
+    </ul>
+  </div>
+  <button type='submit' class='button ba br2 pa2 mv3 w-100'>Create site</button>
 </form>
 {{- end }}

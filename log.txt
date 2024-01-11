@@ -25,6 +25,11 @@ https://www.cs.umd.edu/~ben/goldenrules.html
 - Every user action should have feedback. Common user actions can have modest feedback, major user actions should have big feedback.
 - Permit easy reversal of actions.
 
+Crazy style guide:
+- All JSON properties are PascalCase
+- All HTML form names are PascalCase
+- All HTML IDs are PascalCase
+
 notebrew-config/
 notebrew-users.db
 notebrew-files/

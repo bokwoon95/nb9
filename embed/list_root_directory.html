@@ -29,6 +29,14 @@
   <div class='ml2'><button type='button' class='button-danger ba br2 b--dark-red pv2 ph2'>clear</button></div>
 </div>
 
+{{- if eq $.Status "CreateSiteSuccess" }}
+<div role='alert' class='alert-success mv2 pa2 br2 flex items-center'>
+  <div>Site created: <a href='/files/{{ index $.SessionParams "sitePrefix" }}/'>{{ index $.SessionParams "sitePrefix" }}</a></div>
+  <div class='flex-grow-1'></div>
+  <button class='f3 bg-transparent bn color-success o-70 hover-black' data-dismiss-alert>&times;</button>
+</div>
+{{- end }}
+
 {{- if $.Files }}
 <div class='mv2 flex flex-wrap items-center'>
   <div class='flex-grow-1'></div>
@@ -59,7 +67,7 @@
 </div>
 <div class='bb pb2'><a href='/files/'>files</a> /{{ if $.SitePrefix }} <a href='/files/{{ $.SitePrefix }}/'>{{ $.SitePrefix }}</a> /{{ end }}</div>
 <ul class='mb4'>
-  {{- range $i, $file := $.Files }}
+  {{- range $file := $.Files }}
     {{- if eq $file.Name "notes" }}
     <li class='flex flex-wrap items-center bb pv2'>
       <span class='flex items-center mr2'>{{ template "heroicons-folder-open" }}</span>

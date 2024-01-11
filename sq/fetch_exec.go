@@ -35,6 +35,17 @@ type Cursor[T any] struct {
 
 // FetchCursor returns a new cursor.
 func FetchCursor[T any](ctx context.Context, db DB, query Query, rowmapper func(*Row) T) (cursor *Cursor[T], err error) {
+	switch db := db.(type) {
+	case nil:
+		return nil, fmt.Errorf("database is nil")
+	case *sql.DB:
+		if db == nil {
+			return nil, fmt.Errorf("database is nil")
+		}
+	}
+	if rowmapper == nil {
+		return nil, fmt.Errorf("rowmapper cannot be nil")
+	}
 	cursor = &Cursor[T]{
 		ctx:       ctx,
 		rowmapper: rowmapper,

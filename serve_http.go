@@ -220,6 +220,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch urlPath {
 		case "createsite":
+			nbrew.createsite(w, r, username)
 		case "deletesite":
 		case "delete":
 		case "createnote":

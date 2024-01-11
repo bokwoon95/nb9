@@ -77,12 +77,12 @@
         <span class='mh1'>word wrap</span>
       </label>
     </button>
-    <button id='bottom' type='submit' class='button ba ph3 br2'>save</button>
+    <button type='submit' class='button ba ph3 br2'>save</button>
   </div>
   <div data-codemirror='{{ ext $.FilePath }}'>
     <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code' autofocus>{{ $.Content }}</textarea>
   </div>
-  <button id='bottom' type='submit' class='button ba br2 pa2 mv2 w-100'>save</button>
+  <button type='submit' class='button ba br2 pa2 mv2 w-100'>save</button>
 </form>
 {{- if eq (head $.FilePath) "pages" "posts" }}
 <div class='mv2'>
@@ -97,7 +97,7 @@
 </div>
   {{- if $.Assets }}
   <ul class='grid grid-cols-auto-150px grid-gap-3 mv2'>
-    {{- range $i, $asset := $.Assets }}
+    {{- range $asset := $.Assets }}
     <li class='h-100'>
       {{- if eq (ext $asset.Name) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
       <img src='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='w-100' loading='lazy'>
