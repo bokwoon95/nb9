@@ -143,7 +143,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				}
 				err := nbrew.setSession(w, r, "flash", map[string]any{
 					"postGetRedirect": map[string]string{
-						"action":     "/files/createsite/",
+						"from":       "createsite",
 						"sitePrefix": sitePrefix,
 					},
 				})

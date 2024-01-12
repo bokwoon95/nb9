@@ -43,7 +43,6 @@ type siteEntry struct {
 }
 
 type fileResponse struct {
-	Status          string            `json:"status"`
 	PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
 	ContentSite     string            `json:"contentSite"`
 	Username        NullString        `json:"username"`
@@ -171,9 +170,6 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		response.FilePath = filePath
 		response.IsDir = fileInfo.IsDir()
 		response.ModTime = fileInfo.ModTime()
-		if response.Status == "" {
-			response.Status = "GetSuccess"
-		}
 
 		if isEditable {
 			var b strings.Builder
