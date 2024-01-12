@@ -24,7 +24,7 @@ PRG success: status: PRG_OK
     - sitePrefix: sitePrefix
 
 prg: {
-    code:
+    action:
     message:
 }
 
@@ -32,7 +32,7 @@ type FormErrors map[string][]map[string]string
 type PRG map[string]string
 
 name: [{
-    code: ThisIsIt
+    code: MaxSitesReached # leave code out of it until someone needs to programtically assert a form error
     message: this is the thing
 }]
 
