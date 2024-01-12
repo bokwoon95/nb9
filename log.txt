@@ -72,6 +72,10 @@ https://www.cs.umd.edu/~ben/goldenrules.html
 - Every user action should have feedback. Common user actions can have modest feedback, major user actions should have big feedback.
 - Permit easy reversal of actions.
 
+ARM shared vCPUs from Hetzner (trivially upgradeable up to 16 cores, 32 GB RAM and 320 GB disk space).
+Backblaze for Storage
+BunnyCDN for CDN
+
 notebrew-config/
 notebrew-users.db
 notebrew-files/
