@@ -36,6 +36,30 @@ name: [{
     message: this is the thing
 }]
 
+> Account created, please log in using your new credentials.
+PRG["action"]: "signup"
+
+> Password reset successfully, please log in using your new credentials.
+PRG["action"]: "resetpassword"
+
+> You are already logged in, <a href="/{{ join `admin` $.SitePrefix }}/" class="linktext">click here to go to your dashboard</a>.
+Error["code"]: AlreadyLoggedIn
+
+> Please retry with captcha.
+Error["code"]: RetryWithCaptcha
+
+> Captcha challenge failed.
+Error["code"]: CaptchaChallengeFailed
+
+> Incorrect login credentials.
+Error["code"]: IncorrectLoginCredentials
+
+> User not found.
+Error["code"]: UserNotFound
+
+> Please log in.
+Error["code"]: PleaseLogIn
+
 TODO: now that createsite is implemented, implement deletesite quickly otherwise you will not be able to deal with the deluge of test data.
 TODO: a little "view data" link on file.html that simply the href "?data". When clicked, it generates live data of the page in real time if we're on a page.html, or the latest post/last page data if we're on post.html/postlist.html.
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
@@ -47,11 +71,6 @@ TODO: if CMSDomain is not localhost && the CDN link is configured in cdn.txt, we
 https://www.cs.umd.edu/~ben/goldenrules.html
 - Every user action should have feedback. Common user actions can have modest feedback, major user actions should have big feedback.
 - Permit easy reversal of actions.
-
-Crazy style guide:
-- All JSON properties are PascalCase
-- All HTML form names are PascalCase
-- All HTML IDs are PascalCase
 
 notebrew-config/
 notebrew-users.db
