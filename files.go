@@ -540,7 +540,6 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				return
 			}
 		}
-		response.Status = "PostSuccess"
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)
