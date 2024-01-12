@@ -37,10 +37,10 @@ name: [{
 }]
 
 > Account created, please log in using your new credentials.
-PRG["action"]: "signup"
+PRG["action"]: "/files/signup/"
 
 > Password reset successfully, please log in using your new credentials.
-PRG["action"]: "resetpassword"
+PRG["action"]: "/users/resetpassword/"
 
 > You are already logged in, <a href="/{{ join `admin` $.SitePrefix }}/" class="linktext">click here to go to your dashboard</a>.
 Error["code"]: AlreadyLoggedIn

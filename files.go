@@ -43,14 +43,14 @@ type siteEntry struct {
 }
 
 type fileResponse struct {
-	Status        string            `json:"status"`
-	ContentSite   string            `json:"contentSite"`
-	Username      NullString        `json:"username"`
-	SitePrefix    string            `json:"sitePrefix"`
-	FilePath      string            `json:"filePath"`
-	IsDir         bool              `json:"isDir"`
-	ModTime       time.Time         `json:"modTime"`
-	SessionParams map[string]string `json:"sessionParams,omitempty"`
+	Status          string            `json:"status"`
+	PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
+	ContentSite     string            `json:"contentSite"`
+	Username        NullString        `json:"username"`
+	SitePrefix      string            `json:"sitePrefix"`
+	FilePath        string            `json:"filePath"`
+	IsDir           bool              `json:"isDir"`
+	ModTime         time.Time         `json:"modTime"`
 
 	Sort            string      `json:"sort,omitempty"`
 	Order           string      `json:"order,omitempty"`
