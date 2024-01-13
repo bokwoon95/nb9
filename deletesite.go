@@ -9,8 +9,8 @@ import (
 	"io/fs"
 	"mime"
 	"net/http"
+	"net/url"
 	"strings"
-	"time"
 
 	"github.com/bokwoon95/nb9/sq"
 )
@@ -20,8 +20,10 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 		SiteName string `json:"siteName,omitempty"`
 	}
 	type Response struct {
-		Status   string `json:"status"`
-		SiteName string `json:"siteName,omitempty"`
+		Error       string     `json:"error,omitempty"`
+		FieldErrors url.Values `json:"fieldErrors,omitempty"`
+		Username    NullString `json:"username"`
+		SiteName    string     `json:"siteName,omitempty"`
 	}
 
 	validateSiteName := func(siteName string) bool {
@@ -53,14 +55,13 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 		return exists, nil
 	}
 
-	// site join site_owner join users
 	getSitePermissions := func(siteName, username string) (siteNotFound, userIsAuthorized bool, err error) {
 		userIsAuthorized, err = sq.FetchOne(r.Context(), nbrew.UsersDB, sq.Query{
 			Dialect: nbrew.UsersDialect,
 			Format: "SELECT {*}" +
 				" FROM site" +
-				" LEFT JOIN site_user ON site_user.site_id = site.site_id" +
-				" LEFT JOIN users ON users.user_id = site_user.user_id" +
+				" LEFT JOIN site_owner ON site_owner.site_id = site.site_id" +
+				" LEFT JOIN users ON users.user_id = site_owner.user_id" +
 				" WHERE site.site_name = {siteName}" +
 				" AND users.username = {username}",
 			Values: []any{
@@ -79,7 +80,6 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 		return false, userIsAuthorized, nil
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
 	switch r.Method {
 	case "GET":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
@@ -95,12 +95,11 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 			funcMap := map[string]any{
-				"trimPrefix":  strings.TrimPrefix,
-				"stylesCSS":   func() template.CSS { return template.CSS(stylesCSS) },
-				"baselineJS":  func() template.JS { return template.JS(baselineJS) },
-				"hasDatabase": func() bool { return nbrew.DB != nil },
-				"referer":     func() string { return r.Referer() },
-				"username":    func() string { return username },
+				"trimPrefix": strings.TrimPrefix,
+				"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
+				"baselineJS": func() template.JS { return template.JS(baselineJS) },
+				"referer":    func() string { return r.Referer() },
+				"username":   func() string { return username },
 				"toSitePrefix": func(siteName string) string {
 					if strings.Contains(siteName, ".") {
 						return siteName
@@ -111,43 +110,38 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 					return ""
 				},
 			}
-			tmpl, err := template.New("deletesite.html").Funcs(funcMap).ParseFS(rootFS, "embed/deletesite.html")
+			tmpl, err := template.New("deletesite.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/deletesite.html")
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
-			contentSecurityPolicy(w, "", false)
-			executeTemplate(w, r, time.Time{}, tmpl, &response)
+			w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+			executeTemplate(w, r, tmpl, &response)
 		}
 
-		err := r.ParseForm()
-		if err != nil {
-			badRequest(w, r, err)
-			return
+		response := Response{
+			Username: NullString{String: username, Valid: nbrew.UsersDB != nil},
 		}
-		var response Response
-		_, err = nbrew.getSession(r, "flash", &response)
+		_, err := nbrew.getSession(r, "flash", &response)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
 		}
 		nbrew.clearSession(w, r, "flash")
-		if response.Status != "" {
+		if response.Error != "" {
 			writeResponse(w, r, response)
 			return
 		}
 
 		response.SiteName = r.Form.Get("name")
 		if response.SiteName == "" {
-			response.Status = ErrSiteNameNotProvided
+			response.Error = "SiteNameNotProvided"
 			writeResponse(w, r, response)
 			return
 		}
 		valid := validateSiteName(response.SiteName)
 		if !valid {
-			response.Status = ErrInvalidSiteName
+			response.Error = "InvalidSiteName"
 			writeResponse(w, r, response)
 			return
 		}
@@ -158,7 +152,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 		if isUser {
-			response.Status = ErrSiteIsUser
+			response.Error = "SiteIsUser"
 			writeResponse(w, r, response)
 			return
 		}
@@ -169,16 +163,15 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 		if siteNotFound {
-			response.Status = ErrSiteNotFound
+			response.Error = "SiteNotFound"
 			writeResponse(w, r, response)
 			return
 		}
 		if !userIsAuthorized {
-			response.Status = ErrNotAuthorized
+			response.Error = "NotAuthorized"
 			writeResponse(w, r, response)
 			return
 		}
-		response.Status = Success
 		writeResponse(w, r, response)
 	case "POST":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
@@ -194,7 +187,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				w.Write(b)
 				return
 			}
-			if !response.Status.Success() {
+			if !response.Error.Success() {
 				err := nbrew.setSession(w, r, "flash", &response)
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
@@ -205,7 +198,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
-				"status": Error(fmt.Sprintf(`%s Site deleted`, response.Status.Code())),
+				"status": Error(fmt.Sprintf(`%s Site deleted`, response.Error.Code())),
 			})
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -216,6 +209,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 		}
 
 		var request Request
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
 		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		switch contentType {
 		case "application/json":
@@ -226,7 +220,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			}
 		case "application/x-www-form-urlencoded", "multipart/form-data":
 			if contentType == "multipart/form-data" {
-				err := r.ParseMultipartForm(2 << 20 /* 2MB */)
+				err := r.ParseMultipartForm(1 << 20 /* 1 MB */)
 				if err != nil {
 					badRequest(w, r, err)
 					return
@@ -248,13 +242,13 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			SiteName: request.SiteName,
 		}
 		if response.SiteName == "" {
-			response.Status = ErrSiteNameNotProvided
+			response.Error = ErrSiteNameNotProvided
 			writeResponse(w, r, response)
 			return
 		}
 		ok := validateSiteName(response.SiteName)
 		if !ok {
-			response.Status = ErrInvalidSiteName
+			response.Error = ErrInvalidSiteName
 			writeResponse(w, r, response)
 			return
 		}
@@ -265,7 +259,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 		if ok {
-			response.Status = ErrSiteIsUser
+			response.Error = ErrSiteIsUser
 			writeResponse(w, r, response)
 			return
 		}
@@ -276,12 +270,12 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 		if siteNotFound {
-			response.Status = ErrSiteNotFound
+			response.Error = ErrSiteNotFound
 			writeResponse(w, r, response)
 			return
 		}
 		if !userIsAuthorized {
-			response.Status = ErrNotAuthorized
+			response.Error = ErrNotAuthorized
 			writeResponse(w, r, response)
 			return
 		}
@@ -342,7 +336,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 		}
-		response.Status = DeleteSiteSuccess
+		response.Error = DeleteSiteSuccess
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)

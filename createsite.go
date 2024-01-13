@@ -21,10 +21,10 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 	}
 	type Response struct {
 		Error         string     `json:"error"`
+		FieldErrors   url.Values `json:"fieldErrors,omitempty"`
 		Username      NullString `json:"username"`
 		SiteName      string     `json:"siteName,omitempty"`
 		UserSiteNames []string   `json:"userSiteNames,omitempty"`
-		FieldErrors   url.Values `json:"fieldErrors,omitempty"`
 	}
 	const maxSites = 3
 
