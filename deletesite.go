@@ -4,12 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
 	"io/fs"
 	"mime"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/bokwoon95/nb9/sq"
@@ -20,10 +18,9 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 		SiteName string `json:"siteName,omitempty"`
 	}
 	type Response struct {
-		Error       string     `json:"error,omitempty"`
-		FieldErrors url.Values `json:"fieldErrors,omitempty"`
-		Username    NullString `json:"username"`
-		SiteName    string     `json:"siteName,omitempty"`
+		Error    string     `json:"error,omitempty"`
+		Username NullString `json:"username"`
+		SiteName string     `json:"siteName,omitempty"`
 	}
 
 	validateSiteName := func(siteName string) bool {
@@ -187,25 +184,27 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				w.Write(b)
 				return
 			}
-			if !response.Error.Success() {
+			if response.Error != "" {
 				err := nbrew.setSession(w, r, "flash", &response)
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)
 					return
 				}
-				http.Redirect(w, r, nbrew.Scheme+nbrew.AdminDomain+"/admin/deletesite/", http.StatusFound)
+				http.Redirect(w, r, "/files/deletesite/", http.StatusFound)
 				return
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
-				"status": Error(fmt.Sprintf(`%s Site deleted`, response.Error.Code())),
+				"postRedirectGet": map[string]string{
+					"from": "deletesite",
+				},
 			})
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
-			http.Redirect(w, r, nbrew.Scheme+nbrew.AdminDomain+"/admin/", http.StatusFound)
+			http.Redirect(w, r, "/files/", http.StatusFound)
 		}
 
 		var request Request
@@ -239,16 +238,17 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 		}
 
 		response := Response{
+			Username: NullString{String: username, Valid: nbrew.UsersDB != nil},
 			SiteName: request.SiteName,
 		}
 		if response.SiteName == "" {
-			response.Error = ErrSiteNameNotProvided
+			response.Error = "SiteNameNotProvided"
 			writeResponse(w, r, response)
 			return
 		}
 		ok := validateSiteName(response.SiteName)
 		if !ok {
-			response.Error = ErrInvalidSiteName
+			response.Error = "InvalidSiteName"
 			writeResponse(w, r, response)
 			return
 		}
@@ -259,7 +259,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 		if ok {
-			response.Error = ErrSiteIsUser
+			response.Error = "SiteIsUser"
 			writeResponse(w, r, response)
 			return
 		}
@@ -270,12 +270,12 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 		if siteNotFound {
-			response.Error = ErrSiteNotFound
+			response.Error = "SiteNotFound"
 			writeResponse(w, r, response)
 			return
 		}
 		if !userIsAuthorized {
-			response.Error = ErrNotAuthorized
+			response.Error = "NotAuthorized"
 			writeResponse(w, r, response)
 			return
 		}
@@ -283,25 +283,25 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 		var sitePrefix string
 		if strings.Contains(response.SiteName, ".") {
 			sitePrefix = response.SiteName
-		} else if response.SiteName != "" {
+		} else {
 			sitePrefix = "@" + response.SiteName
 		}
-		err = RemoveAll(nbrew.FS, sitePrefix)
+		err = nbrew.FS.RemoveAll(sitePrefix)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
 		}
-		if nbrew.DB != nil {
-			tx, err := nbrew.DB.Begin()
+		if nbrew.UsersDB != nil {
+			tx, err := nbrew.UsersDB.Begin()
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
 			defer tx.Rollback()
-			_, err = sq.ExecContext(r.Context(), tx, sq.CustomQuery{
-				Dialect: nbrew.Dialect,
+			_, err = sq.Exec(r.Context(), tx, sq.Query{
+				Dialect: nbrew.UsersDialect,
 				Format: "DELETE FROM site_user WHERE EXISTS (" +
 					"SELECT 1" +
 					" FROM site" +
@@ -317,8 +317,8 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				internalServerError(w, r, err)
 				return
 			}
-			_, err = sq.ExecContext(r.Context(), tx, sq.CustomQuery{
-				Dialect: nbrew.Dialect,
+			_, err = sq.Exec(r.Context(), tx, sq.Query{
+				Dialect: nbrew.UsersDialect,
 				Format:  "DELETE FROM site WHERE site_name = {siteName}",
 				Values: []any{
 					sq.StringParam("siteName", request.SiteName),
@@ -336,7 +336,6 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 		}
-		response.Error = DeleteSiteSuccess
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)
