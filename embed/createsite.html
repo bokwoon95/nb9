@@ -10,7 +10,7 @@
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
   <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
 </nav>
-{{- if eq $.Status "MaxSitesReached" }}
+{{- if eq $.Error "MaxSitesReached" }}
 <div class='mv5 w-80 w-70-m w-60-l center'>
   {{- if referer }}
   <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
@@ -30,9 +30,9 @@
   <h1 class='f3 mv3 b'>Create a new site</h1>
   <div class='mv3'>
     <div><label for='siteName' class='b'>Site name:</label></div>
-    <input id='siteName' name='siteName' value='{{ $.SiteName }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "siteName" }} b--invalid-red{{ end }}' autocomplete='on' autofocus required>
+    <input id='siteName' name='siteName' value='{{ $.SiteName }}' class='pv1 ph2 br2 ba w-100{{ if index $.FieldErrors "siteName" }} b--invalid-red{{ end }}' autocomplete='on' autofocus required>
     <ul>
-      {{- range $error := index $.FormErrors "siteName" }}
+      {{- range $error := index $.FieldErrors "siteName" }}
       <li class='f6 invalid-red list-style-disc'>{{ $error }}</li>
       {{- end }}
     </ul>

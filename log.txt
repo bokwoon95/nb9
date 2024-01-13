@@ -28,7 +28,8 @@ prg: {
     message:
 }
 
-type FormErrors map[string][]map[string]string
+type Error string
+type FieldErrors map[string][]string
 type PRG map[string]string
 
 name: [{
