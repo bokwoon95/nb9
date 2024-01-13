@@ -19,7 +19,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 	}
 	type Response struct {
 		Error    string     `json:"error,omitempty"`
-		Username NullString `json:"username"`
+		Username NullString `json:"username,omitempty"`
 		SiteName string     `json:"siteName,omitempty"`
 	}
 
