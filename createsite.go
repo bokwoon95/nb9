@@ -377,7 +377,6 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 		}
-		response.Error = "CreateSiteSuccess"
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)

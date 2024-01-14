@@ -855,10 +855,10 @@ func (fsys *RemoteFS) Remove(name string) error {
 			sq.StringParam("name", name),
 		},
 	}, func(row *sq.Row) (file struct {
-		fileID       [16]byte
-		filePath     string
-		isDir        bool
-		hasChildren  bool
+		fileID      [16]byte
+		filePath    string
+		isDir       bool
+		hasChildren bool
 	}) {
 		row.UUID(&file.fileID, "file_id")
 		file.filePath = row.String("file_path")
@@ -936,7 +936,16 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	pattern := strings.NewReplacer("%", "\\%", "_", "\\_").Replace(name) + "/%"
 	files, err := sq.FetchAll(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
-		Format:  "SELECT {*} FROM files WHERE (file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\') AND text IS NULL AND data IS NULL",
+		Format: "SELECT {*}" +
+			" FROM files" +
+			" WHERE (file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\')" +
+			" AND file_path LIKE '%.jpeg'" +
+			" AND file_path LIKE '%.jpg'" +
+			" AND file_path LIKE '%.png'" +
+			" AND file_path LIKE '%.webp'" +
+			" AND file_path LIKE '%.gif'" +
+			" AND file_path LIKE '%.woff'" +
+			" AND file_path LIKE '%.woff2'",
 		Values: []any{
 			sq.StringParam("name", name),
 			sq.StringParam("pattern", pattern),
