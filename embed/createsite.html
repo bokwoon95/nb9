@@ -9,6 +9,11 @@
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
   <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
+  <span class='flex-grow-1'></span>
+  {{- if $.Username.Valid }}
+  <a href='' class='ma2'>{{ if $.Username.String }}@{{ $.Username.String }}{{ else }}user{{ end }}</a>
+  <a href='/users/logout/' class='ma2'>logout</a>
+  {{- end }}
 </nav>
 {{- if eq $.Error "MaxSitesReached" }}
 <div class='mv5 w-80 w-70-m w-60-l center'>

@@ -53,6 +53,9 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 	}
 
 	getSitePermissions := func(siteName, username string) (siteNotFound, userIsAuthorized bool, err error) {
+		if nbrew.UsersDB == nil {
+			return false, true, nil
+		}
 		userIsAuthorized, err = sq.FetchOne(r.Context(), nbrew.UsersDB, sq.Query{
 			Dialect: nbrew.UsersDialect,
 			Format: "SELECT {*}" +
@@ -80,8 +83,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 	switch r.Method {
 	case "GET":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
-			accept, _, _ := mime.ParseMediaType(r.Header.Get("Accept"))
-			if accept == "application/json" {
+			if r.Form.Has("api") {
 				w.Header().Set("Content-Type", "application/json")
 				encoder := json.NewEncoder(w)
 				encoder.SetEscapeHTML(false)
@@ -91,11 +93,12 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				}
 				return
 			}
+			referer := getReferer(r)
 			funcMap := map[string]any{
 				"trimPrefix": strings.TrimPrefix,
 				"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
 				"baselineJS": func() template.JS { return template.JS(baselineJS) },
-				"referer":    func() string { return r.Referer() },
+				"referer":    func() string { return referer },
 				"username":   func() string { return username },
 				"toSitePrefix": func(siteName string) string {
 					if strings.Contains(siteName, ".") {
@@ -172,8 +175,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 		writeResponse(w, r, response)
 	case "POST":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
-			accept, _, _ := mime.ParseMediaType(r.Header.Get("Accept"))
-			if accept == "application/json" {
+			if r.Form.Has("api") {
 				w.Header().Set("Content-Type", "application/json")
 				b, err := json.Marshal(&response)
 				if err != nil {
