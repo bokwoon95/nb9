@@ -125,8 +125,8 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	file.isFulltextIndexed = isFulltextIndexed(file.info.filePath)
 	if fileType.IsGzippable && !file.isFulltextIndexed {
 		// Do NOT pass file.buf directly to gzip.Reader or it will read from
-		// the buffer! We want to keep the buffer unread in case someone wants
-		// to reach directly into it and pulled out the raw gzipped bytes.
+		// the buffer! We want to keep file.buf unread in case someone wants to
+		// reach directly into it and pulled out the raw gzipped bytes.
 		r := bytes.NewReader(file.buf.Bytes())
 		file.gzipReader, _ = gzipReaderPool.Get().(*gzip.Reader)
 		if file.gzipReader != nil {
@@ -858,13 +858,11 @@ func (fsys *RemoteFS) Remove(name string) error {
 		fileID       [16]byte
 		filePath     string
 		isDir        bool
-		isStoredInDB bool
 		hasChildren  bool
 	}) {
 		row.UUID(&file.fileID, "file_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
-		file.isStoredInDB = row.Bool("text IS NOT NULL OR data IS NOT NULL")
 		file.hasChildren = row.Bool("EXISTS (SELECT 1 FROM files WHERE file_path LIKE {pattern} ESCAPE '\\')", sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(name)+"/%"))
 		return file
 	})
@@ -877,7 +875,11 @@ func (fsys *RemoteFS) Remove(name string) error {
 	if file.hasChildren {
 		return &fs.PathError{Op: "remove", Path: name, Err: syscall.ENOTEMPTY}
 	}
-	if !file.isStoredInDB {
+	var fileType FileType
+	if ext := path.Ext(name); ext != "" {
+		fileType = fileTypes[ext]
+	}
+	if !fileType.IsGzippable {
 		err = fsys.storage.Delete(fsys.ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
 		if err != nil {
 			return err
