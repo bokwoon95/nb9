@@ -120,14 +120,13 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			executeTemplate(w, r, tmpl, &response)
 		}
 
-		response := Response{
-			Username: NullString{String: username, Valid: nbrew.UsersDB != nil},
-		}
+		var response Response
 		_, err := nbrew.getSession(r, "flash", &response)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 		}
 		nbrew.clearSession(w, r, "flash")
+		response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 		if response.Error != "" {
 			writeResponse(w, r, response)
 			return

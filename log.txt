@@ -13,55 +13,7 @@ delete.go
 serve_http.go
 notebrew/main.go
 
-scrap the status field
-prg is a map[string]string that indicates the request is coming from a post-redirect-get flow, and the "action" field is always present indicating which action initiated the post-redirect-get. Other fields may be filled in as necessary for more information.
-    if the prg.action is the current action itself, then the errors may be obtained from the field directly
-
-GET success: status: GET_OK
-POST success: status: POST_OK
-PRG success: status: PRG_OK
-    - action: createsite
-    - sitePrefix: sitePrefix
-
-prg: {
-    action:
-    message:
-}
-
-type Error string
-type FieldErrors map[string][]string
-type PRG map[string]string
-
-name: [{
-    code: MaxSitesReached # leave code out of it until someone needs to programtically assert a form error
-    message: this is the thing
-}]
-
-> Account created, please log in using your new credentials.
-PRG["action"]: "/files/signup/"
-
-> Password reset successfully, please log in using your new credentials.
-PRG["action"]: "/users/resetpassword/"
-
-> You are already logged in, <a href="/{{ join `admin` $.SitePrefix }}/" class="linktext">click here to go to your dashboard</a>.
-Error["code"]: AlreadyLoggedIn
-
-> Please retry with captcha.
-Error["code"]: RetryWithCaptcha
-
-> Captcha challenge failed.
-Error["code"]: CaptchaChallengeFailed
-
-> Incorrect login credentials.
-Error["code"]: IncorrectLoginCredentials
-
-> User not found.
-Error["code"]: UserNotFound
-
-> Please log in.
-Error["code"]: PleaseLogIn
-
-TODO: now that createsite is implemented, implement deletesite quickly otherwise you will not be able to deal with the deluge of test data.
+TODO: why are flash messages without the UsersDB not working?
 TODO: a little "view data" link on file.html that simply the href "?data". When clicked, it generates live data of the page in real time if we're on a page.html, or the latest post/last page data if we're on post.html/postlist.html.
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
     NOTE: for languages don't parse all the language json files and keep them in memory, instead implement a TTL using timers and timer.Reset everytime someone requests for that language file. Once the timer expires, delete it from the map.

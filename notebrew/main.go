@@ -120,9 +120,11 @@ func main() {
 		if err != nil {
 			return err
 		}
-		nbrew := &nb9.Notebrew{}
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
-		nbrew.Logger.Store(&logger)
+		nbrew := &nb9.Notebrew{
+			Logger: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+				AddSource: true,
+			})),
+		}
 
 		// Determine the domain.
 		b, err := os.ReadFile(filepath.Join(configDir, "cmsdomain.txt"))

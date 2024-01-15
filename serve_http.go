@@ -47,7 +47,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	urlPath := strings.Trim(r.URL.Path, "/")
 
 	// Add request method and url to the logger.
-	logger := *nbrew.Logger.Load()
+	logger := nbrew.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
