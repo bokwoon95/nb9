@@ -151,14 +151,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 
 	switch r.Method {
 	case "GET":
-		response := fileResponse{
-			ContentSite: nbrew.contentSite(sitePrefix),
-			Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
-			SitePrefix:  sitePrefix,
-			FilePath:    filePath,
-			IsDir:       fileInfo.IsDir(),
-			ModTime:     fileInfo.ModTime(),
-		}
+		var response fileResponse
 		_, err = nbrew.getSession(r, "flash", &response)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -591,13 +584,16 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		executeTemplate(w, r, tmpl, &response)
 	}
 
-	response := fileResponse{
-		ContentSite: nbrew.contentSite(sitePrefix),
-		Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
-		SitePrefix:  sitePrefix,
-		IsDir:       true,
-		ModTime:     modTime,
+	var response fileResponse
+	_, err := nbrew.getSession(r, "flash", &response)
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
 	}
+	nbrew.clearSession(w, r, "flash")
+	response.ContentSite = nbrew.contentSite(sitePrefix)
+	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
+	response.SitePrefix = sitePrefix
+	response.IsDir = true
 	if sitePrefix == "" && nbrew.UsersDB != nil {
 		sites, err := sq.FetchAll(r.Context(), nbrew.UsersDB, sq.Query{
 			Dialect: nbrew.UsersDialect,
@@ -960,14 +956,16 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	response := fileResponse{
-		ContentSite: nbrew.contentSite(sitePrefix),
-		Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
-		SitePrefix:  sitePrefix,
-		FilePath:    filePath,
-		IsDir:       true,
-		ModTime:     modTime,
+	var response fileResponse
+	_, err := nbrew.getSession(r, "flash", &response)
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
 	}
+	nbrew.clearSession(w, r, "flash")
+	response.ContentSite = nbrew.contentSite(sitePrefix)
+	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
+	response.SitePrefix = sitePrefix
+	response.IsDir = true
 	response.Sort = strings.ToLower(strings.TrimSpace(r.FormValue("sort")))
 	if response.Sort == "" {
 		cookie, _ := r.Cookie("sort")

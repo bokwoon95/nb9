@@ -26,7 +26,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
