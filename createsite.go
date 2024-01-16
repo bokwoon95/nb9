@@ -142,14 +142,10 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				http.Redirect(w, r, "/files/createsite/", http.StatusFound)
 				return
 			}
-			sitePrefix := response.SiteName
-			if !strings.Contains(response.SiteName, ".") {
-				sitePrefix = "@" + sitePrefix
-			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]string{
-					"from":       "createsite",
-					"sitePrefix": sitePrefix,
+					"from":     "createsite",
+					"siteName": response.SiteName,
 				},
 			})
 			if err != nil {
@@ -284,7 +280,6 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			"output/themes",
 			"pages",
 			"posts",
-			"system",
 		}
 		for _, dir := range dirs {
 			err = nbrew.FS.Mkdir(path.Join(sitePrefix, dir), 0755)

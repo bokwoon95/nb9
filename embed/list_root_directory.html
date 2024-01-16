@@ -31,7 +31,7 @@
 
 {{- if eq (index $.PostRedirectGet "from") "createsite" }}
 <div role='alert' class='alert-success mv2 pa2 br2 flex items-center'>
-  <div>Site created: <a href='/files/{{ index $.PostRedirectGet "sitePrefix" }}/'>{{ index $.PostRedirectGet "sitePrefix" }}</a></div>
+  <div>Site created: <a href='/files/{{ index $.PostRedirectGet "sitePrefix" }}/'>{{ index $.PostRedirectGet "siteName" }}</a></div>
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn color-success o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
