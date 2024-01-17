@@ -142,10 +142,14 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				http.Redirect(w, r, "/files/createsite/", http.StatusFound)
 				return
 			}
+			sitePrefix := response.SiteName
+			if !strings.Contains(response.SiteName, ".") {
+				sitePrefix = "@" + response.SiteName
+			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]string{
-					"from":     "createsite",
-					"siteName": response.SiteName,
+					"from":       "createsite",
+					"sitePrefix": sitePrefix,
 				},
 			})
 			if err != nil {
