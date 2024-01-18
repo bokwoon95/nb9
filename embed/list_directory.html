@@ -106,7 +106,7 @@
   </div>
   {{- end }}
 </div>
-<div class='bb pb2'>{{ generateBreadcrumbLinks $.FilePath }}</div>
+<div class='bb pb2'>{{ generateBreadcrumbLinks $.SitePrefix $.FilePath }}</div>
 {{- if $.Files }}
 <ul>
   {{- range $file := $.Files }}

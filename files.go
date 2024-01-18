@@ -918,19 +918,18 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		}
 		referer := getReferer(r)
 		funcMap := map[string]any{
-			"join":                    path.Join,
-			"dir":                     path.Dir,
-			"base":                    path.Base,
-			"ext":                     path.Ext,
-			"hasPrefix":               strings.HasPrefix,
-			"hasSuffix":               strings.HasSuffix,
-			"trimPrefix":              strings.TrimPrefix,
-			"fileSizeToString":        fileSizeToString,
-			"generateBreadcrumbLinks": generateBreadcrumbLinks(sitePrefix),
-			"stylesCSS":               func() template.CSS { return template.CSS(stylesCSS) },
-			"directoryJS":             func() template.JS { return template.JS(directoryJS) },
-			"referer":                 func() string { return referer },
-			"safeHTML":                func(s string) template.HTML { return template.HTML(s) },
+			"join":             path.Join,
+			"dir":              path.Dir,
+			"base":             path.Base,
+			"ext":              path.Ext,
+			"hasPrefix":        strings.HasPrefix,
+			"hasSuffix":        strings.HasSuffix,
+			"trimPrefix":       strings.TrimPrefix,
+			"fileSizeToString": fileSizeToString,
+			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
+			"directoryJS":      func() template.JS { return template.JS(directoryJS) },
+			"referer":          func() string { return referer },
+			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
 			"head": func(s string) string {
 				head, _, _ := strings.Cut(s, "/")
 				return head
@@ -938,6 +937,23 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			"tail": func(s string) string {
 				_, tail, _ := strings.Cut(s, "/")
 				return tail
+			},
+			"generateBreadcrumbLinks": func(sitePrefix, filePath string) template.HTML {
+				var b strings.Builder
+				b.WriteString("<a href='/files/'>files</a>")
+				segments := strings.Split(filePath, "/")
+				if sitePrefix != "" {
+					segments = append([]string{sitePrefix}, segments...)
+				}
+				for i := 0; i < len(segments); i++ {
+					if segments[i] == "" {
+						continue
+					}
+					href := "/files/" + path.Join(segments[:i+1]...) + "/"
+					b.WriteString(" / <a href='" + href + "'>" + segments[i] + "</a>")
+				}
+				b.WriteString(" /")
+				return template.HTML(b.String())
 			},
 		}
 		tmpl, err := template.New("list_directory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/list_directory.html")
@@ -965,6 +981,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	response.ContentSite = nbrew.contentSite(sitePrefix)
 	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 	response.SitePrefix = sitePrefix
+	response.FilePath = filePath
 	response.IsDir = true
 	response.Sort = strings.ToLower(strings.TrimSpace(r.FormValue("sort")))
 	if response.Sort == "" {
@@ -1371,26 +1388,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	}
 	writeResponse(w, r, response)
 	return
-}
-
-func generateBreadcrumbLinks(sitePrefix string) func(string) template.HTML {
-	return func(filePath string) template.HTML {
-		var b strings.Builder
-		b.WriteString(`<a href="/files/">files</a>`)
-		segments := strings.Split(filePath, "/")
-		if sitePrefix != "" {
-			segments = append([]string{sitePrefix}, segments...)
-		}
-		for i := 0; i < len(segments); i++ {
-			if segments[i] == "" {
-				continue
-			}
-			href := `/files/` + path.Join(segments[:i+1]...) + `/`
-			b.WriteString(` / <a href="` + href + `">` + segments[i] + `</a>`)
-		}
-		b.WriteString(` /`)
-		return template.HTML(b.String())
-	}
 }
 
 func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, filePath, content string) error {
