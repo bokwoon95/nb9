@@ -1413,15 +1413,13 @@ func (nbrew *Notebrew) generatePage(ctx context.Context, site Site, sitePrefix, 
 	g1.Go(func() error {
 		const doctype = "<!DOCTYPE html>"
 		text := strings.TrimSpace(content)
-		if len(text) > len(doctype) {
-			if !strings.EqualFold(text[:len(doctype)], doctype) {
-				text = "<!DOCTYPE html>" +
-					"\n<html lang='{{ $.Site.Lang }}'>" +
-					"\n<meta charset='utf-8'>" +
-					"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
-					"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
-					"\n" + text
-			}
+		if len(text) < len(doctype) || !strings.EqualFold(text[:len(doctype)], doctype) {
+			text = "<!DOCTYPE html>" +
+				"\n<html lang='{{ $.Site.Lang }}'>" +
+				"\n<meta charset='utf-8'>" +
+				"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+				"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+				"\n" + text
 		}
 		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, strings.TrimPrefix(filePath, "pages/"), text, nil)
 		if err != nil {
@@ -1816,15 +1814,13 @@ func (nbrew *Notebrew) generatePost(ctx context.Context, site Site, sitePrefix, 
 		}
 		const doctype = "<!DOCTYPE html>"
 		text.String = strings.TrimSpace(text.String)
-		if len(text.String) > len(doctype) {
-			if !strings.EqualFold(text.String[:len(doctype)], doctype) {
-				text.String = "<!DOCTYPE html>" +
-					"\n<html lang='{{ $.Site.Lang }}'>" +
-					"\n<meta charset='utf-8'>" +
-					"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
-					"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
-					"\n" + text.String
-			}
+		if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
+			text.String = "<!DOCTYPE html>" +
+				"\n<html lang='{{ $.Site.Lang }}'>" +
+				"\n<meta charset='utf-8'>" +
+				"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+				"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+				"\n" + text.String
 		}
 		tmpl, err = NewTemplateParser(nbrew.FS, sitePrefix).ParseTemplate(ctx1, "/themes/post.html", text.String, []string{"/themes/post.html"})
 		if err != nil {

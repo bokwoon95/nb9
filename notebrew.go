@@ -60,11 +60,13 @@ type Notebrew struct {
 
 	ContentDomain string // localhost:6444, example.com
 
+	CDNOrigin string
+
 	Proxies map[netip.Addr]struct{} // TODO: fill it in in main
 
 	ProxyForwardedIPHeader map[netip.Addr]string // TODO: fill it in in main
 
-	Logger *slog.Logger // TODO: make it reloadable?
+	Logger *slog.Logger
 }
 
 type Site struct {
