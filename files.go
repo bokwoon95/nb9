@@ -43,13 +43,13 @@ type siteEntry struct {
 }
 
 type fileResponse struct {
-	PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
 	ContentSite     string            `json:"contentSite"`
 	Username        NullString        `json:"username"`
 	SitePrefix      string            `json:"sitePrefix"`
 	FilePath        string            `json:"filePath"`
 	IsDir           bool              `json:"isDir"`
 	ModTime         time.Time         `json:"modTime"`
+	PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
 
 	Sort            string      `json:"sort,omitempty"`
 	Order           string      `json:"order,omitempty"`
