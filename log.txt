@@ -49,6 +49,8 @@ Latency (Q1)   = xxx
 Latency (Q2)   = xxx
 Latency (Q3)   = xxx
 
+TODO: wall of banners? submit your banner? randomly arranged banners?
+
 TODO: i18n.go
 01. en
 02. ms
