@@ -33,7 +33,7 @@
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
   <div>Site created: <a href='/files/{{ index $.PostRedirectGet "sitePrefix" }}/'>{{ trimPrefix (index $.PostRedirectGet "sitePrefix") "@" }}</a></div>
   <div class='flex-grow-1'></div>
-  <button class='f3 bg-transparent bn color-success o-70 hover-black' data-dismiss-alert>&times;</button>
+  <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
 {{- end }}
 {{- if eq (index $.PostRedirectGet "from") "deletesite" }}
@@ -43,7 +43,7 @@
     <span class='ml2'>Site deleted: {{ index $.PostRedirectGet "siteName" }}</span>
   </div>
   <div class='flex-grow-1'></div>
-  <button class='f3 bg-transparent bn color-success o-70 hover-black' data-dismiss-alert>&times;</button>
+  <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
 {{- end }}
 

@@ -16,6 +16,7 @@ serve_http.go
 notebrew/main.go
 
 TODO: createfolder.go
+    TODO: once you get createfolder working, adapt it so that it shows up as "Create category" for posts.
 TODO: a little "view data" link on file.html that simply the href "?data". When clicked, it generates live data of the page in real time if we're on a page.html, or the latest post/last page data if we're on post.html/postlist.html.
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
     NOTE: for languages don't parse all the language json files and keep them in memory, instead implement a TTL using timers and timer.Reset everytime someone requests for that language file. Once the timer expires, delete it from the map.

@@ -21,7 +21,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 	}
 	type Response struct {
 		Error         string     `json:"error"`
-		FieldErrors   url.Values `json:"fieldErrors,omitempty"`
+		FormErrors    url.Values `json:"formErrors,omitempty"`
 		Username      NullString `json:"username"`
 		SiteName      string     `json:"siteName,omitempty"`
 		UserSiteNames []string   `json:"userSiteNames,omitempty"`
@@ -192,8 +192,8 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 
 		var err error
 		response := Response{
-			SiteName:    request.SiteName,
-			FieldErrors: url.Values{},
+			SiteName:   request.SiteName,
+			FormErrors: url.Values{},
 		}
 		userSiteNames, maxSitesReached, err := getSiteInfo(username)
 		if err != nil {
@@ -209,7 +209,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 		}
 
 		if response.SiteName == "" {
-			response.FieldErrors.Add("siteName", "required")
+			response.FormErrors.Add("siteName", "required")
 		} else {
 			hasForbiddenCharacters := false
 			digitCount := 0
@@ -222,10 +222,10 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				}
 			}
 			if hasForbiddenCharacters {
-				response.FieldErrors.Add("siteName", "only lowercase letters, numbers and hyphen allowed")
+				response.FormErrors.Add("siteName", "only lowercase letters, numbers and hyphen allowed")
 			}
 			if len(response.SiteName) > 30 {
-				response.FieldErrors.Add("siteName", "cannot exceed 30 characters")
+				response.FormErrors.Add("siteName", "cannot exceed 30 characters")
 			}
 		}
 		var sitePrefix string
@@ -235,8 +235,8 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			sitePrefix = "@" + response.SiteName
 		}
 		if response.SiteName == "www" || response.SiteName == "cdn" {
-			response.FieldErrors.Add("siteName", "unavailable")
-		} else if !response.FieldErrors.Has("siteName") {
+			response.FormErrors.Add("siteName", "unavailable")
+		} else if !response.FormErrors.Has("siteName") {
 			_, err := fs.Stat(nbrew.FS, sitePrefix)
 			if err != nil {
 				if !errors.Is(err, fs.ErrNotExist) {
@@ -258,15 +258,15 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 						return
 					}
 					if exists {
-						response.FieldErrors.Add("siteName", "unavailable")
+						response.FormErrors.Add("siteName", "unavailable")
 					}
 				}
 			} else {
-				response.FieldErrors.Add("siteName", "unavailable")
+				response.FormErrors.Add("siteName", "unavailable")
 			}
 		}
-		if len(response.FieldErrors) > 0 {
-			response.Error = "FieldErrorsPresent"
+		if len(response.FormErrors) > 0 {
+			response.Error = "FormErrorsPresent"
 			writeResponse(w, r, response)
 			return
 		}

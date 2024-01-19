@@ -96,19 +96,11 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			referer := getReferer(r)
 			funcMap := map[string]any{
 				"trimPrefix": strings.TrimPrefix,
+				"contains":   strings.Contains,
 				"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
 				"baselineJS": func() template.JS { return template.JS(baselineJS) },
 				"referer":    func() string { return referer },
 				"username":   func() string { return username },
-				"toSitePrefix": func(siteName string) string {
-					if strings.Contains(siteName, ".") {
-						return siteName
-					}
-					if siteName != "" {
-						return "@" + siteName
-					}
-					return ""
-				},
 			}
 			tmpl, err := template.New("deletesite.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/deletesite.html")
 			if err != nil {

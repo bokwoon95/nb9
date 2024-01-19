@@ -18,30 +18,30 @@
 {{- if eq $.Error "SiteNameNotProvided" "InvalidSiteName" "SiteNotFound" }}
 <div class='mv5 w-80 w-70-m w-60-l center'>
   {{- if referer }}
-  <div><a href='{{ referer }}' class='linktext' data-go-back>&larr; back</a></div>
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
   {{- end }}
   <h3 class='mv3 b'>No site to delete</h3>
 </div>
 {{- else if eq $.Error "SiteIsUser" }}
 <div class='mv5 w-80 w-70-m w-60-l center'>
   {{- if referer }}
-  <div><a href='{{ referer }}' class='linktext' data-go-back>&larr; back</a></div>
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
   {{- end }}
   <h3 class='mv3 b'>Cannot delete {{ $.SiteName }} because it is a user.</h3>
 </div>
 {{- else if $.Error }}
 <div class='mv5 w-80 w-70-m w-60-l center'>
   {{- if referer }}
-  <div><a href='{{ referer }}' class='linktext' data-go-back>&larr; back</a></div>
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
   {{- end }}
   <div class='mv3 b'>{{ $.Error }}</div>
 </div>
 {{- else }}
 <form method='post' class='mv5 w-80 w-70-m w-60-l center'>
   {{- if referer }}
-  <div><a href='{{ referer }}' class='linktext' data-go-back>&larr; back</a></div>
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
   {{- end }}
-  <h3 class='mv3 b'>Are you sure you wish to delete the site <a href='/files/{{ toSitePrefix $.SiteName }}/' class='linktext'>{{ $.SiteName }}</a>?</h3>
+  <h3 class='mv3 b'>Are you sure you wish to delete the site <a href='/files/{{ if contains $.SiteName "." }}$.SiteName{{ else }}@{{ $.SiteName }}{{ end }}/'>{{ $.SiteName }}</a>?</h3>
   <div>This action is permanent and cannot be undone. All files within the site will be deleted.</div>
   <input type='hidden' name='siteName' value='{{ $.SiteName }}'>
   <button type='submit' class='button-danger ba br2 b--dark-red pa2 mv3'>Delete site ({{ $.SiteName }})</button>
