@@ -223,13 +223,10 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			nbrew.createsite(w, r, username)
 		case "deletesite":
 			nbrew.deletesite(w, r, username)
-		case "delete":
-		case "createnote":
-		case "createpost":
-		case "createcategory":
 		case "createfolder":
-		case "createpage":
+			nbrew.createfolder(w, r, username, sitePrefix)
 		case "createfile":
+		case "delete":
 		case "cut":
 		case "copy":
 		case "paste":
