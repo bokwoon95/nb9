@@ -243,7 +243,10 @@ func Exec(ctx context.Context, db DB, query Query) (Result, error) {
 	args := argsPool.Get().(*[]any)
 	*args = (*args)[:0]
 	defer argsPool.Put(args)
-	err := Writef(ctx, query.Dialect, buf, args, nil, query.Format, query.Values)
+	params := paramsPool.Get().(map[string][]int)
+	clear(params)
+	defer paramsPool.Put(params)
+	err := Writef(ctx, query.Dialect, buf, args, params, query.Format, query.Values)
 	if err != nil {
 		return result, err
 	}
@@ -450,7 +453,7 @@ func PrepareExec(ctx context.Context, db DB, query Query) (*PreparedExec, error)
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
-	err := Writef(ctx, query.Dialect, buf, preparedExec.oldArgs, nil, query.Format, query.Values)
+	err := Writef(ctx, query.Dialect, buf, preparedExec.oldArgs, preparedExec.params, query.Format, query.Values)
 	if err != nil {
 		return nil, err
 	}
@@ -512,8 +515,11 @@ func FetchExists(ctx context.Context, db DB, query Query) (exists bool, err erro
 	args := argsPool.Get().(*[]any)
 	*args = (*args)[:0]
 	defer argsPool.Put(args)
+	params := paramsPool.Get().(map[string][]int)
+	clear(params)
+	defer paramsPool.Put(params)
 	buf.WriteString("SELECT EXISTS (")
-	err = Writef(ctx, query.Dialect, buf, args, nil, query.Format, query.Values)
+	err = Writef(ctx, query.Dialect, buf, args, params, query.Format, query.Values)
 	if err != nil {
 		return false, err
 	}
@@ -538,10 +544,10 @@ func FetchExists(ctx context.Context, db DB, query Query) (exists bool, err erro
 // substituteParams will return a new args slice by substituting values from
 // the given paramValues. The input args slice is untouched.
 func substituteParams(dialect string, oldArgs, newArgs *[]any, paramIndexes map[string][]int, params []Parameter) error {
-	if cap(*oldArgs) >= len(*newArgs) {
-		*oldArgs = (*oldArgs)[:len(*newArgs)]
+	if cap(*newArgs) >= len(*oldArgs) {
+		*newArgs = (*newArgs)[:len(*oldArgs)]
 	} else {
-		*oldArgs = make([]any, len(*newArgs))
+		*newArgs = make([]any, len(*oldArgs))
 	}
 	copy(*newArgs, *oldArgs)
 	var err error
