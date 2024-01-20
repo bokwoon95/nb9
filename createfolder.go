@@ -18,7 +18,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 		Name   string `json:"name,omitempty"`
 	}
 	type Response struct {
-		Error       string     `json:"error"`
+		Error       string     `json:"error,omitempty"`
 		FormErrors  url.Values `json:"formErrors,omitempty"`
 		ContentSite string     `json:"contentSite"`
 		Username    NullString `json:"username"`
@@ -71,6 +71,8 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 			funcMap := map[string]any{
 				"join":       path.Join,
 				"base":       path.Base,
+				"hasPrefix":  strings.HasPrefix,
+				"trimPrefix": strings.TrimPrefix,
 				"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
 				"baselineJS": func() template.JS { return template.JS(baselineJS) },
 				"referer":    func() string { return referer },
@@ -94,6 +96,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 		response.ContentSite = nbrew.contentSite(sitePrefix)
 		response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 		response.SitePrefix = sitePrefix
+		response.Parent = r.Form.Get("parent")
 		if response.Error != "" {
 			writeResponse(w, r, response)
 			return
@@ -130,7 +133,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 					internalServerError(w, r, err)
 					return
 				}
-				http.Redirect(w, r, "/"+path.Join("admin", sitePrefix, "createfolder")+"/?parent="+url.QueryEscape(response.Parent), http.StatusFound)
+				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "createfolder")+"/?parent="+url.QueryEscape(response.Parent), http.StatusFound)
 				return
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
@@ -145,7 +148,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 				internalServerError(w, r, err)
 				return
 			}
-			http.Redirect(w, r, "/"+path.Join("admin", sitePrefix, response.Parent)+"/", http.StatusFound)
+			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
 		}
 
 		var request Request

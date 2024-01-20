@@ -9,6 +9,8 @@
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
   <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
+  &bull;
+  <a href='{{ $.ContentSite }}' class='ma2 white'>{{ if hasPrefix $.ContentSite "https://" }}{{ trimPrefix $.ContentSite "https://" }}{{ else }}{{ trimPrefix $.ContentSite "http://" }}{{ end }}</a>
   <span class='flex-grow-1'></span>
   {{- if $.Username.Valid }}
   <a href='' class='ma2'>{{ if $.Username.String }}@{{ $.Username.String }}{{ else }}user{{ end }}</a>
@@ -31,7 +33,7 @@
   <input type='hidden' name='parent' value='{{ $.Parent }}'>
   <div class='mv3'>
     <div><label for='name' class='b'>Name:</label></div>
-    <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba w-100{{ if index $.Errors "name" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>
+    <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>
     <ul>
       {{- range $error := index $.FormErrors "name" }}
       <li class='f6 invalid-red list-style-disc'>{{ $error }}</li>
