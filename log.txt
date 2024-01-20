@@ -11,6 +11,8 @@ deletesite.go
 createfolder.go
 createfile.go
 delete.go
+cut/copy/paste/rename
+uploadfile.go
 ...
 serve_http.go
 notebrew/main.go
