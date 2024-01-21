@@ -96,17 +96,11 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 		response.ContentSite = nbrew.contentSite(sitePrefix)
 		response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 		response.SitePrefix = sitePrefix
-		response.Parent = r.Form.Get("parent")
+		response.Parent = path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
 		if response.Error != "" {
 			writeResponse(w, r, response)
 			return
 		}
-		if response.Parent == "" {
-			response.Error = "MissingParent"
-			writeResponse(w, r, response)
-			return
-		}
-		response.Parent = path.Clean(strings.Trim(response.Parent, "/"))
 		if !isValidParent(response.Parent) {
 			response.Error = "InvalidParent"
 			writeResponse(w, r, response)
@@ -184,15 +178,9 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 
 		response := Response{
 			FormErrors: make(url.Values),
-			Parent:     request.Parent,
+			Parent:     path.Clean(strings.Trim(request.Parent, "/")),
 			Name:       urlSafe(request.Name),
 		}
-		if response.Parent == "" {
-			response.Error = "MissingParent"
-			writeResponse(w, r, response)
-			return
-		}
-		response.Parent = path.Clean(strings.Trim(response.Parent, "/"))
 		if !isValidParent(response.Parent) {
 			response.Error = "InvalidParent"
 			writeResponse(w, r, response)
