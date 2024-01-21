@@ -330,7 +330,7 @@ func stripMarkdownStyles(src []byte) string {
 	return b.String()
 }
 
-var isForbiddenChar = []bool{
+var isForbiddenChar = [...]bool{
 	' ': true, '!': true, '"': true, '#': true, '$': true, '%': true, '&': true, '\'': true,
 	'(': true, ')': true, '*': true, '+': true, ',': true, '/': true, ':': true, ';': true,
 	'<': true, '>': true, '=': true, '?': true, '[': true, ']': true, '\\': true, '^': true,

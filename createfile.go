@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"io/fs"
+	"mime"
 	"net/http"
 	"net/url"
 	"path"
@@ -106,6 +107,87 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		}
 		writeResponse(w, r, response)
 	case "POST":
+		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
+			if r.Form.Has("api") {
+				w.Header().Set("Content-Type", "application/json")
+				encoder := json.NewEncoder(w)
+				encoder.SetEscapeHTML(false)
+				err := encoder.Encode(&response)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+				}
+				return
+			}
+			if response.Error != "" {
+				err := nbrew.setSession(w, r, "flash", &response)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "createfile")+"/?parent="+url.QueryEscape(response.Parent), http.StatusFound)
+				return
+			}
+			err := nbrew.setSession(w, r, "flash", map[string]any{
+				"postRedirectGet": map[string]string{
+					"from": "createfile",
+				},
+			})
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent, response.Name), http.StatusFound)
+		}
+
+		var request Request
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
+		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		switch contentType {
+		case "application/json":
+			err := json.NewDecoder(r.Body).Decode(&request)
+			if err != nil {
+				badRequest(w, r, err)
+				return
+			}
+		case "application/x-www-form-urlencoded", "multipart/form-data":
+			if contentType == "multipart/form-data" {
+				err := r.ParseMultipartForm(1 << 20 /* 1 MB */)
+				if err != nil {
+					badRequest(w, r, err)
+					return
+				}
+			} else {
+				err := r.ParseForm()
+				if err != nil {
+					badRequest(w, r, err)
+					return
+				}
+			}
+			request.Parent = r.Form.Get("parent")
+			request.Name = r.Form.Get("name")
+		default:
+			unsupportedContentType(w, r)
+			return
+		}
+
+		response := Response{
+			FormErrors: make(url.Values),
+			Parent:     path.Clean(strings.Trim(request.Parent, "/")),
+			Name:       urlSafe(request.Name),
+		}
+		if !isValidParent(response.Parent) {
+			response.Error = "InvalidParent"
+			writeResponse(w, r, response)
+			return
+		}
+		if response.Name == "" {
+			response.FormErrors.Add("name", "required")
+			response.Error = "FormErrorsPresent"
+			writeResponse(w, r, response)
+			return
+		}
 	default:
 		methodNotAllowed(w, r)
 	}
