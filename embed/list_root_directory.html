@@ -213,14 +213,16 @@
     </li>
     {{- end }}
   </ul>
+  {{- else }}
+    {{- if and (not $.From) (not $.Before) }}
+    <div class='mv2 tc'>- No other sites -</div>
+    {{- end }}
+  {{- end }}
   <div class='mv3 flex flex-wrap items-center'>
     <div><button type='button' class='button ba br2 pv1 ph2'>&larr; previous</button></div>
     <div class='flex-grow-1'></div>
     <div><button type='button' class='button ba br2 pv1 ph2'>next &rarr;</button></div>
   </div>
-  {{- else }}
-  <div class='mv2 tc'>- No other sites -</div>
-  {{- end }}
 {{- end }}
 
 {{- define "octicons-plus" }}

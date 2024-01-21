@@ -539,11 +539,14 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		FilePath        string            `json:"filePath"`
 		IsDir           bool              `json:"isDir"`
 		ModTime         time.Time         `json:"modTime"`
-		Files           []File            `json:"files,omitempty"`
-		Sites           []Site            `json:"sites,omitempty"`
-		HasPreviousSite bool              `json:"hasPreviousSite,omitempty"`
-		NextSite        string            `json:"nextSite,omitempty"`
-		Limit           int               `json:"limit,omitempty"`
+
+		Files           []File `json:"files,omitempty"`
+		From            string `json:"from,omitempty"`
+		Before          string `json:"before,omitempty"`
+		Limit           int    `json:"limit,omitempty"`
+		Sites           []Site `json:"sites,omitempty"`
+		HasPreviousSite bool   `json:"hasPreviousSite,omitempty"`
+		NextSite        string `json:"nextSite,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
@@ -731,14 +734,13 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	from := r.FormValue("from")
-	before := r.FormValue("before")
 	response.Limit, _ = strconv.Atoi(r.FormValue("limit"))
 	if response.Limit <= 0 {
 		response.Limit = 1000
 	}
 
-	if from != "" {
+	response.From = r.FormValue("from")
+	if response.From != "" {
 		g, ctx := errgroup.WithContext(r.Context())
 		g.Go(func() error {
 			sites, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
@@ -752,7 +754,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					" ORDER BY file_path" +
 					" LIMIT {limit} + 1",
 				Values: []any{
-					sq.StringParam("from", from),
+					sq.StringParam("from", response.From),
 					sq.IntParam("limit", response.Limit),
 				},
 			}, func(row *sq.Row) Site {
@@ -780,7 +782,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					" AND (file_path LIKE '@%' OR file_path LIKE '%.%')" +
 					" AND file_path < {from}",
 				Values: []any{
-					sq.StringParam("from", from),
+					sq.StringParam("from", response.From),
 				},
 			})
 			if err != nil {
@@ -799,7 +801,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	if before != "" {
+	response.Before = r.FormValue("before")
+	if response.Before != "" {
 		g, ctx := errgroup.WithContext(r.Context())
 		g.Go(func() error {
 			response.Sites, err = sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
@@ -813,7 +816,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					" ORDER BY file_path" +
 					" LIMIT {limit} + 1",
 				Values: []any{
-					sq.StringParam("before", before),
+					sq.StringParam("before", response.Before),
 					sq.IntParam("limit", response.Limit),
 				},
 			}, func(row *sq.Row) Site {
@@ -841,7 +844,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					" ORDER BY file_path" +
 					" LIMIT 1",
 				Values: []any{
-					sq.StringParam("before", before),
+					sq.StringParam("before", response.Before),
 				},
 			}, func(row *sq.Row) string {
 				return row.String("file_path")
