@@ -540,13 +540,14 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		IsDir           bool              `json:"isDir"`
 		ModTime         time.Time         `json:"modTime"`
 
-		Files           []File `json:"files,omitempty"`
-		From            string `json:"from,omitempty"`
-		Before          string `json:"before,omitempty"`
-		Limit           int    `json:"limit,omitempty"`
-		Sites           []Site `json:"sites,omitempty"`
-		HasPreviousSite bool   `json:"hasPreviousSite,omitempty"`
-		NextSite        string `json:"nextSite,omitempty"`
+		Files []File `json:"files,omitempty"`
+
+		From               string `json:"from,omitempty"`
+		Before             string `json:"before,omitempty"`
+		Limit              int    `json:"limit,omitempty"`
+		Sites              []Site `json:"sites,omitempty"`
+		PreviousSiteExists bool   `json:"previousSiteExists,omitempty"`
+		NextSite           string `json:"nextSite,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
@@ -788,7 +789,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			if err != nil {
 				return err
 			}
-			response.HasPreviousSite = hasPreviousSite
+			response.PreviousSiteExists = hasPreviousSite
 			return nil
 		})
 		err := g.Wait()
@@ -828,7 +829,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				return err
 			}
 			if len(response.Sites) > response.Limit {
-				response.HasPreviousSite = true
+				response.PreviousSiteExists = true
 				response.Sites = response.Sites[1:]
 			}
 			return nil
@@ -927,12 +928,15 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		FilePath        string            `json:"filePath"`
 		IsDir           bool              `json:"isDir"`
 		ModTime         time.Time         `json:"modTime"`
-		Sort            string            `json:"sort,omitempty"`
-		Order           string            `json:"order,omitempty"`
-		Files           []File            `json:"files,omitempty"`
-		HasPreviousFile bool              `json:"hasPreviousFile,omitempty"`
-		NextFile        string            `json:"nextFile,omitempty"`
-		Limit           int               `json:"limit,omitempty"`
+
+		Sort               string `json:"sort,omitempty"`
+		Order              string `json:"order,omitempty"`
+		From               string `json:"from,omitempty"`
+		Before             string `json:"before,omitempty"`
+		Limit              int    `json:"limit,omitempty"`
+		Files              []File `json:"files,omitempty"`
+		PreviousFileExists bool   `json:"previousFileExists,omitempty"`
+		NextFile           string `json:"nextFile,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
@@ -1111,23 +1115,23 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	from := r.FormValue("from")
-	before := r.FormValue("before")
+	response.From = r.FormValue("from")
+	response.Before = r.FormValue("before")
 	var fromTime, beforeTime *time.Time
 	if response.Sort == "edited" {
-		if from != "" {
-			from = strings.TrimSuffix(from, "Z")
+		if response.From != "" {
+			response.From = strings.TrimSuffix(response.From, "Z")
 			for _, format := range timestampFormats {
-				timeVal, err := time.ParseInLocation(format, from, time.UTC)
+				timeVal, err := time.ParseInLocation(format, response.From, time.UTC)
 				if err == nil {
 					fromTime = &timeVal
 					break
 				}
 			}
-		} else if before != "" {
-			before = strings.TrimSuffix(before, "Z")
+		} else if response.Before != "" {
+			response.Before = strings.TrimSuffix(response.Before, "Z")
 			for _, format := range timestampFormats {
-				timeVal, err := time.ParseInLocation(format, before, time.UTC)
+				timeVal, err := time.ParseInLocation(format, response.Before, time.UTC)
 				if err == nil {
 					beforeTime = &timeVal
 					break
@@ -1142,7 +1146,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 
 	var sortFrom bool
 	if response.Sort == "name" || response.Sort == "created" {
-		sortFrom = from != ""
+		sortFrom = response.From != ""
 	} else if response.Sort == "edited" {
 		sortFrom = fromTime != nil
 	}
@@ -1152,10 +1156,10 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			var filter, order sq.Expression
 			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
-					filter = sq.Expr("file_path >= {}", path.Join(filePath, from))
+					filter = sq.Expr("file_path >= {}", path.Join(filePath, response.From))
 					order = sq.Expr("file_path ASC")
 				} else {
-					filter = sq.Expr("file_path <= {}", path.Join(filePath, from))
+					filter = sq.Expr("file_path <= {}", path.Join(filePath, response.From))
 					order = sq.Expr("file_path DESC")
 				}
 			} else if response.Sort == "edited" {
@@ -1208,9 +1212,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			var filter sq.Expression
 			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
-					filter = sq.Expr("file_path < {}", path.Join(filePath, from))
+					filter = sq.Expr("file_path < {}", path.Join(filePath, response.From))
 				} else {
-					filter = sq.Expr("file_path > {}", path.Join(filePath, from))
+					filter = sq.Expr("file_path > {}", path.Join(filePath, response.From))
 				}
 			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
@@ -1233,7 +1237,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			if err != nil {
 				return err
 			}
-			response.HasPreviousFile = hasPreviousFile
+			response.PreviousFileExists = hasPreviousFile
 			return nil
 		})
 		err := g.Wait()
@@ -1248,7 +1252,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 
 	var sortBefore bool
 	if response.Sort == "name" || response.Sort == "created" {
-		sortBefore = before != ""
+		sortBefore = response.Before != ""
 	} else if response.Sort == "edited" {
 		sortBefore = beforeTime != nil
 	}
@@ -1264,10 +1268,10 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			var filter, order sq.Expression
 			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
-					filter = sq.Expr("file_path < {}", path.Join(filePath, before))
+					filter = sq.Expr("file_path < {}", path.Join(filePath, response.Before))
 					order = sq.Expr("file_path ASC")
 				} else {
-					filter = sq.Expr("file_path > {}", path.Join(filePath, before))
+					filter = sq.Expr("file_path > {}", path.Join(filePath, response.Before))
 					order = sq.Expr("file_path DESC")
 				}
 			} else if response.Sort == "edited" {
@@ -1306,7 +1310,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			}
 			response.Files = files
 			if len(response.Files) > response.Limit {
-				response.HasPreviousFile = true
+				response.PreviousFileExists = true
 				response.Files = response.Files[1:]
 			}
 			return nil
@@ -1315,10 +1319,10 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			var filter, order sq.Expression
 			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
-					filter = sq.Expr("file_path >= {}", path.Join(filePath, before))
+					filter = sq.Expr("file_path >= {}", path.Join(filePath, response.Before))
 					order = sq.Expr("file_path ASC")
 				} else {
-					filter = sq.Expr("file_path <= {}", path.Join(filePath, before))
+					filter = sq.Expr("file_path <= {}", path.Join(filePath, response.Before))
 					order = sq.Expr("file_path DESC")
 				}
 			} else if response.Sort == "edited" {
@@ -1394,7 +1398,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		},
 	}, func(row *sq.Row) File {
 		return File{
-			Name:    path.Base(row.String("files.file_path")),
+			Name:    path.Base(row.String("file_path")),
 			Size:    row.Int64("size"),
 			ModTime: row.Time("mod_time"),
 			IsDir:   row.Bool("is_dir"),
