@@ -25,9 +25,13 @@
 </nav>
 {{- if eq (index $.PostRedirectGet "from") "createfolder" }}
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
-  {{ $parent := index $.PostRedirectGet "parent" }}
-  {{ $name := index $.PostRedirectGet "name" }}
+  {{- $parent := index $.PostRedirectGet "parent" }}
+  {{- $name := index $.PostRedirectGet "name" }}
+  {{- if eq $parent "posts" }}
+  <div>Category created: <a href='/{{ join "files" $.SitePrefix $parent $name }}/'>{{ $name }}</a></div>
+  {{- else }}
   <div>Folder created: <a href='/{{ join "files" $.SitePrefix $parent $name }}/'>{{ $name }}</a></div>
+  {{- end }}
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
