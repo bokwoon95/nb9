@@ -66,6 +66,22 @@ func (fsys *LocalFS) Open(name string) (fs.File, error) {
 	return file, nil
 }
 
+func (fsys *LocalFS) Stat(name string) (fs.FileInfo, error) {
+	err := fsys.ctx.Err()
+	if err != nil {
+		return nil, err
+	}
+	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
+		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
+	}
+	name = filepath.FromSlash(name)
+	fileInfo, err := os.Stat(filepath.Join(fsys.rootDir, name))
+	if err != nil {
+		return nil, err
+	}
+	return fileInfo, nil
+}
+
 func (fsys *LocalFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, error) {
 	err := fsys.ctx.Err()
 	if err != nil {

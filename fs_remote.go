@@ -144,15 +144,13 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	return file, nil
 }
 
-var _ = fs.StatFS(nil)
-
 func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 	err := fsys.ctx.Err()
 	if err != nil {
 		return nil, err
 	}
 	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
-		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
+		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
 	}
 	if name == "." {
 		return &RemoteFileInfo{filePath: ".", isDir: true}, nil
