@@ -29,7 +29,7 @@
   {{- if referer }}
   <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
   {{- end }}
-  <h1 class='f3 mv3 b'>Create a folder in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a></h1>
+  <h1 class='f3 mv3 b'>Creating folder in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a></h1>
   <input type='hidden' name='parent' value='{{ $.Parent }}'>
   <div class='mv3'>
     <div><label for='name' class='b'>Name:</label></div>

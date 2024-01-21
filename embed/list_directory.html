@@ -158,14 +158,12 @@
 </ul>
 {{- else }}
 <div class='mv4 tc'>
-  {{- if eq (head $.FilePath) "notes" }}
-  folder is empty, <a href='/{{ join "files" $.SitePrefix "createnote" }}/{{ if tail $.FilePath }}?category={{ head (tail $.FilePath) }}{{ end }}'>create a new note</a>
-  {{- else if eq (head $.FilePath) "pages" }}
-  folder is empty, <a href='/{{ join "files" $.SitePrefix "createpage" }}/?parent={{ $.FilePath }}'>create a new page</a>
+  {{- if eq (head $.FilePath) "pages" }}
+  folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new page</a>
   {{- else if eq (head $.FilePath) "posts" }}
-  folder is empty, <a href='/{{ join "files" $.SitePrefix "createpost" }}/{{ if tail $.FilePath }}?category={{ head (tail $.FilePath) }}{{ end }}'>create a new post</a>
+  folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new post</a>
   {{- else }}
-  folder is empty
+  folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new file</a>
   {{- end }}
 </div>
 {{- end }}
