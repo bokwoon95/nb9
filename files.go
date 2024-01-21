@@ -37,18 +37,19 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		Size    int64     `json:"size"`
 	}
 	type Response struct {
-		ContentSite    string     `json:"contentSite"`
-		Username       NullString `json:"username"`
-		SitePrefix     string     `json:"sitePrefix"`
-		FilePath       string     `json:"filePath"`
-		IsDir          bool       `json:"isDir"`
-		ModTime        time.Time  `json:"modTime"`
-		Content        string     `json:"content"`
-		URL            string     `json:"url,omitempty"`
-		BelongsTo      string     `json:"belongsTo,omitempty"`
-		AssetDir       string     `json:"assetDir,omitempty"`
-		Assets         []Asset    `json:"assets,omitempty"`
-		TemplateErrors []string   `json:"templateErrors,omitempty"`
+		PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
+		ContentSite     string            `json:"contentSite"`
+		Username        NullString        `json:"username"`
+		SitePrefix      string            `json:"sitePrefix"`
+		FilePath        string            `json:"filePath"`
+		IsDir           bool              `json:"isDir"`
+		ModTime         time.Time         `json:"modTime"`
+		Content         string            `json:"content"`
+		URL             string            `json:"url,omitempty"`
+		BelongsTo       string            `json:"belongsTo,omitempty"`
+		AssetDir        string            `json:"assetDir,omitempty"`
+		Assets          []Asset           `json:"assets,omitempty"`
+		TemplateErrors  []string          `json:"templateErrors,omitempty"`
 	}
 
 	file, err := nbrew.FS.Open(path.Join(".", sitePrefix, filePath))

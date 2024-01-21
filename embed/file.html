@@ -20,6 +20,13 @@
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
+{{- if eq (index $.PostRedirectGet "from") "createfile" }}
+<div role='alert' class='alert mv2 pa2 br2 flex items-center'>
+  <div>File created</div>
+  <div class='flex-grow-1'></div>
+  <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
+</div>
+{{- end }}
 <div class='mv2'>
   {{- if referer }}
   <a href='{{ referer }}' data-go-back>&larr; back</a>
