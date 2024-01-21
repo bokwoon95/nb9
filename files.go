@@ -1362,6 +1362,12 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			}
 			return nil
 		})
+		err = g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
 		writeResponse(w, r, response)
 		return
 	}
