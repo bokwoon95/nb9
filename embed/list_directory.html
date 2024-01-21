@@ -157,15 +157,17 @@
   {{- end }}
 </ul>
 {{- else }}
-<div class='mv4 tc'>
-  {{- if eq (head $.FilePath) "pages" }}
-  folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new page</a>
-  {{- else if eq (head $.FilePath) "posts" }}
-  folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new post</a>
-  {{- else }}
-  folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new file</a>
+  {{- if and (not $.From) (not $.Before) }}
+  <div class='mv4 tc'>
+    {{- if eq (head $.FilePath) "pages" }}
+    folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new page</a>
+    {{- else if eq (head $.FilePath) "posts" }}
+    folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new post</a>
+    {{- else }}
+    folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new file</a>
+    {{- end }}
+  </div>
   {{- end }}
-</div>
 {{- end }}
 
 {{- define "octicons-plus" }}

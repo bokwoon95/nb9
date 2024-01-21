@@ -1115,40 +1115,26 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	response.From = r.FormValue("from")
-	response.Before = r.FormValue("before")
-	var fromTime, beforeTime *time.Time
-	if response.Sort == "edited" {
-		if response.From != "" {
-			response.From = strings.TrimSuffix(response.From, "Z")
-			for _, format := range timestampFormats {
-				timeVal, err := time.ParseInLocation(format, response.From, time.UTC)
-				if err == nil {
-					fromTime = &timeVal
-					break
-				}
-			}
-		} else if response.Before != "" {
-			response.Before = strings.TrimSuffix(response.Before, "Z")
-			for _, format := range timestampFormats {
-				timeVal, err := time.ParseInLocation(format, response.Before, time.UTC)
-				if err == nil {
-					beforeTime = &timeVal
-					break
-				}
-			}
-		}
-	}
 	response.Limit, _ = strconv.Atoi(r.FormValue("limit"))
 	if response.Limit <= 0 {
 		response.Limit = 1000
 	}
 
 	var sortFrom bool
+	var fromTime time.Time
+	response.From = r.FormValue("from")
 	if response.Sort == "name" || response.Sort == "created" {
 		sortFrom = response.From != ""
 	} else if response.Sort == "edited" {
-		sortFrom = fromTime != nil
+		response.From = strings.TrimSuffix(response.From, "Z")
+		for _, format := range timestampFormats {
+			timeVal, err := time.ParseInLocation(format, response.From, time.UTC)
+			if err == nil {
+				fromTime = timeVal
+				sortFrom = true
+				break
+			}
+		}
 	}
 	if sortFrom {
 		g, ctx := errgroup.WithContext(r.Context())
@@ -1164,10 +1150,10 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
-					filter = sq.Expr("mod_time >= {}", *fromTime)
+					filter = sq.Expr("mod_time >= {}", fromTime)
 					order = sq.Expr("mod_time ASC, file_path")
 				} else {
-					filter = sq.Expr("mod_time <= {}", *fromTime)
+					filter = sq.Expr("mod_time <= {}", fromTime)
 					order = sq.Expr("mod_time DESC, file_path")
 				}
 			}
@@ -1218,9 +1204,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
-					filter = sq.Expr("mod_time < {}", *fromTime)
+					filter = sq.Expr("mod_time < {}", fromTime)
 				} else {
-					filter = sq.Expr("mod_time > {}", *fromTime)
+					filter = sq.Expr("mod_time > {}", fromTime)
 				}
 			}
 			hasPreviousFile, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
@@ -1251,10 +1237,20 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	}
 
 	var sortBefore bool
+	var beforeTime time.Time
+	response.Before = r.FormValue("before")
 	if response.Sort == "name" || response.Sort == "created" {
 		sortBefore = response.Before != ""
 	} else if response.Sort == "edited" {
-		sortBefore = beforeTime != nil
+		response.Before = strings.TrimSuffix(response.Before, "Z")
+		for _, format := range timestampFormats {
+			timeVal, err := time.ParseInLocation(format, response.Before, time.UTC)
+			if err == nil {
+				beforeTime = timeVal
+				sortBefore = true
+				break
+			}
+		}
 	}
 	if sortBefore {
 		g, ctx := errgroup.WithContext(r.Context())
@@ -1276,10 +1272,10 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
-					filter = sq.Expr("mod_time < {}", *beforeTime)
+					filter = sq.Expr("mod_time < {}", beforeTime)
 					order = sq.Expr("mod_time ASC, file_path")
 				} else {
-					filter = sq.Expr("mod_time > {}", *beforeTime)
+					filter = sq.Expr("mod_time > {}", beforeTime)
 					order = sq.Expr("mod_time DESC, file_path")
 				}
 			}
@@ -1327,10 +1323,10 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
-					filter = sq.Expr("mod_time >= {}", *beforeTime)
+					filter = sq.Expr("mod_time >= {}", beforeTime)
 					order = sq.Expr("mod_time ASC, file_path")
 				} else {
-					filter = sq.Expr("mod_time <= {}", *beforeTime)
+					filter = sq.Expr("mod_time <= {}", beforeTime)
 					order = sq.Expr("mod_time DESC, file_path")
 				}
 			}
