@@ -39,7 +39,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 				return true
 			}
 		case "output":
-			_, next, _ := strings.Cut(tail, "/")
+			next, _, _ := strings.Cut(tail, "/")
 			if next != "themes" {
 				return false
 			}

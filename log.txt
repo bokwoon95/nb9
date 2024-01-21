@@ -25,6 +25,7 @@ TODO: /users/language/?redirect=foo/bar/baz which lets people set the language c
     BEFORE YOU DO THIS: look at how big the language files are. If it's an acceptable cost to keep them all in memory then just keep it in memory and reads will be much faster since you don't have to guard reads behind a mutex.
 TODO: rewrite the cookie handling portion of directory.js to mirror the sort/order logic on the server.
 TODO: if CMSDomain is not localhost && the CDN link is configured in cdn.txt, we will intercept all generated links and rewrite relative links to CDN links. This means if you're generating pages on localhost, the links are always relative (since GitHub pages etc already host files on their own CDN). And if the user runs their own server but doesn't want to set up the CDN, they can skip configuring the CDN and all the links will stay relative (for max flexibility). Whenever links are rewritten to CDN links you do lose some file flexibility as it means they can no longer be plopped anywhere and just work, it assumes a cdn is up and available as well.
+TODO: iconify the buttons (cog, regen, createfile, createfolder)
 
 https://www.cs.umd.edu/~ben/goldenrules.html
 - Every user action should have feedback. Common user actions can have modest feedback, major user actions should have big feedback.

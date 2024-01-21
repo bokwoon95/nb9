@@ -30,46 +30,27 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type fileEntry struct {
-	Name    string    `json:"name"`
-	IsDir   bool      `json:"isDir"`
-	ModTime time.Time `json:"modTime"`
-	Size    int64     `json:"size,omitempty"`
-}
-
-type siteEntry struct {
-	Name  string `json:"name"`
-	Owner string `json:"owner,omitempty"`
-}
-
-type fileResponse struct {
-	ContentSite     string            `json:"contentSite"`
-	Username        NullString        `json:"username"`
-	SitePrefix      string            `json:"sitePrefix"`
-	FilePath        string            `json:"filePath"`
-	IsDir           bool              `json:"isDir"`
-	ModTime         time.Time         `json:"modTime"`
-	PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
-
-	Sort            string      `json:"sort,omitempty"`
-	Order           string      `json:"order,omitempty"`
-	Files           []fileEntry `json:"files,omitempty"`
-	HasPreviousFile bool        `json:"hasPreviousFile,omitempty"`
-	NextFile        string      `json:"nextFile,omitempty"`
-	Sites           []siteEntry `json:"sites,omitempty"`
-	HasPreviousSite bool        `json:"hasPreviousSite,omitempty"`
-	NextSite        string      `json:"nextSite,omitempty"`
-	Limit           int         `json:"limit,omitempty"`
-
-	Content        string      `json:"content,omitempty"`
-	URL            string      `json:"url,omitempty"`
-	BelongsTo      string      `json:"belongsTo,omitempty"`
-	AssetDir       string      `json:"assetDir,omitempty"`
-	Assets         []fileEntry `json:"assets,omitempty"`
-	TemplateErrors []string    `json:"templateErrors,omitempty"`
-}
-
 func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
+	type Asset struct {
+		Name    string    `json:"name"`
+		ModTime time.Time `json:"modTime"`
+		Size    int64     `json:"size"`
+	}
+	type Response struct {
+		ContentSite    string     `json:"contentSite"`
+		Username       NullString `json:"username"`
+		SitePrefix     string     `json:"sitePrefix"`
+		FilePath       string     `json:"filePath"`
+		IsDir          bool       `json:"isDir"`
+		ModTime        time.Time  `json:"modTime"`
+		Content        string     `json:"content"`
+		URL            string     `json:"url,omitempty"`
+		BelongsTo      string     `json:"belongsTo,omitempty"`
+		AssetDir       string     `json:"assetDir,omitempty"`
+		Assets         []Asset    `json:"assets,omitempty"`
+		TemplateErrors []string   `json:"templateErrors,omitempty"`
+	}
+
 	file, err := nbrew.FS.Open(path.Join(".", sitePrefix, filePath))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -151,7 +132,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 
 	switch r.Method {
 	case "GET":
-		var response fileResponse
+		var response Response
 		_, err = nbrew.getSession(r, "flash", &response)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -206,8 +187,8 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 					Values: []any{
 						sq.StringParam("assetDir", path.Join(sitePrefix, response.AssetDir)),
 					},
-				}, func(row *sq.Row) fileEntry {
-					return fileEntry{
+				}, func(row *sq.Row) Asset {
+					return Asset{
 						Name:    path.Base(row.String("file_path")),
 						Size:    row.Int64("size"),
 						ModTime: row.Time("mod_time"),
@@ -238,7 +219,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 							internalServerError(w, r, err)
 							return
 						}
-						response.Assets = append(response.Assets, fileEntry{
+						response.Assets = append(response.Assets, Asset{
 							Name:    name,
 							Size:    fileInfo.Size(),
 							ModTime: fileInfo.ModTime(),
@@ -267,8 +248,8 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 					Values: []any{
 						sq.StringParam("assetDir", path.Join(sitePrefix, response.AssetDir)),
 					},
-				}, func(row *sq.Row) fileEntry {
-					return fileEntry{
+				}, func(row *sq.Row) Asset {
+					return Asset{
 						Name:    path.Base(row.String("file_path")),
 						Size:    row.Int64("size"),
 						ModTime: row.Time("mod_time"),
@@ -299,7 +280,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 							internalServerError(w, r, err)
 							return
 						}
-						response.Assets = append(response.Assets, fileEntry{
+						response.Assets = append(response.Assets, Asset{
 							Name:    name,
 							Size:    fileInfo.Size(),
 							ModTime: fileInfo.ModTime(),
@@ -375,7 +356,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
 		executeTemplate(w, r, tmpl, &response)
 	case "POST":
-		writeResponse := func(w http.ResponseWriter, r *http.Request, response fileResponse) {
+		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 			if r.Form.Has("api") {
 				w.Header().Set("Content-Type", "application/json")
 				encoder := json.NewEncoder(w)
@@ -434,7 +415,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			return
 		}
 
-		response := fileResponse{
+		response := Response{
 			ContentSite: nbrew.contentSite(sitePrefix),
 			Username:    NullString{String: username, Valid: nbrew.UsersDB != nil},
 			SitePrefix:  sitePrefix,
@@ -540,7 +521,31 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 }
 
 func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix string, modTime time.Time) {
-	writeResponse := func(w http.ResponseWriter, r *http.Request, response fileResponse) {
+	type File struct {
+		Name    string    `json:"name"`
+		IsDir   bool      `json:"isDir"`
+		ModTime time.Time `json:"modTime"`
+		Size    int64     `json:"size,omitempty"`
+	}
+	type Site struct {
+		Name  string `json:"name"`
+		Owner string `json:"owner,omitempty"`
+	}
+	type Response struct {
+		PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
+		ContentSite     string            `json:"contentSite"`
+		Username        NullString        `json:"username"`
+		SitePrefix      string            `json:"sitePrefix"`
+		FilePath        string            `json:"filePath"`
+		IsDir           bool              `json:"isDir"`
+		ModTime         time.Time         `json:"modTime"`
+		Files           []File            `json:"files,omitempty"`
+		Sites           []Site            `json:"sites,omitempty"`
+		HasPreviousSite bool              `json:"hasPreviousSite,omitempty"`
+		NextSite        string            `json:"nextSite,omitempty"`
+		Limit           int               `json:"limit,omitempty"`
+	}
+	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
 			w.Header().Set("Content-Type", "application/json")
 			encoder := json.NewEncoder(w)
@@ -584,7 +589,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		executeTemplate(w, r, tmpl, &response)
 	}
 
-	var response fileResponse
+	var response Response
 	_, err := nbrew.getSession(r, "flash", &response)
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
@@ -608,8 +613,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			Values: []any{
 				sq.StringParam("username", username),
 			},
-		}, func(row *sq.Row) siteEntry {
-			return siteEntry{
+		}, func(row *sq.Row) Site {
+			return Site{
 				Name: row.String("CASE"+
 					" WHEN site.site_name LIKE '%.%' THEN site.site_name"+
 					" WHEN site.site_name <> '' THEN {concatSiteName}"+
@@ -632,7 +637,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			return
 		}
 		response.Sites = sites
-		n := slices.IndexFunc(response.Sites, func(site siteEntry) bool { return site.Name == "" })
+		n := slices.IndexFunc(response.Sites, func(site Site) bool { return site.Name == "" })
 		if n < 0 {
 			writeResponse(w, r, response)
 			return
@@ -656,7 +661,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			if !fileInfo.IsDir() {
 				continue
 			}
-			response.Files = append(response.Files, fileEntry{
+			response.Files = append(response.Files, File{
 				Name:    name,
 				ModTime: fileInfo.ModTime(),
 				IsDir:   true,
@@ -680,7 +685,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			}
 			name := dirEntry.Name()
 			if strings.HasPrefix(name, "@") || strings.Contains(name, ".") {
-				response.Sites = append(response.Sites, siteEntry{Name: name})
+				response.Sites = append(response.Sites, Site{Name: name})
 			}
 		}
 		writeResponse(w, r, response)
@@ -707,8 +712,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			sq.StringParam("themes", path.Join(sitePrefix, "output/themes")),
 			sq.StringParam("output", path.Join(sitePrefix, "output")),
 		},
-	}, func(row *sq.Row) fileEntry {
-		return fileEntry{
+	}, func(row *sq.Row) File {
+		return File{
 			Name:    strings.Trim(strings.TrimPrefix(row.String("file_path"), sitePrefix), "/"),
 			ModTime: row.Time("mod_time"),
 			IsDir:   true,
@@ -750,8 +755,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					sq.StringParam("from", from),
 					sq.IntParam("limit", response.Limit),
 				},
-			}, func(row *sq.Row) siteEntry {
-				return siteEntry{
+			}, func(row *sq.Row) Site {
+				return Site{
 					Name: row.String("files.file_path"),
 				}
 			})
@@ -811,8 +816,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					sq.StringParam("before", before),
 					sq.IntParam("limit", response.Limit),
 				},
-			}, func(row *sq.Row) siteEntry {
-				return siteEntry{
+			}, func(row *sq.Row) Site {
+				return Site{
 					Name: row.String("files.file_path"),
 				}
 			})
@@ -820,7 +825,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				return err
 			}
 			if len(response.Sites) > response.Limit {
-				response.HasPreviousFile = true
+				response.HasPreviousSite = true
 				response.Sites = response.Sites[1:]
 			}
 			return nil
@@ -872,8 +877,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		Values: []any{
 			sq.IntParam("limit", response.Limit),
 		},
-	}, func(row *sq.Row) siteEntry {
-		return siteEntry{
+	}, func(row *sq.Row) Site {
+		return Site{
 			Name: row.String("files.file_path"),
 		}
 	})
@@ -905,7 +910,28 @@ var timestampFormats = []string{
 }
 
 func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
-	writeResponse := func(w http.ResponseWriter, r *http.Request, response fileResponse) {
+	type File struct {
+		Name    string    `json:"name"`
+		IsDir   bool      `json:"isDir"`
+		ModTime time.Time `json:"modTime"`
+		Size    int64     `json:"size,omitempty"`
+	}
+	type Response struct {
+		PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
+		ContentSite     string            `json:"contentSite"`
+		Username        NullString        `json:"username"`
+		SitePrefix      string            `json:"sitePrefix"`
+		FilePath        string            `json:"filePath"`
+		IsDir           bool              `json:"isDir"`
+		ModTime         time.Time         `json:"modTime"`
+		Sort            string            `json:"sort,omitempty"`
+		Order           string            `json:"order,omitempty"`
+		Files           []File            `json:"files,omitempty"`
+		HasPreviousFile bool              `json:"hasPreviousFile,omitempty"`
+		NextFile        string            `json:"nextFile,omitempty"`
+		Limit           int               `json:"limit,omitempty"`
+	}
+	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
 			w.Header().Set("Content-Type", "application/json")
 			encoder := json.NewEncoder(w)
@@ -972,7 +998,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	var response fileResponse
+	var response Response
 	_, err := nbrew.getSession(r, "flash", &response)
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
@@ -1037,7 +1063,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				internalServerError(w, r, err)
 				return
 			}
-			file := fileEntry{
+			file := File{
 				Name:    fileInfo.Name(),
 				Size:    fileInfo.Size(),
 				ModTime: fileInfo.ModTime(),
@@ -1059,7 +1085,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				slices.Reverse(response.Files)
 			}
 		case "edited":
-			slices.SortFunc(response.Files, func(a, b fileEntry) int {
+			slices.SortFunc(response.Files, func(a, b File) int {
 				if a.ModTime.Equal(b.ModTime) {
 					return strings.Compare(a.Name, b.Name)
 				}
@@ -1152,8 +1178,8 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					sq.Param("order", order),
 					sq.IntParam("limit", response.Limit),
 				},
-			}, func(row *sq.Row) fileEntry {
-				return fileEntry{
+			}, func(row *sq.Row) File {
+				return File{
 					Name:    path.Base(row.String("files.file_path")),
 					Size:    row.Int64("size"),
 					ModTime: row.Time("mod_time"),
@@ -1264,8 +1290,8 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					sq.Param("order", order),
 					sq.IntParam("limit", response.Limit),
 				},
-			}, func(row *sq.Row) fileEntry {
-				return fileEntry{
+			}, func(row *sq.Row) File {
+				return File{
 					Name:    path.Base(row.String("files.file_path")),
 					Size:    row.Int64("size"),
 					ModTime: row.Time("mod_time"),
@@ -1314,8 +1340,8 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					sq.Param("filter", filter),
 					sq.Param("order", order),
 				},
-			}, func(row *sq.Row) fileEntry {
-				return fileEntry{
+			}, func(row *sq.Row) File {
+				return File{
 					Name:    path.Base(row.String("file_path")),
 					ModTime: row.Time("mod_time"),
 				}
@@ -1363,8 +1389,8 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			sq.Param("order", order),
 			sq.IntParam("limit", response.Limit),
 		},
-	}, func(row *sq.Row) fileEntry {
-		return fileEntry{
+	}, func(row *sq.Row) File {
+		return File{
 			Name:    path.Base(row.String("files.file_path")),
 			Size:    row.Int64("size"),
 			ModTime: row.Time("mod_time"),

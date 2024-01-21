@@ -29,7 +29,13 @@
   {{- if referer }}
   <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
   {{- end }}
-  <h1 class='f3 mv3 b'>Creating folder in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a></h1>
+  <h1 class='f3 mv3 b'>
+    {{- if eq $.Parent "posts" }}
+    Create a new category
+    {{- else }}
+    Create a new folder in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+    {{- end }}
+  </h1>
   <input type='hidden' name='parent' value='{{ $.Parent }}'>
   <div class='mv3'>
     <div><label for='name' class='b'>Name:</label></div>
@@ -40,6 +46,12 @@
       {{- end }}
     </ul>
   </div>
-  <button type='submit' class='button ba br2 pa2 mv3 w-100'>Create folder</button>
+  <button type='submit' class='button ba br2 pa2 mv3 w-100'>
+    {{- if eq $.Parent "posts" }}
+    Create category
+    {{- else }}
+    Create folder
+    {{- end }}
+  </button>
 </form>
 {{- end }}
