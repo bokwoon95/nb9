@@ -1295,7 +1295,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				},
 			}, func(row *sq.Row) File {
 				return File{
-					Name:    path.Base(row.String("files.file_path")),
+					Name:    path.Base(row.String("file_path")),
 					Size:    row.Int64("size"),
 					ModTime: row.Time("mod_time"),
 					IsDir:   row.Bool("is_dir"),
