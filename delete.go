@@ -2,12 +2,15 @@ package nb9
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"mime"
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -77,20 +80,11 @@ func (nbrew *Notebrew) delet(w http.ResponseWriter, r *http.Request, username, s
 			referer := getReferer(r)
 			funcMap := map[string]any{
 				"join":       path.Join,
-				"base":       path.Base,
 				"hasPrefix":  strings.HasPrefix,
 				"trimPrefix": strings.TrimPrefix,
 				"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
 				"baselineJS": func() template.JS { return template.JS(baselineJS) },
 				"referer":    func() string { return referer },
-				"head": func(s string) string {
-					head, _, _ := strings.Cut(s, "/")
-					return head
-				},
-				"tail": func(s string) string {
-					_, tail, _ := strings.Cut(s, "/")
-					return tail
-				},
 			}
 			tmpl, err := template.New("delete.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/delete.html")
 			if err != nil {
@@ -121,7 +115,32 @@ func (nbrew *Notebrew) delet(w http.ResponseWriter, r *http.Request, username, s
 			writeResponse(w, r, response)
 			return
 		}
-		// TODO: list all deletable files efficiently (if remoteFS, use a prepared statement on a transaction).
+		seen := make(map[string]bool)
+		for _, name := range r.Form["name"] {
+			name = filepath.ToSlash(name)
+			if strings.Contains(name, "/") {
+				continue
+			}
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, name))
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			response.Files = append(response.Files, File{
+				Name:    fileInfo.Name(),
+				IsDir:   fileInfo.IsDir(),
+				Size:    fileInfo.Size(),
+				ModTime: fileInfo.ModTime(),
+			})
+		}
 		writeResponse(w, r, response)
 	case "POST":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
@@ -153,8 +172,8 @@ func (nbrew *Notebrew) delet(w http.ResponseWriter, r *http.Request, username, s
 			}
 			if len(response.Errors) == 1 {
 				b.WriteString(" (1 error)")
-			} else {
-				b.WriteString(" ("+strconv.Itoa(len(response.Errors)) + " errors)")
+			} else if len(response.Errors) > 1 {
+				b.WriteString(" (" + strconv.Itoa(len(response.Errors)) + " errors)")
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]string{
@@ -208,7 +227,44 @@ func (nbrew *Notebrew) delet(w http.ResponseWriter, r *http.Request, username, s
 			writeResponse(w, r, response)
 			return
 		}
-		// TODO: delete all files efficiently (if remoteFS, use a prepared statement on a transaction).
+		seen := make(map[string]bool)
+		for _, name := range request.Names {
+			name = filepath.ToSlash(name)
+			if strings.Contains(name, "/") {
+				continue
+			}
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			err := nbrew.FS.RemoveAll(path.Join(sitePrefix, response.Parent, name))
+			if err != nil {
+				response.Errors = append(response.Errors, fmt.Sprintf("%s: %v", name, err))
+			} else {
+				response.Files = append(response.Files, File{Name: name})
+			}
+			if response.Parent == "pages" {
+				if name == "index.html" {
+					err := nbrew.FS.RemoveAll(path.Join(sitePrefix, "output/index.html"))
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+					}
+				}
+			} else {
+				head, tail, _ := strings.Cut(response.Parent, "/")
+				if head == "pages" {
+					err := nbrew.FS.RemoveAll(path.Join(sitePrefix, "output", tail, strings.TrimSuffix(name, path.Ext(name))))
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+					}
+				} else if head == "posts" {
+					err := nbrew.FS.RemoveAll(path.Join(sitePrefix, "output", response.Parent, strings.TrimSuffix(name, path.Ext(name))))
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+					}
+				}
+			}
+		}
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)

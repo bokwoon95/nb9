@@ -228,6 +228,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case "createfile":
 			nbrew.createfile(w, r, username, sitePrefix)
 		case "delete":
+			nbrew.delet(w, r, username, sitePrefix)
 		case "cut":
 		case "copy":
 		case "paste":

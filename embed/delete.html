@@ -34,7 +34,7 @@
   <ul class='list-style-disc ph3'>
     {{- range $file := $.Files }}
     <li class='mv1'>
-      <a href='/{{ join `admin` sitePrefix $.ParentFolder $file.Name }}{{ if $file.IsDir }}/{{ end }}'>{{ $file.Name }}{{ if $file.IsDir }}/{{ end }}</a>
+      <a href='/{{ join "files" $.SitePrefix $.Parent $file.Name }}{{ if $file.IsDir }}/{{ end }}'>{{ $file.Name }}{{ if $file.IsDir }}/{{ end }}</a>
       <input type='hidden' name='name' value='{{ $file.Name }}'>
     </li>
     {{- end }}
