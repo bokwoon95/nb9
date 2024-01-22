@@ -48,30 +48,30 @@
   <div class='mv3'>
     <div><label for='name' class='b'>Name:</label></div>
     <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>
-    <ul class='ph3'>
+    <ul class='list-style-disc ph3 f6 invalid-red'>
       {{- range $error := index $.FormErrors "name" }}
-      <li class='f6 invalid-red list-style-disc'>{{ $error }}</li>
+      <li>{{ $error }}</li>
       {{- end }}
     </ul>
   </div>
   <div class='f6'>Examples:</div>
   {{- if eq (head $.Parent) "pages" }}
-  <ul class='ph3 f6'>
-    <li class='list-style-disc'>this-is-my-page.html</li>
-    <li class='list-style-disc'>about me</li>
+  <ul class='list-style-disc ph3 f6'>
+    <li>this-is-my-page.html</li>
+    <li>about me</li>
   </ul>
   {{- else if eq (head $.Parent) "posts" }}
-  <ul class='ph3 f6'>
-    <li class='list-style-disc'>hello-world-my-first-post.md</li>
-    <li class='list-style-disc'>my day trip to kyoto</li>
+  <ul class='list-style-disc ph3 f6'>
+    <li>hello-world-my-first-post.md</li>
+    <li>my day trip to kyoto</li>
   </ul>
   {{- else }}
-  <ul class='ph3 f6'>
-    <li class='list-style-disc'>common-templates.html</li>
-    <li class='list-style-disc'>my-styles.css</li>
-    <li class='list-style-disc'>do-thing.js</li>
-    <li class='list-style-disc'>text-markup.md</li>
-    <li class='list-style-disc'>text-raw.txt</li>
+  <ul class='list-style-disc ph3 f6'>
+    <li>common-templates.html</li>
+    <li>my-styles.css</li>
+    <li>do-thing.js</li>
+    <li>text-markup.md</li>
+    <li>text-raw.txt</li>
   </ul>
   {{- end }}
   <button type='submit' class='button ba br2 pa2 mv3 w-100'>

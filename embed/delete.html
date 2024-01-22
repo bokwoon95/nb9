@@ -17,3 +17,28 @@
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
+{{- if or (eq $.Error "InvalidParent") (not $.Files) }}
+<div class='mv5 w-80 w-70-m w-60-l center'>
+  {{- if referer }}
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- end }}
+  <div class='mv3 b tc'>No items to delete</div>
+</div>
+{{- else }}
+<form method='post' class='mv5 w-80 w-70-m w-60-l center'>
+  {{- if referer }}
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- end }}
+  <h3 class='mv3 b'>Delete the following files(s)?</h3>
+  <input type='hidden' name='parent' value='{{ $.Parent }}'>
+  <ul class='list-style-disc ph3'>
+    {{- range $file := $.Files }}
+    <li class='mv1'>
+      <a href='/{{ join `admin` sitePrefix $.ParentFolder $file.Name }}{{ if $file.IsDir }}/{{ end }}'>{{ $file.Name }}{{ if $file.IsDir }}/{{ end }}</a>
+      <input type='hidden' name='name' value='{{ $file.Name }}'>
+    </li>
+    {{- end }}
+  </ul>
+  <button type='submit' class='button-danger ba br2 b--dark-red pa2 mv3'>Delete</button>
+</form>
+{{- end }}
