@@ -28,6 +28,8 @@
 <form method='post' action='/{{ join "files" $.SitePrefix "createfile" }}/' class='mv5 w-80 w-70-m w-60-l center'>
   {{- if referer }}
   <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- else }}
+  <div><a href='/{{ join "files" $.SitePrefix $.Parent }}/'>&larr; back</a></div>
   {{- end }}
   <h1 class='f3 mv3 b'>
     {{- if eq (head $.Parent) "pages" }}

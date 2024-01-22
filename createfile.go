@@ -198,13 +198,32 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		}
 		head, _, _ := strings.Cut(response.Parent, "/")
 		switch head {
+		case "notes":
+			switch path.Ext(response.Name) {
+			case ".html", ".css", ".js", ".md", ".txt":
+				break
+			case "":
+				response.Name += ".txt"
+			default:
+				response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md, .txt or omitted)")
+			}
 		case "pages":
-			if !strings.HasSuffix(response.Name, ".html") {
+			switch path.Ext(response.Name) {
+			case ".html":
+				break
+			case "":
 				response.Name += ".html"
+			default:
+				response.FormErrors.Add("name", "extension must be .html or omitted")
 			}
 		case "posts":
-			if !strings.HasSuffix(response.Name, ".md") {
+			switch path.Ext(response.Name) {
+			case ".md":
+				break
+			case "":
 				response.Name += ".md"
+			default:
+				response.FormErrors.Add("name", "extension must be .md or omitted")
 			}
 		default:
 			switch path.Ext(response.Name) {
