@@ -672,17 +672,6 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 }
 
 func executeAndRewriteCDNLinks(writer io.WriteCloser, tmpl *template.Template, data any, cdnDomain string) error {
-	if cdnDomain == "" {
-		err := tmpl.Execute(writer, data)
-		if err != nil {
-			return &TemplateExecutionError{Err: err}
-		}
-		err = writer.Close()
-		if err != nil {
-			return err
-		}
-		return nil
-	}
 	// TODO: stream template output into a pipeWriter, pass the pipeReader end
 	// into a golang.org/x/net/html.Tokenizer and iterate over tokens, looking
 	// for anchor tags and rewriting their href attribute to a CDN version if
