@@ -71,7 +71,7 @@ type Notebrew struct {
 
 type Site struct {
 	Title      string
-	Favicon    string
+	Favicon    template.URL
 	Emoji      string
 	Lang       string
 	Categories []string

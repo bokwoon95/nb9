@@ -268,6 +268,26 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
+		if head == "pages" || head == "posts" {
+			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.CDNDomain)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			switch head {
+			case "pages":
+				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name), "")
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+				}
+			case "posts":
+				err := siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name), "")
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+				}
+			}
+		}
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)

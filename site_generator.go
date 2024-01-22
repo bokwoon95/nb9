@@ -66,7 +66,7 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, cdnDomain string
 		siteGen.site.Emoji = "☕"
 	}
 	if siteGen.site.Favicon == "" {
-		siteGen.site.Favicon = "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>" + siteGen.site.Emoji + "</text></svg>"
+		siteGen.site.Favicon = template.URL("data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>" + siteGen.site.Emoji + "</text></svg>")
 	}
 	if siteGen.site.Lang == "" {
 		siteGen.site.Lang = "en"
