@@ -451,6 +451,57 @@ func main() {
 			if err != nil {
 				return err
 			}
+			if filesDialect == "sqlite" {
+				dbi := ddl.NewDatabaseIntrospector(filesDialect, filesDB)
+				dbi.Tables = []string{"files_fts5"}
+				tables, err := dbi.GetTables()
+				if err != nil {
+					return err
+				}
+				if len(tables) == 0 {
+					_, err := filesDB.Exec("CREATE VIRTUAL TABLE files_fts5 USING fts5 (text, content=files);")
+					if err != nil {
+						return err
+					}
+				}
+				dbi.Tables = []string{"files"}
+				triggers, err := dbi.GetTriggers()
+				if err != nil {
+					return err
+				}
+				triggerNames := make(map[string]struct{})
+				for _, trigger := range triggers {
+					triggerNames[trigger.TriggerName] = struct{}{}
+				}
+				if _, ok := triggerNames["files_after_insert"]; !ok {
+					_, err := filesDB.Exec("CREATE TRIGGER files_after_insert AFTER INSERT ON files BEGIN" +
+						"\n    INSERT INTO files_fts5 (rowid, text) VALUES (NEW.rowid, NEW.text);" +
+						"\nEND;",
+					)
+					if err != nil {
+						return err
+					}
+				}
+				if _, ok := triggerNames["files_after_delete"]; !ok {
+					_, err := filesDB.Exec("CREATE TRIGGER files_after_delete AFTER DELETE ON files BEGIN" +
+						"\n    INSERT INTO files_fts5 (files_fts5, rowid, text) VALUES ('delete', OLD.rowid, OLD.text);" +
+						"\nEND;",
+					)
+					if err != nil {
+						return err
+					}
+				}
+				if _, ok := triggerNames["files_after_update"]; !ok {
+					_, err := filesDB.Exec("CREATE TRIGGER files_after_update AFTER UPDATE ON files BEGIN" +
+						"\n    INSERT INTO files_fts5 (files_fts5, rowid, text) VALUES ('delete', OLD.rowid, OLD.text);" +
+						"\n    INSERT INTO files_fts5 (rowid, text) VALUES (NEW.rowid, NEW.text);" +
+						"\nEND;",
+					)
+					if err != nil {
+						return err
+					}
+				}
+			}
 			defer func() {
 				if filesDialect == "sqlite" {
 					filesDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")

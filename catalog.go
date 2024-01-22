@@ -12,8 +12,13 @@ type rawTable struct {
 	Table      string
 	PrimaryKey []string
 	Columns    []struct {
-		Column     string
-		Type       map[string]string
+		Dialect string
+		Column  string
+		Type    map[string]string
+		Expr    struct {
+			Definition string
+			Stored     bool
+		}
 		Index      bool
 		PrimaryKey bool
 		Unique     bool
@@ -22,6 +27,11 @@ type rawTable struct {
 			Table  string
 			Column string
 		}
+	}
+	Indexes []struct {
+		Dialect string
+		Type    string
+		Columns []string
 	}
 }
 
@@ -66,12 +76,17 @@ func unmarshalCatalog(dialect string, b []byte) (*ddl.Catalog, error) {
 			if columnType == "" {
 				columnType = rawColumn.Type["default"]
 			}
+			if rawColumn.Dialect != "" && rawColumn.Dialect != dialect {
+				continue
+			}
 			cache.AddOrUpdateColumn(table, ddl.Column{
-				ColumnName:   rawColumn.Column,
-				ColumnType:   columnType,
-				IsPrimaryKey: rawColumn.PrimaryKey,
-				IsUnique:     rawColumn.Unique,
-				IsNotNull:    rawColumn.NotNull,
+				ColumnName:          rawColumn.Column,
+				ColumnType:          columnType,
+				IsPrimaryKey:        rawColumn.PrimaryKey,
+				IsUnique:            rawColumn.Unique,
+				IsNotNull:           rawColumn.NotNull,
+				GeneratedExpr:       rawColumn.Expr.Definition,
+				GeneratedExprStored: rawColumn.Expr.Stored,
 			})
 			if rawColumn.PrimaryKey {
 				cache.AddOrUpdateConstraint(table, ddl.Constraint{
@@ -107,6 +122,16 @@ func unmarshalCatalog(dialect string, b []byte) (*ddl.Catalog, error) {
 					UpdateRule:        ddl.CASCADE,
 				})
 			}
+		}
+		for _, rawIndex := range rawTable.Indexes {
+			if rawIndex.Dialect != "" && rawIndex.Dialect != dialect {
+				continue
+			}
+			cache.AddOrUpdateIndex(table, ddl.Index{
+				IndexName: ddl.GenerateName(ddl.INDEX, rawTable.Table, rawIndex.Columns),
+				IndexType: rawIndex.Type,
+				Columns:   rawIndex.Columns,
+			})
 		}
 	}
 	return catalog, nil

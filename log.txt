@@ -4,28 +4,28 @@ fs_local.go
 fs_remote.go
 init.go
 notebrew.go
-template_parser.go
+site_generator.go
 files.go
 createsite.go
 deletesite.go
 createfolder.go
 createfile.go
 delete.go
+search.go
 cut/copy/paste/rename
 uploadfile.go
 ...
 serve_http.go
 notebrew/main.go
 
-TODO: createfile
-    - when creating a new file, also generate the output index.html so that view: page is always relevant
-TODO: a little "view data" link on file.html that simply the href "?data". When clicked, it generates live data of the page in real time if we're on a page.html, or the latest post/last page data if we're on post.html/postlist.html.
+TODO: search.go
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
     NOTE: for languages don't parse all the language json files and keep them in memory, instead implement a TTL using timers and timer.Reset everytime someone requests for that language file. Once the timer expires, delete it from the map.
     BEFORE YOU DO THIS: look at how big the language files are. If it's an acceptable cost to keep them all in memory then just keep it in memory and reads will be much faster since you don't have to guard reads behind a mutex.
 TODO: rewrite the cookie handling portion of directory.js to mirror the sort/order logic on the server.
 TODO: if CMSDomain is not localhost && the CDN link is configured in cdn.txt, we will intercept all generated links and rewrite relative links to CDN links. This means if you're generating pages on localhost, the links are always relative (since GitHub pages etc already host files on their own CDN). And if the user runs their own server but doesn't want to set up the CDN, they can skip configuring the CDN and all the links will stay relative (for max flexibility). Whenever links are rewritten to CDN links you do lose some file flexibility as it means they can no longer be plopped anywhere and just work, it assumes a cdn is up and available as well.
 TODO: iconify the buttons (cog, regen, createfile, createfolder)
+TODO: a little "view data" link on file.html that simply the href "?data". When clicked, it generates live data of the page in real time if we're on a page.html, or the latest post/last page data if we're on post.html/postlist.html.
 
 https://www.cs.umd.edu/~ben/goldenrules.html
 - Every user action should have feedback. Common user actions can have modest feedback, major user actions should have big feedback.

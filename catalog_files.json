@@ -71,6 +71,33 @@
           "postgres": "TIMESTAMPTZ"
         },
         "index": true
+      },
+      {
+        "dialect": "postgres",
+        "column": "text_tsv",
+        "type": {
+          "default": "TSVECTOR"
+        },
+        "expr": {
+          "definition": "to_tsvector('english', text)",
+          "stored": true
+        }
+      }
+    ],
+    "indexes": [
+      {
+        "dialect": "postgres",
+        "type": "GIN",
+        "columns": [
+          "text_tsv"
+        ]
+      },
+      {
+        "dialect": "mysql",
+        "type": "FULLTEXT",
+        "columns": [
+          "text"
+        ]
       }
     ]
   }
