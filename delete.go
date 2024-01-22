@@ -228,6 +228,9 @@ func (nbrew *Notebrew) delet(w http.ResponseWriter, r *http.Request, username, s
 			return
 		}
 		seen := make(map[string]bool)
+		// TODO: if any of the files are pages/index.html,
+		// output/themes/post.html and output/themes/postlist.html then
+		// regenerate those files from RuntimeFS.
 		for _, name := range request.Names {
 			name = filepath.ToSlash(name)
 			if strings.Contains(name, "/") {
