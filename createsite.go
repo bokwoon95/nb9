@@ -50,12 +50,12 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 		}
 		n := 0
 		var unlimitedSites bool
-		for _, siteName := range userSiteNames {
-			if siteName == "" {
+		for _, userSiteName := range userSiteNames {
+			if userSiteName == "" {
 				unlimitedSites = true
 				continue
 			}
-			userSiteNames[n] = siteName
+			userSiteNames[n] = userSiteName
 			n++
 		}
 		userSiteNames = userSiteNames[:n]

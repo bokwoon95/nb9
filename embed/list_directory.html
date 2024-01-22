@@ -1,3 +1,4 @@
+{{- $READ_ONLY := and (eq (head $.FilePath) "output") (ne (head (tail $.FilePath)) "themes") }}
 <!DOCTYPE html>
 <html lang='en'>
 <meta charset='utf-8'>
@@ -93,7 +94,7 @@
       </form>
     </details>
   </div>
-  {{- if eq (head $.FilePath) "notes" "pages" "posts" "output" }}
+  {{- if not $READ_ONLY }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
       <summary role='button' title='Create' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
@@ -106,7 +107,7 @@
         <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>create folder</a></div>
         {{- else if eq (head $.FilePath) "posts" }}
         <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>create post</a></div>
-          {{- if eq (dir (tail $.FilePath)) "." }}
+          {{- if eq $.FilePath "posts" }}
           <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>create category</a></div>
           {{- end }}
         {{- else }}
@@ -124,8 +125,7 @@
   {{- range $file := $.Files }}
   <li class='bb pv2'>
     <label for='{{ $file.Name }}' class='flex items-center pointer' data-disable-click-selection>
-      {{ $readOnly := and (eq (head $.FilePath) "output") (ne (head (tail $.FilePath)) "themes") }}
-      {{- if not $readOnly }}
+      {{- if not $READ_ONLY }}
       <div class='mr2'>
         <input type='checkbox' id='{{ $file.Name }}' name='name' value='{{ $file.Name }}' class='pointer'>
       </div>
@@ -142,7 +142,7 @@
         </div>
       </div>
       <div class='flex-grow-1'></div>
-      {{- if not $readOnly }}
+      {{- if not $READ_ONLY }}
       <details class='relative' data-autoclose-details>
         <summary role='button' title='more actions' class='flex items-center button ba br2 b--black h2 hide-marker ph2' data-disable-click-selection>
           {{ template "heroicons-ellipsis-horizontal" }}

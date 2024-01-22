@@ -75,6 +75,14 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
 				"baselineJS": func() template.JS { return template.JS(baselineJS) },
 				"referer":    func() string { return referer },
+				"head": func(s string) string {
+					head, _, _ := strings.Cut(s, "/")
+					return head
+				},
+				"tail": func(s string) string {
+					_, tail, _ := strings.Cut(s, "/")
+					return tail
+				},
 			}
 			tmpl, err := template.New("createfile.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/createfile.html")
 			if err != nil {

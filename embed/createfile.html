@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang='en'>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<link rel='icon' href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>☕</text></svg>'>
+<style>{{ stylesCSS }}</style>
+<script type='module'>{{ baselineJS }}</script>
+<title>Create file</title>
+<body class='centered-body'>
+<nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
+  <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
+  &bull;
+  <a href='{{ $.ContentSite }}' class='ma2 white'>{{ if hasPrefix $.ContentSite "https://" }}{{ trimPrefix $.ContentSite "https://" }}{{ else }}{{ trimPrefix $.ContentSite "http://" }}{{ end }}</a>
+  <span class='flex-grow-1'></span>
+  {{- if $.Username.Valid }}
+  <a href='' class='ma2'>{{ if $.Username.String }}@{{ $.Username.String }}{{ else }}user{{ end }}</a>
+  <a href='/users/logout/' class='ma2'>logout</a>
+  {{- end }}
+</nav>
+{{- if eq $.Error "InvalidParent" }}
+<div class='mv5 w-80 w-70-m w-60-l center'>
+  {{- if referer }}
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- end }}
+  <div class='mv3 b tc'>Can't create a file here.</div>
+</div>
+{{- else }}
+<form method='post' action='/{{ join "files" $.SitePrefix "createfile" }}/' class='mv5 w-80 w-70-m w-60-l center'>
+  {{- if referer }}
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- end }}
+  <h1 class='f3 mv3 b'>
+    {{- if eq (head $.Parent) "pages" }}
+    Create a new page in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+    {{- else if eq (head $.Parent) "posts" }}
+      {{- if eq $.Parent "posts" }}
+      Create a new post
+      {{- else }}
+      Create a new post in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+      {{- end }}
+    {{- else }}
+    Create a new file in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+    {{- end }}
+  </h1>
+  <input type='hidden' name='parent' value='{{ $.Parent }}'>
+  <div class='mv3'>
+    <div><label for='name' class='b'>Name:</label></div>
+    <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>
+    <ul>
+      {{- range $error := index $.FormErrors "name" }}
+      <li class='f6 invalid-red list-style-disc'>{{ $error }}</li>
+      {{- end }}
+    </ul>
+  </div>
+  <div class='f6'>Examples:</div>
+  {{- if eq (head $.Parent) "pages" }}
+  <ul class='ph3 f6'>
+    <li class='list-style-disc'>this-is-my-page.html</li>
+    <li class='list-style-disc'>about me</li>
+  </ul>
+  {{- else if eq (head $.Parent) "posts" }}
+  <ul class='ph3 f6'>
+    <li class='list-style-disc'>hello-world-my-first-post.md</li>
+    <li class='list-style-disc'>my day trip to kyoto</li>
+  </ul>
+  {{- else }}
+  <ul class='ph3 f6'>
+    <li class='list-style-disc'>my-template.html</li>
+    <li class='list-style-disc'>my-styles.css</li>
+    <li class='list-style-disc'>do-thing.js</li>
+    <li class='list-style-disc'>text-markup.md</li>
+    <li class='list-style-disc'>text-raw.txt</li>
+  </ul>
+  {{- end }}
+  <button type='submit' class='button ba br2 pa2 mv3 w-100'>
+    {{- if eq (head $.Parent) "pages" }}
+    Create page
+    {{- else if eq (head $.Parent) "posts" }}
+    Create post
+    {{- else }}
+    Create file
+    {{- end }}
+  </button>
+</form>
+{{- end }}

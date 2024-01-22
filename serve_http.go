@@ -226,6 +226,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case "createfolder":
 			nbrew.createfolder(w, r, username, sitePrefix)
 		case "createfile":
+			nbrew.createfile(w, r, username, sitePrefix)
 		case "delete":
 		case "cut":
 		case "copy":
