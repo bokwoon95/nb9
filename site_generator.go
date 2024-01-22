@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,9 +42,12 @@ type SiteGenerator struct {
 
 func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, cdnDomain string) (*SiteGenerator, error) {
 	siteGen := &SiteGenerator{
-		fsys:       fsys,
-		cdnDomain:  cdnDomain,
-		sitePrefix: sitePrefix,
+		fsys:               fsys,
+		sitePrefix:         sitePrefix,
+		cdnDomain:          cdnDomain,
+		mu:                 sync.Mutex{},
+		templateCache:      make(map[string]*template.Template),
+		templateInProgress: make(map[string]chan struct{}),
 	}
 	b, err := fs.ReadFile(fsys, path.Join(sitePrefix, "site.json"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -61,12 +66,12 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, cdnDomain string
 		siteGen.site.Emoji = "☕"
 	}
 	if siteGen.site.Favicon == "" {
-		siteGen.site.Favicon = "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>"+siteGen.site.Emoji+"</text></svg>"
+		siteGen.site.Favicon = "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>" + siteGen.site.Emoji + "</text></svg>"
 	}
 	if siteGen.site.Lang == "" {
 		siteGen.site.Lang = "en"
 	}
-	if siteGen.site.CodeStyle=="" {
+	if siteGen.site.CodeStyle == "" {
 		siteGen.site.CodeStyle = "onedark"
 	}
 	if siteGen.site.Categories == nil {
@@ -660,6 +665,249 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 		}
 	} else {
 		err = tmpl.Execute(writer, &pageData)
+		if err != nil {
+			return &TemplateExecutionError{Err: err}
+		}
+		err = writer.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, content string) error {
+	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
+	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
+	postData := PostData{
+		Site:             siteGen.site,
+		Category:         path.Dir(strings.TrimPrefix(urlPath, "posts/")),
+		Name:             path.Base(strings.TrimPrefix(urlPath, "posts/")),
+		ModificationTime: time.Now().UTC(),
+	}
+	if strings.Contains(postData.Category, "/") {
+		return nil
+	}
+	if postData.Category == "." {
+		postData.Category = ""
+	}
+	prefix, _, ok := strings.Cut(strings.TrimPrefix(urlPath, "posts/"), "-")
+	if !ok || len(prefix) == 0 || len(prefix) > 8 {
+		return nil
+	}
+	b, _ := base32Encoding.DecodeString(fmt.Sprintf("%08s", prefix))
+	if len(b) != 5 {
+		return nil
+	}
+	var timestamp [8]byte
+	copy(timestamp[len(timestamp)-5:], b)
+	postData.CreationTime = time.Unix(int64(binary.BigEndian.Uint64(timestamp[:])), 0)
+	var err error
+	var tmpl *template.Template
+	g1, ctx1 := errgroup.WithContext(ctx)
+	g1.Go(func() error {
+		var err error
+		var text sql.NullString
+		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+			text, err = sq.FetchOne(ctx1, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
+				Values: []any{
+					sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "output/themes/post.html")),
+				},
+			}, func(row *sq.Row) sql.NullString {
+				return row.NullString("text")
+			})
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		} else {
+			file, err := siteGen.fsys.WithContext(ctx1).Open(path.Join(siteGen.sitePrefix, "output/themes/post.html"))
+			if err != nil {
+				if !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+			} else {
+				defer file.Close()
+				fileInfo, err := file.Stat()
+				if err != nil {
+					return err
+				}
+				if fileInfo.IsDir() {
+					return fmt.Errorf("%s is not a file", filePath)
+				}
+				var b strings.Builder
+				b.Grow(int(fileInfo.Size()))
+				_, err = io.Copy(&b, file)
+				if err != nil {
+					return err
+				}
+				err = file.Close()
+				if err != nil {
+					return err
+				}
+				text = sql.NullString{String: b.String(), Valid: true}
+			}
+		}
+		if !text.Valid {
+			file, err := RuntimeFS.Open("embed/post.html")
+			if err != nil {
+				return err
+			}
+			fileInfo, err := file.Stat()
+			if err != nil {
+				return err
+			}
+			if fileInfo.IsDir() {
+				return fmt.Errorf("%s is not a file", filePath)
+			}
+			var b strings.Builder
+			b.Grow(int(fileInfo.Size()))
+			_, err = io.Copy(&b, file)
+			if err != nil {
+				return err
+			}
+			err = file.Close()
+			if err != nil {
+				return err
+			}
+			text = sql.NullString{String: b.String(), Valid: true}
+		}
+		const doctype = "<!DOCTYPE html>"
+		text.String = strings.TrimSpace(text.String)
+		if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
+			text.String = "<!DOCTYPE html>" +
+				"\n<html lang='{{ $.Site.Lang }}'>" +
+				"\n<meta charset='utf-8'>" +
+				"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+				"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+				"\n" + text.String
+		}
+		tmpl, err = siteGen.ParseTemplate(ctx1, "/themes/post.html", text.String, []string{"/themes/post.html"})
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	g1.Go(func() error {
+		err := ctx1.Err()
+		if err != nil {
+			return err
+		}
+		markdown := goldmark.New(
+			goldmark.WithParserOptions(parser.WithAttribute()),
+			goldmark.WithExtensions(
+				extension.Table,
+				highlighting.NewHighlighting(highlighting.WithStyle(siteGen.site.CodeStyle)),
+			),
+			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+		)
+		contentBytes := []byte(content)
+		// Title
+		var line []byte
+		remainder := contentBytes
+		for len(remainder) > 0 {
+			line, remainder, _ = bytes.Cut(remainder, []byte("\n"))
+			line = bytes.TrimSpace(line)
+			if len(line) == 0 {
+				continue
+			}
+			postData.Title = stripMarkdownStyles(line)
+			break
+		}
+		// Content
+		var b strings.Builder
+		err = markdown.Convert(contentBytes, &b)
+		if err != nil {
+			return err
+		}
+		postData.Content = template.HTML(b.String())
+		return nil
+	})
+	g1.Go(func() error {
+		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+			cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
+					" AND NOT is_dir" +
+					" AND (" +
+					"file_path LIKE '%.jpeg'" +
+					" OR file_path LIKE '%.jpg'" +
+					" OR file_path LIKE '%.png'" +
+					" OR file_path LIKE '%.webp'" +
+					" OR file_path LIKE '%.gif'" +
+					") " +
+					" ORDER BY file_path",
+				Values: []any{
+					sq.StringParam("outputDir", outputDir),
+				},
+			}, func(row *sq.Row) string {
+				return path.Base(row.String("file_path"))
+			})
+			if err != nil {
+				return err
+			}
+			defer cursor.Close()
+			for cursor.Next() {
+				name, err := cursor.Result()
+				if err != nil {
+					return err
+				}
+				postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
+			}
+			err = cursor.Close()
+			if err != nil {
+				return err
+			}
+		} else {
+			dirEntries, err := siteGen.fsys.WithContext(ctx1).ReadDir(outputDir)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					return nil
+				}
+				return err
+			}
+			for _, dirEntry := range dirEntries {
+				name := dirEntry.Name()
+				if dirEntry.IsDir() {
+					continue
+				}
+				switch path.Ext(name) {
+				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+					postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
+				}
+			}
+		}
+		return nil
+	})
+	err = g1.Wait()
+	if err != nil {
+		return err
+	}
+	writer, err := siteGen.fsys.WithContext(ctx).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		err := siteGen.fsys.WithContext(ctx).MkdirAll(outputDir, 0755)
+		if err != nil {
+			return err
+		}
+		writer, err = siteGen.fsys.WithContext(ctx).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+		if err != nil {
+			return err
+		}
+	}
+	defer writer.Close()
+	if siteGen.cdnDomain != "" {
+		err = executeAndRewriteCDNLinks(writer, tmpl, &postData, siteGen.cdnDomain)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = tmpl.Execute(writer, &postData)
 		if err != nil {
 			return &TemplateExecutionError{Err: err}
 		}

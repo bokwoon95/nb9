@@ -47,7 +47,7 @@
   <input type='hidden' name='parent' value='{{ $.Parent }}'>
   <div class='mv3'>
     <div><label for='name' class='b'>Name:</label></div>
-    <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>
+    <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}'{{ if ne (head $.Parent) "posts" }} required{{ end }} autocomplete='on' autofocus>
     <ul class='list-style-disc ph3 f6 invalid-red'>
       {{- range $error := index $.FormErrors "name" }}
       <li>{{ $error }}</li>

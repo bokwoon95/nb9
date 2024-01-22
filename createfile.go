@@ -1,6 +1,7 @@
 package nb9
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"html/template"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 )
 
 func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -190,33 +192,43 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			writeResponse(w, r, response)
 			return
 		}
-		if response.Name == "" {
-			response.FormErrors.Add("name", "required")
-			response.Error = "FormErrorsPresent"
-			writeResponse(w, r, response)
-			return
-		}
 		head, _, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes":
-			switch path.Ext(response.Name) {
-			case ".html", ".css", ".js", ".md", ".txt":
-				break
-			case "":
-				response.Name += ".txt"
-			default:
-				response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md, .txt or omitted)")
+			if response.Name == "" {
+				response.FormErrors.Add("name", "required")
+			} else {
+				switch path.Ext(response.Name) {
+				case ".html", ".css", ".js", ".md", ".txt":
+					break
+				case "":
+					response.Name += ".txt"
+				default:
+					response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md, .txt or omitted)")
+				}
 			}
 		case "pages":
-			switch path.Ext(response.Name) {
-			case ".html":
-				break
-			case "":
-				response.Name += ".html"
-			default:
-				response.FormErrors.Add("name", "extension must be .html or omitted")
+			if response.Name == "" {
+				response.FormErrors.Add("name", "required")
+			} else {
+				switch path.Ext(response.Name) {
+				case ".html":
+					break
+				case "":
+					response.Name += ".html"
+				default:
+					response.FormErrors.Add("name", "extension must be .html or omitted")
+				}
 			}
 		case "posts":
+			var timestamp [8]byte
+			binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
+			prefix := strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
+			if response.Name == "" {
+				response.Name = prefix
+			} else {
+				response.Name = prefix + "-" + response.Name
+			}
 			switch path.Ext(response.Name) {
 			case ".md":
 				break
@@ -226,13 +238,17 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				response.FormErrors.Add("name", "extension must be .md or omitted")
 			}
 		default:
-			switch path.Ext(response.Name) {
-			case ".html", ".css", ".js", ".md", ".txt":
-				break
-			case "":
-				response.FormErrors.Add("name", "missing extension (must be either .html, .css, .js, .md or .txt)")
-			default:
-				response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md or .txt)")
+			if response.Name == "" {
+				response.FormErrors.Add("name", "required")
+			} else {
+				switch path.Ext(response.Name) {
+				case ".html", ".css", ".js", ".md", ".txt":
+					break
+				case "":
+					response.FormErrors.Add("name", "missing extension (must be either .html, .css, .js, .md or .txt)")
+				default:
+					response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md or .txt)")
+				}
 			}
 		}
 		if len(response.FormErrors) > 0 {
