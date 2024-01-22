@@ -17,6 +17,8 @@ uploadfile.go
 serve_http.go
 notebrew/main.go
 
+TODO: delete
+    - regenerate pages/index.html, output/themes/post.html and output/themes/postlist.html if deleted.
 TODO: createfile
     - when creating a new file, also generate the output index.html so that view: page is always relevant
 TODO: a little "view data" link on file.html that simply the href "?data". When clicked, it generates live data of the page in real time if we're on a page.html, or the latest post/last page data if we're on post.html/postlist.html.
