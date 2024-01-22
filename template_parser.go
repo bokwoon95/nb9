@@ -2,7 +2,6 @@ package nb9
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -274,56 +273,3 @@ func (templateParser *TemplateParser) ParseTemplate(ctx context.Context, name, t
 	}
 	return finalTemplate.Lookup(name), nil
 }
-
-var funcMap = map[string]any{
-	"join":             path.Join,
-	"base":             path.Base,
-	"ext":              path.Ext,
-	"trimPrefix":       strings.TrimPrefix,
-	"trimSuffix":       strings.TrimSuffix,
-	"fileSizeToString": fileSizeToString,
-	"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
-	"head": func(s string) string {
-		head, _, _ := strings.Cut(s, "/")
-		return head
-	},
-	"tail": func(s string) string {
-		_, tail, _ := strings.Cut(s, "/")
-		return tail
-	},
-	"list": func(v ...any) []any { return v },
-	"dict": func(v ...any) (map[string]any, error) {
-		dict := make(map[string]any)
-		if len(dict)%2 != 0 {
-			return nil, fmt.Errorf("odd number of arguments passed in")
-		}
-		for i := 0; i+1 < len(dict); i += 2 {
-			key, ok := v[i].(string)
-			if !ok {
-				return nil, fmt.Errorf("value %d (%#v) is not a string", i, v[i])
-			}
-			value := v[i+1]
-			dict[key] = value
-		}
-		return dict, nil
-	},
-	"dump": func(a ...any) template.HTML {
-		// TODO: convert each argument into json and print each
-		// argument out in a <pre style="white-space: pre-wrap"></pre>
-		// tag.
-		return ""
-	},
-}
-
-type TemplateErrors map[string][]string
-
-func (e TemplateErrors) Error() string {
-	b, _ := json.MarshalIndent(e, "", "  ")
-	return fmt.Sprintf("the following templates have errors: %s", string(b))
-}
-
-type TemplateExecutionError struct{ Err error }
-
-func (e *TemplateExecutionError) Error() string { return e.Err.Error() }
-
-func (e *TemplateExecutionError) Unwrap() error { return e.Err }
