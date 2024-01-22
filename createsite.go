@@ -305,7 +305,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				internalServerError(w, r, err)
 				return
 			}
-			writer, err := nbrew.FS.OpenWriter(destName, 0644)
+			writer, err := nbrew.FS.OpenWriter(path.Join(sitePrefix, destName), 0644)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
