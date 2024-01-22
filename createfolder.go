@@ -211,7 +211,12 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 		err := nbrew.FS.Mkdir(path.Join(sitePrefix, response.Parent, response.Name), 0755)
 		if err != nil {
 			if errors.Is(err, fs.ErrExist) {
-				response.FormErrors.Add("name", "folder already exists")
+				if head == "posts" {
+					response.FormErrors.Add("name", "category already exists")
+				} else {
+					response.FormErrors.Add("name", "folder already exists")
+				}
+				response.Error = "FormErrorsPresent"
 				writeResponse(w, r, response)
 				return
 			}

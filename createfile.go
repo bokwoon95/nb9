@@ -196,6 +196,44 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			writeResponse(w, r, response)
 			return
 		}
+		head, _, _ := strings.Cut(response.Parent, "/")
+		switch head {
+		case "pages":
+			if !strings.HasSuffix(response.Name, ".html") {
+				response.Name += ".html"
+			}
+		case "posts":
+			if !strings.HasSuffix(response.Name, ".md") {
+				response.Name += ".md"
+			}
+		default:
+			switch path.Ext(response.Name) {
+			case ".html", ".css", ".js", ".md", ".txt":
+				break
+			case "":
+				response.FormErrors.Add("name", "missing extension (must be either .html, .css, .js, .md or .txt)")
+			default:
+				response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md or .txt)")
+			}
+		}
+		if len(response.FormErrors) > 0 {
+			response.Error = "FormErrorsPresent"
+			writeResponse(w, r, response)
+			return
+		}
+		writer, err := nbrew.FS.OpenWriter(path.Join(sitePrefix, response.Parent, response.Name), 0644)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		err = writer.Close()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)
 	}

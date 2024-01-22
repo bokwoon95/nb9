@@ -46,7 +46,7 @@
   <div class='mv3'>
     <div><label for='name' class='b'>Name:</label></div>
     <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>
-    <ul>
+    <ul class='ph3'>
       {{- range $error := index $.FormErrors "name" }}
       <li class='f6 invalid-red list-style-disc'>{{ $error }}</li>
       {{- end }}

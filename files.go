@@ -368,6 +368,9 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				}
 				return
 			}
+			response.PostRedirectGet = map[string]string{
+				"from": "files",
+			}
 			err := nbrew.setSession(w, r, "flash", &response)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
