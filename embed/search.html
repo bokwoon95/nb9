@@ -43,7 +43,7 @@
   {{- range $match := $.Matches }}
   <li>
     <div><a href='/{{ join "files" $.SitePrefix $match.FilePath }}' class='b'>{{ $match.FilePath }}</a></div>
-    <pre>{{ $match.Preview }}</pre>
+    <pre style='white-space: pre-wrap'>{{ $match.Preview }}</pre>
   </li>
   {{- end }}
 </ul>

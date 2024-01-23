@@ -198,8 +198,10 @@
     folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new page</a>
     {{- else if eq (head $.FilePath) "posts" }}
     folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new post</a>
-    {{- else }}
+    {{- else if not $READ_ONLY }}
     folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new file</a>
+    {{- else }}
+    folder is empty
     {{- end }}
   </div>
   {{- end }}
