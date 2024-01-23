@@ -55,19 +55,7 @@
 
 <div class='mv2 flex flex-wrap items-center'>
   <div class='flex-grow-1'></div>
-  {{- if eq (head $.FilePath) "pages" }}
-  <div class='flex items-center'>
-    <details class='relative ml2' data-autoclose-details>
-      <summary role='button' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
-        {{ template "octicons-sync" }}
-        {{ template "octicons-triangle-down" }}
-      </summary>
-      <form class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
-        <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate pages</button></div>
-      </form>
-    </details>
-  </div>
-  {{- else if eq (head $.FilePath) "posts" }}
+  {{- if eq (head $.FilePath) "posts" }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
       <summary role='button' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>

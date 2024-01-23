@@ -1140,10 +1140,10 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			var filter, order sq.Expression
 			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
-					filter = sq.Expr("file_path >= {}", path.Join(filePath, response.From))
+					filter = sq.Expr("file_path >= {}", path.Join(sitePrefix, filePath, response.From))
 					order = sq.Expr("file_path ASC")
 				} else {
-					filter = sq.Expr("file_path <= {}", path.Join(filePath, response.From))
+					filter = sq.Expr("file_path <= {}", path.Join(sitePrefix, filePath, response.From))
 					order = sq.Expr("file_path DESC")
 				}
 			} else if response.Sort == "edited" {
@@ -1164,7 +1164,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					" ORDER BY {order}" +
 					" LIMIT {limit} + 1",
 				Values: []any{
-					sq.StringParam("filePath", filePath),
+					sq.StringParam("filePath", path.Join(sitePrefix, filePath)),
 					sq.Param("filter", filter),
 					sq.Param("order", order),
 					sq.IntParam("limit", response.Limit),
@@ -1196,9 +1196,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			var filter sq.Expression
 			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
-					filter = sq.Expr("file_path < {}", path.Join(filePath, response.From))
+					filter = sq.Expr("file_path < {}", path.Join(sitePrefix, filePath, response.From))
 				} else {
-					filter = sq.Expr("file_path > {}", path.Join(filePath, response.From))
+					filter = sq.Expr("file_path > {}", path.Join(sitePrefix, filePath, response.From))
 				}
 			} else if response.Sort == "edited" {
 				if response.Order == "asc" {
@@ -1214,7 +1214,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
 					" AND {filter}",
 				Values: []any{
-					sq.StringParam("filePath", filePath),
+					sq.StringParam("filePath", path.Join(sitePrefix, filePath)),
 					sq.Param("filter", filter),
 				},
 			})
@@ -1262,10 +1262,10 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			var filter, order sq.Expression
 			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
-					filter = sq.Expr("file_path < {}", path.Join(filePath, response.Before))
+					filter = sq.Expr("file_path < {}", path.Join(sitePrefix, filePath, response.Before))
 					order = sq.Expr("file_path ASC")
 				} else {
-					filter = sq.Expr("file_path > {}", path.Join(filePath, response.Before))
+					filter = sq.Expr("file_path > {}", path.Join(sitePrefix, filePath, response.Before))
 					order = sq.Expr("file_path DESC")
 				}
 			} else if response.Sort == "edited" {
@@ -1286,7 +1286,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					" ORDER BY {order}" +
 					" LIMIT {limit} + 1",
 				Values: []any{
-					sq.StringParam("filePath", filePath),
+					sq.StringParam("filePath", path.Join(sitePrefix, filePath)),
 					sq.Param("filter", filter),
 					sq.Param("order", order),
 					sq.IntParam("limit", response.Limit),
@@ -1313,10 +1313,10 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			var filter, order sq.Expression
 			if response.Sort == "name" || response.Sort == "created" {
 				if response.Order == "asc" {
-					filter = sq.Expr("file_path >= {}", path.Join(filePath, response.Before))
+					filter = sq.Expr("file_path >= {}", path.Join(sitePrefix, filePath, response.Before))
 					order = sq.Expr("file_path ASC")
 				} else {
-					filter = sq.Expr("file_path <= {}", path.Join(filePath, response.Before))
+					filter = sq.Expr("file_path <= {}", path.Join(sitePrefix, filePath, response.Before))
 					order = sq.Expr("file_path DESC")
 				}
 			} else if response.Sort == "edited" {
@@ -1337,7 +1337,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					" ORDER BY {order}" +
 					" LIMIT 1",
 				Values: []any{
-					sq.StringParam("filePath", filePath),
+					sq.StringParam("filePath", path.Join(sitePrefix, filePath)),
 					sq.Param("filter", filter),
 					sq.Param("order", order),
 				},
@@ -1392,7 +1392,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			" ORDER BY {order}" +
 			" LIMIT {limit} + 1",
 		Values: []any{
-			sq.StringParam("filePath", filePath),
+			sq.StringParam("filePath", path.Join(sitePrefix, filePath)),
 			sq.Param("order", order),
 			sq.IntParam("limit", response.Limit),
 		},
