@@ -276,7 +276,7 @@ func main() {
 			default:
 				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "users.json"), databaseConfig.Dialect)
 			}
-			err = nbrew.UsersDB.Ping()
+
 			if err != nil {
 				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "users.json"), nbrew.UsersDialect, dataSourceName, err)
 			}
@@ -300,6 +300,13 @@ func main() {
 				if nbrew.UsersDialect == "sqlite" {
 					nbrew.UsersDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
 				}
+				ticker := time.NewTicker(4 * time.Hour)
+				go func() {
+					for {
+						<-ticker.C
+						nbrew.UsersDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
+					}
+				}()
 				nbrew.UsersDB.Close()
 			}()
 		}
@@ -506,6 +513,13 @@ func main() {
 				if filesDialect == "sqlite" {
 					filesDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
 				}
+				ticker := time.NewTicker(4 * time.Hour)
+				go func() {
+					for {
+						<-ticker.C
+						filesDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
+					}
+				}()
 				filesDB.Close()
 			}()
 
