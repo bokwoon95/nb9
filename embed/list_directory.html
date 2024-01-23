@@ -92,18 +92,21 @@
     </details>
   </div>
   {{- end }}
+  {{- if $.SearchSupported }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
       <summary role='button' title='Search' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
         {{ template "octicons-search" }}
         {{ template "octicons-triangle-down" }}
       </summary>
-      <form class='absolute bg-white br2 pa2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+      <form method='get' action='/{{ join "files" $.SitePrefix "search" }}/' class='absolute bg-white br2 pa2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+        <input type='hidden' name='parent' value='{{ $.FilePath }}'>
         <input id='search' name='search' placeholder='search this folder' class='pa2 br2 ba'>
         <button type='submit' class='button ba br2 pa2 w-100 mt2'>search</button>
       </form>
     </details>
   </div>
+  {{- end }}
   {{- if not $READ_ONLY }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>

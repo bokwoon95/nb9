@@ -533,6 +533,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		FilePath        string            `json:"filePath"`
 		IsDir           bool              `json:"isDir"`
 		ModTime         time.Time         `json:"modTime"`
+		SearchSupported bool              `json:"searchSupported"`
 
 		Files []File `json:"files,omitempty"`
 
@@ -597,6 +598,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 	response.SitePrefix = sitePrefix
 	response.IsDir = true
+	_, response.SearchSupported = nbrew.FS.(*RemoteFS)
 	if sitePrefix == "" && nbrew.UsersDB != nil {
 		sites, err := sq.FetchAll(r.Context(), nbrew.UsersDB, sq.Query{
 			Dialect: nbrew.UsersDialect,
@@ -922,6 +924,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		FilePath        string            `json:"filePath"`
 		IsDir           bool              `json:"isDir"`
 		ModTime         time.Time         `json:"modTime"`
+		SearchSupported bool              `json:"searchSupported"`
 
 		Sort               string `json:"sort,omitempty"`
 		Order              string `json:"order,omitempty"`
@@ -1010,6 +1013,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	response.SitePrefix = sitePrefix
 	response.FilePath = filePath
 	response.IsDir = true
+	_, response.SearchSupported = nbrew.FS.(*RemoteFS)
 	response.Sort = strings.ToLower(strings.TrimSpace(r.FormValue("sort")))
 	if response.Sort == "" {
 		cookie, _ := r.Cookie("sort")

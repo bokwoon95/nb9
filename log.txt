@@ -19,6 +19,7 @@ serve_http.go
 notebrew/main.go
 
 TODO: rework icons
+    - site settings | regen button | search button
 TODO: search.go
     - Hide the search button if fs is not remoteFS -- how to propagate this information into the templates?
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
