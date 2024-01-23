@@ -2,6 +2,7 @@ package nb9
 
 import (
 	"encoding/json"
+	"html/template"
 	"io/fs"
 	"net/http"
 	"path"
@@ -11,7 +12,7 @@ import (
 )
 
 func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
-	type File struct {
+	type Match struct {
 		FilePath string `json:"filePath"`
 		Preview  string `json:"preview"`
 	}
@@ -21,11 +22,14 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 		Username    NullString `json:"username"`
 		SitePrefix  string     `json:"sitePrefix"`
 		Parent      string     `json:"parent,omitempty"`
-		Search      string     `json:"search,omitempty"`
-		Files       []File     `json:"files,omitempty"`
+		Text        string     `json:"text,omitempty"`
+		Matches     []Match    `json:"matches,omitempty"`
 	}
 
 	isValidParent := func(parent string) bool {
+		if !fs.ValidPath(parent) || strings.Contains(parent, "\\") {
+			return false
+		}
 		if parent == "." {
 			return true
 		}
@@ -77,13 +81,24 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 			}
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		encoder := json.NewEncoder(w)
-		encoder.SetEscapeHTML(false)
-		err := encoder.Encode(&response)
+		referer := getReferer(r)
+		funcMap := map[string]any{
+			"join":       path.Join,
+			"hasPrefix":  strings.HasPrefix,
+			"trimPrefix": strings.TrimPrefix,
+			"contains":   strings.Contains,
+			"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
+			"baselineJS": func() template.JS { return template.JS(baselineJS) },
+			"referer":    func() string { return referer },
+		}
+		tmpl, err := template.New("search.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/search.html")
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
 		}
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		executeTemplate(w, r, tmpl, &response)
 	}
 
 	var response Response
@@ -91,45 +106,48 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 	response.SitePrefix = sitePrefix
 	response.Parent = path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
-	response.Search = strings.TrimSpace(r.Form.Get("search"))
+	response.Text = strings.TrimSpace(r.Form.Get("text"))
 	if !isValidParent(response.Parent) {
-		response.Error = "InvalidParent"
-		writeResponse(w, r, response)
-		return
+		response.Parent = "."
 	}
-	if response.Search == "" {
+	if response.Text == "" {
 		writeResponse(w, r, response)
 		return
 	}
 	var err error
 	switch remoteFS.filesDialect {
 	case "sqlite":
-		var siteFilter sq.Expression
-		if sitePrefix != "" {
-			siteFilter = sq.Expr("(file_path LIKE {} ESCAPE '\\')", sitePrefix+"/%")
-		} else {
-			siteFilter = sq.Expr("(file_path LIKE 'notes/%'" +
+		var parentFilter sq.Expression
+		parent := path.Join(sitePrefix, response.Parent)
+		if parent == "." {
+			parentFilter = sq.Expr("(file_path LIKE 'notes/%'" +
 				" OR file_path LIKE 'pages/%'" +
 				" OR file_path LIKE 'posts/%'" +
 				" OR file_path LIKE 'output/%')")
+		} else {
+			parentFilter = sq.Expr("file_path LIKE {} ESCAPE '\\'", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(parent)+"/%")
 		}
-		response.Files, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
+		response.Matches, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
 			Dialect: remoteFS.filesDialect,
 			Format: "SELECT {*}" +
 				" FROM files" +
 				" JOIN files_fts5 ON files_fts5.rowid = files.rowid" +
-				" WHERE {siteFilter}" +
-				" AND files_fts5.text MATCH {searchTerm}" +
+				" WHERE {parentFilter}" +
+				" AND files_fts5.text MATCH {text}" +
 				" ORDER BY files_fts5.rank",
 			Values: []any{
-				sq.Param("siteFilter", siteFilter),
-				sq.StringParam("searchTerm", `"`+strings.ReplaceAll(response.Search, `"`, `""`)+`"`),
+				sq.Param("parentFilter", parentFilter),
+				sq.StringParam("text", `"`+strings.ReplaceAll(response.Text, `"`, `""`)+`"`),
 			},
-		}, func(row *sq.Row) File {
-			return File{
+		}, func(row *sq.Row) Match {
+			match := Match{
 				FilePath: row.String("files.file_path"),
 				Preview:  row.String("substr(files.text, 1, 500)"),
 			}
+			if sitePrefix != "" {
+				_, match.FilePath, _ = strings.Cut(match.FilePath, "/")
+			}
+			return match
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())

@@ -83,7 +83,6 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
 				"baselineJS": func() template.JS { return template.JS(baselineJS) },
 				"referer":    func() string { return r.Referer() },
-				"username":   func() string { return username },
 				"maxSites":   func() int { return maxSites },
 			}
 			tmpl, err := template.New("createsite.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/createsite.html")

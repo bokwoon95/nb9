@@ -204,6 +204,7 @@ details[open] summary.button { background-color: white; }
 code, .code { font-family: Consolas, monaco, monospace; }
 details > summary.hide-marker::marker, /* Latest Chrome, Edge, Firefox */ details > summary.hide-marker::-webkit-details-marker /* Safari */ { display: none; }
 .list-style-disc { list-style: disc; }
+.list-style-decimal { list-style: decimal; }
 .o-70 { opacity: .7; }
 .pointer:hover { cursor: pointer; }
 .resize-vertical { resize: vertical; }

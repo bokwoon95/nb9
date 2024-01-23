@@ -4,8 +4,8 @@
 <meta name='viewport' content='width=device-width, initial-scale=1'>
 <link rel='icon' href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>☕</text></svg>'>
 <style>{{ stylesCSS }}</style>
-<script type='module'>{{ directoryJS }}</script>
-<title>{{ if $.Search }}"{{ $.Search }}"{{ else }}search{{ end }}</title>
+<script type='module'>{{ baselineJS }}</script>
+<title>{{ if $.Text }}"{{ $.Text }}"{{ else }}search{{ end }}</title>
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
   <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
@@ -17,5 +17,35 @@
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
-<form method='post' action='/{{ join "files" $.SitePrefix "createfile" }}/' class='mv5 w-80 w-70-m w-60-l center'>
+<form method='get' action='/{{ join "files" $.SitePrefix "search" }}/' class='mv5 w-80 w-70-m w-60-l center'>
+  {{- if referer }}
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- else }}
+  <div><a href='/{{ join "files" $.SitePrefix }}/'>&larr; back</a></div>
+  {{- end }}
+  {{- if and $.Parent (ne $.Parent ".") }}
+  <h1 class='f3 mv3 b'>Search in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ $.Parent }}/</a></h1>
+  <input type='hidden' name='parent' value='{{ $.Parent }}'>
+  {{- else }}
+  <h1 class='f3 mv3 b'>Search</h1>
+  {{- end }}
+  <div class='mv3'>
+    <div><label for='text' class='b'>Text:</label></div>
+    <input id='text' name='text' value='{{ $.Text }}' placeholder='search text' class='pv1 ph2 br2 ba w-100' autocomplete='on' required>
+  </div>
+  <button type='submit' class='button ba br2 pa2 mv3 w-100'>search</button>
 </form>
+{{- if $.Matches }}
+<ul class='ph3 list-style-decimal'>
+  {{- range $match := $.Matches }}
+  <li>
+    <div><a href='/{{ join "files" $.SitePrefix $match.FilePath }}' class='b'>{{ $match.FilePath }}</a></div>
+    <pre>{{ $match.Preview }}</pre>
+  </li>
+  {{- end }}
+</ul>
+{{- else }}
+  {{- if $.Text }}
+  <div class='mv2 tc'>- No matches -</div>
+  {{- end }}
+{{- end }}
