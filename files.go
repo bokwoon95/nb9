@@ -539,8 +539,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 
 		From               string `json:"from,omitempty"`
 		Before             string `json:"before,omitempty"`
-		Limit              int    `json:"limit,omitempty"`
-		Sites              []Site `json:"sites,omitempty"`
+		Limit              int    `json:"limit"`
+		Sites              []Site `json:"sites"`
 		PreviousSiteExists bool   `json:"previousSiteExists,omitempty"`
 		NextSite           string `json:"nextSite,omitempty"`
 	}
@@ -1252,12 +1252,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	}
 	if sortBefore {
 		g, ctx := errgroup.WithContext(r.Context())
-		err := g.Wait()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
 		g.Go(func() error {
 			var filter, order sq.Expression
 			if response.Sort == "name" || response.Sort == "created" {

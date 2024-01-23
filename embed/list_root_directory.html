@@ -230,11 +230,17 @@
     <div class='mv2 tc'>- No other sites -</div>
     {{- end }}
   {{- end }}
+  {{- if or $.PreviousSiteExists $.NextSite }}
   <div class='mv3 flex flex-wrap items-center'>
-    <div><button type='button' class='button ba br2 pv1 ph2'>&larr; previous</button></div>
+    {{- if $.PreviousSiteExists }}
+    <div><a href='?before={{ (index $.Sites 0).Name }}&limit={{ $.Limit }}'>&larr; previous</a></div>
+    {{- end }}
     <div class='flex-grow-1'></div>
-    <div><button type='button' class='button ba br2 pv1 ph2'>next &rarr;</button></div>
+    {{- if $.NextSite }}
+    <div><a href='?from={{ $.NextSite }}&limit={{ $.Limit }}'>next &rarr;</a></div>
+    {{- end }}
   </div>
+  {{- end }}
 {{- end }}
 
 {{- define "octicons-plus" }}
