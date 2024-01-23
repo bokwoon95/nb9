@@ -23,4 +23,9 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 		Search      string     `json:"search,omitempty"`
 		Files       []File     `json:"files,omitempty"`
 	}
+
+	if r.Method != "GET" {
+		methodNotAllowed(w, r)
+		return
+	}
 }
