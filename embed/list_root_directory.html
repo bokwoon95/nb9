@@ -50,7 +50,17 @@
 {{- if $.Files }}
 <div class='mv2 flex flex-wrap items-center'>
   <div class='flex-grow-1'></div>
-  <a href=''>site settings</a>
+  <div class='flex items-center'>
+    <details class='relative ml2' data-autoclose-details>
+      <summary role='button' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
+        {{ template "octicons-gear" }}
+        {{ template "octicons-triangle-down" }}
+      </summary>
+      <form class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+        <div class='ma2 tr'><a href='' class='nowrap'>site settings</a></div>
+      </form>
+    </details>
+  </div>
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
       <summary role='button' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>

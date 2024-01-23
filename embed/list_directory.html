@@ -55,40 +55,40 @@
 
 <div class='mv2 flex flex-wrap items-center'>
   <div class='flex-grow-1'></div>
-  {{- if eq (head $.FilePath) "pages" "posts" }}
+  {{- if eq (head $.FilePath) "pages" }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
-      <summary role='button' title='Misc' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
-        {{ template "heroicons-ellipsis-horizontal" }}
+      <summary role='button' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
+        {{ template "octicons-sync" }}
         {{ template "octicons-triangle-down" }}
       </summary>
-      <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
-        {{- if eq (head $.FilePath) "pages" }}
-        <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate folder</button></div>
-        {{- else if eq (head $.FilePath) "posts" }}
-        <div class='ma2 tr'><a href='' class='nowrap'>list settings</a></div>
-        <div class='ma2 tr'><a href='' class='nowrap'>view list</a></div>
-        <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate list</button></div>
-        {{- end }}
-      </div>
+      <form class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+        <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate pages</button></div>
+      </form>
     </details>
   </div>
-  {{- end }}
-  {{- if ne (head $.FilePath) "output" }}
+  {{- else if eq (head $.FilePath) "posts" }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
-      <summary role='button' title='Sort' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
-        {{ template "octicons-sort-desc" }}
+      <summary role='button' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
+        {{ template "octicons-gear" }}
         {{ template "octicons-triangle-down" }}
       </summary>
-      <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
-        <div class='ma2 tr'><a href='' class='nowrap arrow-before'>name</a></div>
-        <div class='ma2 tr'><a href='' class='nowrap'>date created</a></div>
-        <div class='ma2 tr'><a href='' class='nowrap'>date updated</a></div>
-        <hr>
-        <div class='ma2 tr'><a href='' class='nowrap arrow-before'>ascending</a></div>
-        <div class='ma2 tr'><a href='' class='nowrap'>descending</a></div>
-      </div>
+      <form class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+        <div class='ma2 tr'><a href='' class='nowrap'>list settings</a></div>
+      </form>
+    </details>
+  </div>
+  <div class='flex items-center'>
+    <details class='relative ml2' data-autoclose-details>
+      <summary role='button' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
+        {{ template "octicons-sync" }}
+        {{ template "octicons-triangle-down" }}
+      </summary>
+      <form class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+        <div class='ma2 tr'><a href='' class='nowrap'>view list</a></div>
+        <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate list</button></div>
+      </form>
     </details>
   </div>
   {{- end }}
@@ -107,6 +107,23 @@
     </details>
   </div>
   {{- end }}
+  <div class='flex items-center'>
+    <details class='relative ml2' data-autoclose-details>
+      <summary role='button' title='Sort' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
+        {{ template "octicons-sort-desc" }}
+        {{ template "octicons-triangle-down" }}
+      </summary>
+      <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+        <div class='ma2 tr'><a href='' class='nowrap arrow-before'>name</a></div>
+        <div class='ma2 tr'><a href='' class='nowrap'>date created</a></div>
+        <div class='ma2 tr'><a href='' class='nowrap'>date updated</a></div>
+        <hr>
+        <div class='ma2 tr'><a href='' class='nowrap arrow-before'>ascending</a></div>
+        <div class='ma2 tr'><a href='' class='nowrap'>descending</a></div>
+      </div>
+    </details>
+  </div>
+
   {{- if not $READ_ONLY }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
@@ -116,16 +133,16 @@
       </summary>
       <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
         {{- if eq (head $.FilePath) "pages" }}
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>create page</a></div>
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>create folder</a></div>
+        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>📄create page</a></div>
+        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>📂create folder</a></div>
         {{- else if eq (head $.FilePath) "posts" }}
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>create post</a></div>
+        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>📄create post</a></div>
           {{- if eq $.FilePath "posts" }}
-          <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>create category</a></div>
+          <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>📂create category</a></div>
           {{- end }}
         {{- else }}
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>create file</a></div>
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>create folder</a></div>
+        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>📄create file</a></div>
+        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>📂create folder</a></div>
         {{- end }}
       </div>
     </details>
