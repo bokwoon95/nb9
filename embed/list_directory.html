@@ -49,8 +49,13 @@
 {{- end }}
 <div class='dashed-border mv2 pa2 br2 flex items-center'>
   <div class='flex-grow-1 truncate'><a href=''>5 items copied</a>: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</div>
-  <div class='ml2'><button type='button' class='button ba br2 pv2 ph2'>paste</button></div>
-  <div class='ml2'><button type='button' class='button-danger ba br2 b--dark-red pv2 ph2'>clear</button></div>
+  <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
+    <input type='hidden' name='destination' value='{{ $.FilePath }}'>
+    <button type='submit' class='button ba br2 pv2 ph2'>paste</button>
+  </form>
+  <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/clear" }}/' class='ml2'>
+    <button type='submit' class='button-danger ba br2 b--dark-red pv2 ph2'>clear</button>
+  </form>
 </div>
 
 <div class='mv2 flex flex-wrap items-center'>
@@ -149,7 +154,7 @@
           <input type='checkbox' id='{{ $file.Name }}' name='name' value='{{ $file.Name }}' class='pointer'>
         </div>
         {{- end }}
-        <div class='br2 truncate'>
+        <div class='br2 truncate' style='border-style: dotted;'>
           <div class='flex items-center'>
             {{- if $file.IsDir }}
             <span class="mr2 flex items-center">{{ template "heroicons-folder-open" }}</span>
@@ -169,9 +174,9 @@
           </summary>
           <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
             <div class='ma2 tc'><a href=''>rename</a></div>
-            <div class='ma2'><button type='submit' name='name' value='{{ $file.Name }}' class='button ba br2 pa2 w-100'>cut</button></div>
-            <div class='ma2'><button type='submit' name='name' value='{{ $file.Name }}' class='button ba br2 pa2 w-100'>copy</button></div>
-            <div class='ma2'><button type='submit' formaction='/{{ join "files" $.SitePrefix "delete" }}/' name='name' value='{{ $file.Name }}' class='button-danger ba br2 b--dark-red pa2 w-100'>delete</button></div>
+            <div class='ma2'><button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/cut" }}/' name='name' value='{{ $file.Name }}' class='button ba br2 pa2 w-100'>cut</button></div>
+            <div class='ma2'><button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/copy" }}/' name='name' value='{{ $file.Name }}' class='button ba br2 pa2 w-100'>copy</button></div>
+            <div class='ma2'><button type='submit' formmethod='get' formaction='/{{ join "files" $.SitePrefix "delete" }}/' name='name' value='{{ $file.Name }}' class='button-danger ba br2 b--dark-red pa2 w-100'>delete</button></div>
           </div>
         </details>
         {{- end }}

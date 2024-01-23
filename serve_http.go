@@ -218,6 +218,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if head == "clipboard" {
+			nbrew.clipboard(w, r, username, sitePrefix, tail)
+			return
+		}
+
 		switch urlPath {
 		case "createsite":
 			nbrew.createsite(w, r, username)
@@ -231,9 +236,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			nbrew.delete(w, r, username, sitePrefix)
 		case "search":
 			nbrew.search(w, r, username, sitePrefix)
-		case "cut":
-		case "copy":
-		case "paste":
 		case "rename":
 		default:
 			notFound(w, r)
