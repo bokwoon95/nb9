@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func (nbrew *Notebrew) delet(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
+func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
 	type Request struct {
 		Parent string   `json:"parent,omitempty"`
 		Names  []string `json:"names,omitempty"`
