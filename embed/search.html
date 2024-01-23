@@ -31,9 +31,12 @@
   {{- end }}
   <div class='mv3'>
     <div><label for='text' class='b'>Text:</label></div>
-    <input id='text' name='text' value='{{ $.Text }}' placeholder='search text' class='pv1 ph2 br2 ba w-100' autocomplete='on' required>
+    <input id='text' name='text' placeholder='search text' class='pv1 ph2 br2 ba w-100' autocomplete='on' required>
   </div>
   <button type='submit' class='button ba br2 pa2 mv3 w-100'>search</button>
+  {{- if $.Text }}
+  <h2><i>"{{ $.Text }}"</i></h2>
+  {{- end }}
 </form>
 {{- if $.Matches }}
 <ul class='ph3 list-style-decimal'>
