@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"slices"
 	"strconv"
@@ -556,6 +557,26 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			return
 		}
 		referer := getReferer(r)
+		clipboard := make(url.Values)
+		isInClipboard := make(map[string]bool)
+		cookie, _ := r.Cookie("clipboard")
+		if cookie != nil {
+			values, err := url.ParseQuery(cookie.Value)
+			if err == nil {
+				if values.Has("cut") {
+					clipboard.Set("cut", "")
+				}
+				clipboard.Set("sitePrefix", values.Get("sitePrefix"))
+				clipboard.Set("parent", values.Get("parent"))
+				for _, name := range values["name"] {
+					if isInClipboard[name] {
+						continue
+					}
+					isInClipboard[name] = true
+					clipboard.Add("name", name)
+				}
+			}
+		}
 		funcMap := map[string]any{
 			"join":             path.Join,
 			"dir":              path.Dir,
@@ -568,6 +589,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
 			"directoryJS":      func() template.JS { return template.JS(directoryJS) },
 			"referer":          func() string { return referer },
+			"clipboard":        func() url.Values { return clipboard },
 			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
 			"head": func(s string) string {
 				head, _, _ := strings.Cut(s, "/")
@@ -947,6 +969,26 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			return
 		}
 		referer := getReferer(r)
+		clipboard := make(url.Values)
+		isInClipboard := make(map[string]bool)
+		cookie, _ := r.Cookie("clipboard")
+		if cookie != nil {
+			values, err := url.ParseQuery(cookie.Value)
+			if err == nil {
+				if values.Has("cut") {
+					clipboard.Set("cut", "")
+				}
+				clipboard.Set("sitePrefix", values.Get("sitePrefix"))
+				clipboard.Set("parent", values.Get("parent"))
+				for _, name := range values["name"] {
+					if isInClipboard[name] {
+						continue
+					}
+					isInClipboard[name] = true
+					clipboard.Add("name", name)
+				}
+			}
+		}
 		funcMap := map[string]any{
 			"join":             path.Join,
 			"dir":              path.Dir,
@@ -959,6 +1001,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
 			"directoryJS":      func() template.JS { return template.JS(directoryJS) },
 			"referer":          func() string { return referer },
+			"clipboard":        func() url.Values { return clipboard },
 			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
 			"head": func(s string) string {
 				head, _, _ := strings.Cut(s, "/")
@@ -984,6 +1027,15 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 				b.WriteString(" /")
 				return template.HTML(b.String())
+			},
+			"isInClipboard": func(name string) bool {
+				if sitePrefix != clipboard.Get("sitePrefix") {
+					return false
+				}
+				if response.FilePath != clipboard.Get("parent") {
+					return false
+				}
+				return isInClipboard[name]
 			},
 		}
 		tmpl, err := template.New("list_directory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/list_directory.html")

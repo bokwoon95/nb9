@@ -1,4 +1,5 @@
-{{- $READ_ONLY := and (eq (head $.FilePath) "output") (ne (head (tail $.FilePath)) "themes") }}
+{{- $readOnly := and (eq (head $.FilePath) "output") (ne (head (tail $.FilePath)) "themes") }}
+{{- $clipboard := clipboard }}
 <!DOCTYPE html>
 <html lang='en'>
 <meta charset='utf-8'>
@@ -47,16 +48,22 @@
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
 {{- end }}
+{{- if gt (len $clipboard) 0 }}
 <div class='dashed-border mv2 pa2 br2 flex items-center'>
-  <div class='flex-grow-1 truncate'><a href=''>5 items copied</a>: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</div>
+  <div class='flex-grow-1 truncate'>
+    <a href='/{{ join "files" ($clipboard.Get "sitePrefix") ($clipboard.Get "parent") }}/'>{{ len (index $clipboard "name") }} item{{ if ne (len (index $clipboard "name")) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := index $clipboard "name" }}{{ if gt $i 0 }}, {{ end }}{{ $name }}{{ end }}
+  </div>
+  {{- if not $readOnly }}
   <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
     <input type='hidden' name='destination' value='{{ $.FilePath }}'>
     <button type='submit' class='button ba br2 pv2 ph2'>paste</button>
   </form>
+  {{- end }}
   <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/clear" }}/' class='ml2'>
     <button type='submit' class='button-danger ba br2 b--dark-red pv2 ph2'>clear</button>
   </form>
 </div>
+{{- end }}
 
 <div class='mv2 flex flex-wrap items-center'>
   <div class='flex-grow-1'></div>
@@ -101,7 +108,7 @@
       </div>
     </details>
   </div>
-  {{- if not $READ_ONLY }}
+  {{- if not $readOnly }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
       <summary role='button' title='Create' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
@@ -149,12 +156,12 @@
     {{- range $file := $.Files }}
     <li class='bb pv2'>
       <label for='{{ $file.Name }}' class='flex items-center pointer' data-disable-click-selection>
-        {{- if not $READ_ONLY }}
+        {{- if not $readOnly }}
         <div class='mr2'>
           <input type='checkbox' id='{{ $file.Name }}' name='name' value='{{ $file.Name }}' class='pointer'>
         </div>
         {{- end }}
-        <div class='br2 truncate' style='border-style: dotted;'>
+        <div class='br2 truncate{{ if isInClipboard $file.Name }} dashed-border{{ end }}'>
           <div class='flex items-center'>
             {{- if $file.IsDir }}
             <span class="mr2 flex items-center">{{ template "heroicons-folder-open" }}</span>
@@ -166,7 +173,7 @@
           </div>
         </div>
         <div class='flex-grow-1'></div>
-        {{- if not $READ_ONLY }}
+        {{- if not $readOnly }}
         <details class='relative' data-autoclose-details>
           <summary role='button' title='more actions' class='flex items-center button ba br2 b--black h2 hide-marker ph2' data-disable-click-selection>
             {{ template "heroicons-ellipsis-horizontal" }}
@@ -203,7 +210,7 @@
     folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new page</a>
     {{- else if eq (head $.FilePath) "posts" }}
     folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new post</a>
-    {{- else if not $READ_ONLY }}
+    {{- else if not $readOnly }}
     folder is empty, <a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}'>create a new file</a>
     {{- else }}
     folder is empty
