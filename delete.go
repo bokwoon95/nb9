@@ -120,9 +120,11 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		seen := make(map[string]bool)
-		fsys := nbrew.FS.WithContext(r.Context())
-		for _, name := range r.Form["name"] {
-			name = filepath.ToSlash(name)
+		g, ctx := errgroup.WithContext(r.Context())
+		names := r.Form["name"]
+		response.Files = make([]File, len(names))
+		for i, name := range names {
+			i, name := i, filepath.ToSlash(name)
 			if strings.Contains(name, "/") {
 				continue
 			}
@@ -130,22 +132,38 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				continue
 			}
 			seen[name] = true
-			fileInfo, err := fs.Stat(fsys, path.Join(sitePrefix, response.Parent, name))
-			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					continue
+			g.Go(func() error {
+				fileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(sitePrefix, response.Parent, name))
+				if err != nil {
+					if errors.Is(err, fs.ErrNotExist) {
+						return nil
+					}
+					return err
 				}
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			response.Files = append(response.Files, File{
-				Name:    fileInfo.Name(),
-				IsDir:   fileInfo.IsDir(),
-				Size:    fileInfo.Size(),
-				ModTime: fileInfo.ModTime(),
+				response.Files[i] = File{
+					Name:    fileInfo.Name(),
+					IsDir:   fileInfo.IsDir(),
+					Size:    fileInfo.Size(),
+					ModTime: fileInfo.ModTime(),
+				}
+				return nil
 			})
 		}
+		err = g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		n := 0
+		for _, file := range response.Files {
+			if file.Name==""{
+				continue
+			}
+			response.Files[n] = file
+			n++
+		}
+		response.Files = response.Files[:n]
 		writeResponse(w, r, response)
 	case "POST":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
