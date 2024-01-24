@@ -38,12 +38,6 @@
         "notnull": true
       },
       {
-        "column": "num_files",
-        "type": {
-          "default": "INT"
-        }
-      },
-      {
         "column": "text",
         "type": {
           "default": "TEXT",

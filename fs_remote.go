@@ -544,14 +544,9 @@ func (file *RemoteFileWriter) Close() error {
 
 	// If we reach here it means file doesn't exist. Insert a new file entry
 	// into the database.
-	tx, err := file.db.BeginTx(file.ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
 	if file.fileType.IsGzippable {
 		if file.isFulltextIndexed {
-			_, err := sq.Exec(file.ctx, tx, sq.Query{
+			_, err := sq.Exec(file.ctx, file.db, sq.Query{
 				Dialect: file.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, size, text, mod_time, is_dir)" +
 					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {text}, {modTime}, FALSE)",
@@ -568,7 +563,7 @@ func (file *RemoteFileWriter) Close() error {
 				return err
 			}
 		} else {
-			_, err := sq.Exec(file.ctx, tx, sq.Query{
+			_, err := sq.Exec(file.ctx, file.db, sq.Query{
 				Dialect: file.dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, size, data, mod_time, is_dir)" +
 					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {data}, {modTime}, FALSE)",
@@ -586,7 +581,7 @@ func (file *RemoteFileWriter) Close() error {
 			}
 		}
 	} else {
-		_, err := sq.Exec(file.ctx, tx, sq.Query{
+		_, err := sq.Exec(file.ctx, file.db, sq.Query{
 			Dialect: file.dialect,
 			Format: "INSERT INTO files (file_id, parent_id, file_path, size, mod_time, is_dir)" +
 				" VALUES ({fileID}, {parentID}, {filePath}, {size}, {modTime}, FALSE)",
@@ -602,22 +597,6 @@ func (file *RemoteFileWriter) Close() error {
 			go file.storage.Delete(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
 			return err
 		}
-	}
-	if file.parentID != nil {
-		_, err := sq.Exec(file.ctx, tx, sq.Query{
-			Dialect: file.dialect,
-			Format:  "UPDATE files SET num_files = num_files + 1 WHERE file_id = {parentID}",
-			Values: []any{
-				sq.UUIDParam("parentID", file.parentID),
-			},
-		})
-		if err != nil {
-			return err
-		}
-	}
-	err = tx.Commit()
-	if err != nil {
-		return err
 	}
 	return nil
 }
@@ -883,40 +862,16 @@ func (fsys *RemoteFS) Remove(name string) error {
 			return err
 		}
 	}
-	tx, err := fsys.filesDB.BeginTx(fsys.ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
 	// NOTE: For SQLite and Postgres, we can reduce the number of queries to 2
 	// (current is 3) by using DELETE ... RETURNING. Do this if Remove() proves
 	// to be too slow.
-	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+	_, err = sq.Exec(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
 		Format:  "DELETE FROM files WHERE file_path = {name}",
 		Values: []any{
 			sq.StringParam("name", name),
 		},
 	})
-	if err != nil {
-		return err
-	}
-	if !file.isDir {
-		parentDir := path.Dir(name)
-		if parentDir != "." {
-			_, err = sq.Exec(fsys.ctx, tx, sq.Query{
-				Dialect: fsys.filesDialect,
-				Format:  "UPDATE files SET num_files = num_files - 1 WHERE file_path = {parentDir} AND num_files > 0",
-				Values: []any{
-					sq.StringParam("parentDir", parentDir),
-				},
-			})
-			if err != nil {
-				return err
-			}
-		}
-	}
-	err = tx.Commit()
 	if err != nil {
 		return err
 	}
@@ -982,21 +937,6 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	if err != nil {
 		return err
 	}
-	isDir, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
-		Dialect: fsys.filesDialect,
-		Format:  "SELECT {*} FROM files WHERE file_path = {name}",
-		Values: []any{
-			sq.StringParam("name", name),
-		},
-	}, func(row *sq.Row) bool {
-		return row.Bool("is_dir")
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		}
-		return err
-	}
 	// NOTE: For SQLite and Postgres, we can reduce the number of queries to 2
 	// (current is 5) by using DELETE ... RETURNING. Do this if RemoveAll()
 	// proves to be too slow.
@@ -1009,21 +949,6 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	})
 	if err != nil {
 		return err
-	}
-	if !isDir {
-		parentDir := path.Dir(name)
-		if parentDir != "." {
-			_, err = sq.Exec(fsys.ctx, tx, sq.Query{
-				Dialect: fsys.filesDialect,
-				Format:  "UPDATE files SET num_files = num_files - 1 WHERE file_path = {parentDir} AND num_files > 0",
-				Values: []any{
-					sq.StringParam("parentDir", parentDir),
-				},
-			})
-			if err != nil {
-				return err
-			}
-		}
 	}
 	err = tx.Commit()
 	if err != nil {
