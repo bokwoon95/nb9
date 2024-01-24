@@ -1,6 +1,7 @@
 package nb9
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -233,14 +236,13 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 		// TODO: if any of the files are pages/index.html,
 		// output/themes/post.html and output/themes/postlist.html then
 		// regenerate those files from RuntimeFS.
-		fsys := nbrew.FS.WithContext(r.Context())
-		regenerateFile := func(sitePrefix, destName, srcName string) error {
+		regenerateFile := func(ctx context.Context, sitePrefix, destName, srcName string) error {
 			file, err := RuntimeFS.Open(srcName)
 			if err != nil {
 				return err
 			}
 			defer file.Close()
-			writer, err := fsys.OpenWriter(path.Join(sitePrefix, destName), 0644)
+			writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, destName), 0644)
 			if err != nil {
 				return err
 			}
@@ -251,8 +253,11 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			}
 			return writer.Close()
 		}
-		for _, name := range request.Names {
-			name = filepath.ToSlash(name)
+		g, ctx := errgroup.WithContext(r.Context())
+		response.Errors = make([]string, len(request.Names))
+		response.Files = make([]File, len(request.Names))
+		for i, name := range request.Names {
+			i, name := i, filepath.ToSlash(name)
 			if strings.Contains(name, "/") {
 				continue
 			}
@@ -260,46 +265,71 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				continue
 			}
 			seen[name] = true
-			err := fsys.RemoveAll(path.Join(sitePrefix, response.Parent, name))
-			if err != nil {
-				response.Errors = append(response.Errors, fmt.Sprintf("%s: %v", name, err))
-			} else {
-				response.Files = append(response.Files, File{Name: name})
-			}
-			head, tail, _ := strings.Cut(response.Parent, "/")
-			switch head {
-			case "pages":
-				if tail == "" && name == "index.html" {
-					err := regenerateFile(sitePrefix, "pages/index.html", "embed/index.html")
-					if err != nil {
-						getLogger(r.Context()).Error(err.Error())
-					}
-				} else {
-					err := fsys.RemoveAll(path.Join(sitePrefix, "output", tail, strings.TrimSuffix(name, path.Ext(name))))
-					if err != nil {
-						getLogger(r.Context()).Error(err.Error())
-					}
-				}
-			case "posts":
-				err := fsys.RemoveAll(path.Join(sitePrefix, "output", response.Parent, strings.TrimSuffix(name, path.Ext(name))))
+			g.Go(func() error {
+				err := nbrew.FS.WithContext(ctx).RemoveAll(path.Join(sitePrefix, response.Parent, name))
 				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
+					response.Errors[i] = fmt.Sprintf("%s: %v", name, err)
+				} else {
+					response.Files[i] = File{Name: name}
 				}
-			case "output":
-				if tail == "themes" {
-					if name == "post.html" {
-						err := regenerateFile(sitePrefix, "output/themes/post.html", "embed/post.html")
+				head, tail, _ := strings.Cut(response.Parent, "/")
+				switch head {
+				case "pages":
+					if tail == "" && name == "index.html" {
+						err := regenerateFile(ctx, sitePrefix, "pages/index.html", "embed/index.html")
 						if err != nil {
-							getLogger(r.Context()).Error(err.Error())
+							getLogger(ctx).Error(err.Error())
 						}
-					} else if name == "postlist.html" {
-						err := regenerateFile(sitePrefix, "output/themes/postlist.html", "embed/postlist.html")
+					} else {
+						err := nbrew.FS.WithContext(ctx).RemoveAll(path.Join(sitePrefix, "output", tail, strings.TrimSuffix(name, path.Ext(name))))
 						if err != nil {
-							getLogger(r.Context()).Error(err.Error())
+							getLogger(ctx).Error(err.Error())
+						}
+					}
+				case "posts":
+					err := nbrew.FS.WithContext(ctx).RemoveAll(path.Join(sitePrefix, "output", response.Parent, strings.TrimSuffix(name, path.Ext(name))))
+					if err != nil {
+						getLogger(ctx).Error(err.Error())
+					}
+				case "output":
+					if tail == "themes" {
+						if name == "post.html" {
+							err := regenerateFile(ctx, sitePrefix, "output/themes/post.html", "embed/post.html")
+							if err != nil {
+								getLogger(ctx).Error(err.Error())
+							}
+						} else if name == "postlist.html" {
+							err := regenerateFile(ctx, sitePrefix, "output/themes/postlist.html", "embed/postlist.html")
+							if err != nil {
+								getLogger(ctx).Error(err.Error())
+							}
 						}
 					}
 				}
+				return nil
+			})
+		}
+		err := g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		n := 0
+		for _, file := range response.Files {
+			if file.Name == "" {
+				continue
 			}
+			response.Files[n] = file
+			n++
+		}
+		n = 0
+		for _, errmsg := range response.Errors {
+			if errmsg == "" {
+				continue
+			}
+			response.Errors[n] = errmsg
+			n++
 		}
 		writeResponse(w, r, response)
 	default:

@@ -19,7 +19,6 @@ serve_http.go
 notebrew/main.go
 
 TODO: cut.go/copy.go/paste.go/rename.go
-    TODO: on list_directory.html, read the clipboard data and pass it in via template function. From the clipboard data, reconstruct the clipboard notification. If the current page is the clipboard parent, additionally highlight the items that are in the clipboard.
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
     NOTE: for languages don't parse all the language json files and keep them in memory, instead implement a TTL using timers and timer.Reset everytime someone requests for that language file. Once the timer expires, delete it from the map.
     BEFORE YOU DO THIS: look at how big the language files are. If it's an acceptable cost to keep them all in memory then just keep it in memory and reads will be much faster since you don't have to guard reads behind a mutex.
