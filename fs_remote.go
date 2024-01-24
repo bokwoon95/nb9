@@ -852,19 +852,13 @@ func (fsys *RemoteFS) Remove(name string) error {
 	if file.hasChildren {
 		return &fs.PathError{Op: "remove", Path: name, Err: syscall.ENOTEMPTY}
 	}
-	var fileType FileType
-	if ext := path.Ext(name); ext != "" {
-		fileType = fileTypes[ext]
-	}
-	if !fileType.IsGzippable {
+	switch path.Ext(name) {
+	case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".woff", ".woff2":
 		err = fsys.storage.Delete(fsys.ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
 		if err != nil {
 			return err
 		}
 	}
-	// NOTE: For SQLite and Postgres, we can reduce the number of queries to 2
-	// (current is 3) by using DELETE ... RETURNING. Do this if Remove() proves
-	// to be too slow.
 	_, err = sq.Exec(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
 		Format:  "DELETE FROM files WHERE file_path = {name}",
@@ -922,35 +916,14 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	if err != nil {
 		return err
 	}
-	tx, err := fsys.filesDB.BeginTx(fsys.ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+	_, err = sq.Exec(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
-		Format:  "DELETE FROM files WHERE file_path LIKE {pattern} ESCAPE '\\'",
+		Format:  "DELETE FROM files WHERE file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\'",
 		Values: []any{
+			sq.StringParam("name", name),
 			sq.StringParam("pattern", pattern),
 		},
 	})
-	if err != nil {
-		return err
-	}
-	// NOTE: For SQLite and Postgres, we can reduce the number of queries to 2
-	// (current is 5) by using DELETE ... RETURNING. Do this if RemoveAll()
-	// proves to be too slow.
-	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
-		Dialect: fsys.filesDialect,
-		Format:  "DELETE FROM files WHERE file_path = {name}",
-		Values: []any{
-			sq.StringParam("name", name),
-		},
-	})
-	if err != nil {
-		return err
-	}
-	err = tx.Commit()
 	if err != nil {
 		return err
 	}
