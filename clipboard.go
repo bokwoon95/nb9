@@ -94,6 +94,8 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		redirect(w, r)
 	case "paste":
 		// TODO: read the clipboard and carry out the paste.
+		// - if destination is pages or posts, check if the source contains any non-.html or non-.md files.
+		//
 	default:
 		notFound(w, r)
 	}

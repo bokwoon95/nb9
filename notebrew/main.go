@@ -642,6 +642,7 @@ func main() {
 			if err != nil {
 				return err
 			}
+			// TODO: if stat doesn't exist, regenerate index.html and postlist.html.
 		}
 		// pages/index.html, themes/post.html, themes/postlist.html
 
