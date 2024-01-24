@@ -43,6 +43,8 @@ notebrew-files/
 notebrew-files.db
 notebrew-objects/
 
+notebrew start | notebrew stop | notebrew status
+
 notebrew-config/metrics.json (site-specific metrics? or not, since we are aiming to put everything on one server at first)
 notebrew-config/metrics.txt
 Requests per second (mean) = xxx
