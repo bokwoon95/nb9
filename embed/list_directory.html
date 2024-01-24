@@ -51,7 +51,7 @@
 {{- if gt (len $clipboard) 0 }}
 <div class='dashed-border mv2 pa2 br2 flex items-center'>
   <div class='flex-grow-1 truncate'>
-    <a href='/{{ join "files" ($clipboard.Get "sitePrefix") ($clipboard.Get "parent") }}/'>{{ len (index $clipboard "name") }} item{{ if ne (len (index $clipboard "name")) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := index $clipboard "name" }}{{ if gt $i 0 }}, {{ end }}{{ $name }}{{ end }}
+    <a href='/{{ join "files" ($clipboard.Get "sitePrefix") ($clipboard.Get "parent") }}/'>{{ len (index $clipboard "name") }} file{{ if ne (len (index $clipboard "name")) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := index $clipboard "name" }}{{ if gt $i 0 }}, {{ end }}{{ $name }}{{ end }}
   </div>
   {{- if not $readOnly }}
   <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
