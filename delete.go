@@ -323,6 +323,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			response.Files[n] = file
 			n++
 		}
+		response.Files = response.Files[:n]
 		n = 0
 		for _, errmsg := range response.Errors {
 			if errmsg == "" {
@@ -331,6 +332,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			response.Errors[n] = errmsg
 			n++
 		}
+		response.Errors = response.Errors[:n]
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)
