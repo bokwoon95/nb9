@@ -572,8 +572,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 					if isInClipboard[name] {
 						continue
 					}
-					isInClipboard[name] = true
 					clipboard.Add("name", name)
+					isInClipboard[name] = true
 				}
 			}
 		}
@@ -984,8 +984,8 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					if isInClipboard[name] {
 						continue
 					}
-					isInClipboard[name] = true
 					clipboard.Add("name", name)
+					isInClipboard[name] = true
 				}
 			}
 		}

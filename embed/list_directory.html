@@ -48,6 +48,15 @@
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
 {{- end }}
+{{- if eq (index $.PostRedirectGet "from") "paste" }}
+<div role='alert' class='alert mv2 pa2 br2 flex items-center'>
+  <div class='flex items-center'>
+    <span class='ml2'>{{ index $.PostRedirectGet "msg" }}</span>
+  </div>
+  <div class='flex-grow-1'></div>
+  <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
+</div>
+{{- end }}
 {{- if gt (len $clipboard) 0 }}
 <div class='dashed-border mv2 pa2 br2 flex items-center'>
   <div class='flex-grow-1 truncate'>

@@ -1,12 +1,15 @@
 package nb9
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
@@ -93,10 +96,146 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		})
 		redirect(w, r)
 	case "paste":
-		// TODO: read the clipboard and carry out the paste.
-		// - if destination is pages or posts, check if the source contains any non-.html or non-.md files.
-		//
+		cookie, _ := r.Cookie("clipboard")
+		if cookie == nil {
+			redirect(w, r)
+			return
+		}
+		clipboard, err := url.ParseQuery(cookie.Value)
+		if err != nil {
+			redirect(w, r)
+			return
+		}
+		srcSitePrefix := clipboard.Get("sitePrefix")
+		if srcSitePrefix != "" && !strings.HasPrefix(srcSitePrefix, "@") && !strings.Contains(srcSitePrefix, ".") {
+			redirect(w, r)
+			return
+		}
+		parent := path.Clean(strings.Trim(clipboard.Get("parent"), "/"))
+		if !isValidParent(parent) {
+			redirect(w, r)
+			return
+		}
+		destination := path.Clean(strings.Trim(r.Form.Get("destination"), "/"))
+		if !isValidParent(destination) {
+			redirect(w, r)
+			return
+		}
+		seen := make(map[string]bool)
+		isCut := clipboard.Has("cut")
+		g, ctx := errgroup.WithContext(r.Context())
+		for _, name := range clipboard["name"] {
+			name := name
+			if seen[name] {
+				continue
+			}
+			g.Go(func() error {
+				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(srcSitePrefix, parent, name))
+				if err != nil {
+					if errors.Is(err, fs.ErrNotExist) {
+						return nil
+					}
+					return err
+				}
+				var destNotExist bool
+				destFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(sitePrefix, destination, name))
+				if err != nil {
+					if !errors.Is(err, fs.ErrNotExist) {
+						return err
+					}
+					destNotExist = true
+				}
+				if srcFileInfo.IsDir() {
+					if destNotExist {
+						if isCut {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						} else {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						}
+					} else if destFileInfo.IsDir() {
+						if isCut {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						} else {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						}
+					} else {
+						if isCut {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						} else {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						}
+					}
+				} else {
+					if destNotExist {
+						if isCut {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						} else {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						}
+					} else if destFileInfo.IsDir() {
+						if isCut {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						} else {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						}
+					} else {
+						if isCut {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						} else {
+							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+								_ = remoteFS
+							} else {
+							}
+						}
+					}
+				}
+				return nil
+			})
+		}
+		err = g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 	default:
 		notFound(w, r)
 	}
+}
+
+// srcfilename destfilename (make sure to sanitize the destfilename's sitePrefix)
+func paste() {
 }
