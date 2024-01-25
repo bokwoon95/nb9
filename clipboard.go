@@ -111,13 +111,13 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			redirect(w, r)
 			return
 		}
-		parent := path.Clean(strings.Trim(clipboard.Get("parent"), "/"))
-		if !isValidParent(parent) {
+		srcParent := path.Clean(strings.Trim(clipboard.Get("parent"), "/"))
+		if !isValidParent(srcParent) {
 			redirect(w, r)
 			return
 		}
-		destination := path.Clean(strings.Trim(r.Form.Get("destination"), "/"))
-		if !isValidParent(destination) {
+		destParent := path.Clean(strings.Trim(r.Form.Get("destination"), "/"))
+		if !isValidParent(destParent) {
 			redirect(w, r)
 			return
 		}
@@ -130,7 +130,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				continue
 			}
 			g.Go(func() error {
-				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(srcSitePrefix, parent, name))
+				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(srcSitePrefix, srcParent, name))
 				if err != nil {
 					if errors.Is(err, fs.ErrNotExist) {
 						return nil
@@ -138,7 +138,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					return err
 				}
 				var destNotExist bool
-				destFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(sitePrefix, destination, name))
+				destFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(sitePrefix, destParent, name))
 				if err != nil {
 					if !errors.Is(err, fs.ErrNotExist) {
 						return err
