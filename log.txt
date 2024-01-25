@@ -18,6 +18,13 @@ uploadfile.go
 serve_http.go
 notebrew/main.go
 
+anything in pages/*
+    source file is directly correlated to an index.html in its output/* folder
+    output folder can contain .css, .js and .md files (just regard all files?)
+anything in posts/*
+    source file is directly correlated to an index.html in its output/posts/* folder
+    output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
+
 TODO: clipboard.go get paste to work
 TODO: rename.go
 TODO: site_generator.go GeneratePostList
