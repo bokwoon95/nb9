@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"io"
 	"log"
+	"net/url"
 	"os"
 
 	"golang.org/x/net/html"
@@ -115,6 +116,7 @@ func main() {
 						return
 					}
 					if bytes.Equal(name, []byte("img")) && bytes.Equal(key, []byte("src")) {
+						url.Parse(string(val))
 						// TODO: how to determine if val is a link that has to be replaced with the CDN variant?
 					}
 					_, err = writer.Write(val)
