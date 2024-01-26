@@ -687,101 +687,6 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 	return nil
 }
 
-func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, urlPath string) error {
-	tokenizer := html.NewTokenizer(reader)
-	for {
-		tokenType := tokenizer.Next()
-		switch tokenType {
-		case html.ErrorToken:
-			err := tokenizer.Err()
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		case html.TextToken:
-			_, err := writer.Write(tokenizer.Text())
-			if err != nil {
-				return err
-			}
-		case html.DoctypeToken:
-			for _, b := range [...][]byte{
-				[]byte("<!DOCTYPE "), tokenizer.Text(), []byte(">"),
-			} {
-				_, err := writer.Write(b)
-				if err != nil {
-					return err
-				}
-			}
-		case html.CommentToken:
-			for _, b := range [...][]byte{
-				[]byte("<!--"), tokenizer.Text(), []byte("-->"),
-			} {
-				_, err := writer.Write(b)
-				if err != nil {
-					return err
-				}
-			}
-		case html.StartTagToken, html.SelfClosingTagToken, html.EndTagToken:
-			switch tokenType {
-			case html.StartTagToken, html.SelfClosingTagToken:
-				_, err := writer.Write([]byte("<"))
-				if err != nil {
-					return err
-				}
-			case html.EndTagToken:
-				_, err := writer.Write([]byte("</"))
-				if err != nil {
-					return err
-				}
-			}
-			var key, val []byte
-			name, moreAttr := tokenizer.TagName()
-			_, err := writer.Write(name)
-			if err != nil {
-				return err
-			}
-			isImgTag := bytes.Equal(name, []byte("img"))
-			for moreAttr {
-				key, val, moreAttr = tokenizer.TagAttr()
-				if isImgTag && bytes.Equal(key, []byte("src")) {
-					uri, err := url.Parse(string(val))
-					if err == nil && uri.Scheme == "" && uri.Host == "" {
-						switch path.Ext(uri.Path) {
-						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-							uri.Scheme = "https"
-							uri.Host = cdnDomain
-							if !strings.HasPrefix(uri.Path, "/") {
-								uri.Path = "/" + path.Join(urlPath, uri.Path)
-							}
-							val = []byte(uri.String())
-						}
-					}
-				}
-				for _, b := range [...][]byte{
-					[]byte(` `), key, []byte(`="`), val, []byte(`"`),
-				} {
-					_, err := writer.Write(b)
-					if err != nil {
-						return err
-					}
-				}
-			}
-			switch tokenType {
-			case html.StartTagToken, html.EndTagToken:
-				_, err = writer.Write([]byte(">"))
-				if err != nil {
-					return err
-				}
-			case html.SelfClosingTagToken:
-				_, err = writer.Write([]byte("/>"))
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-}
-
 func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, content string) error {
 	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
 	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
@@ -1033,6 +938,105 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, conten
 		return err
 	}
 	return nil
+}
+
+func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, filePath, content string) error {
+	return nil
+}
+
+func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, urlPath string) error {
+	tokenizer := html.NewTokenizer(reader)
+	for {
+		tokenType := tokenizer.Next()
+		switch tokenType {
+		case html.ErrorToken:
+			err := tokenizer.Err()
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		case html.TextToken:
+			_, err := writer.Write(tokenizer.Text())
+			if err != nil {
+				return err
+			}
+		case html.DoctypeToken:
+			for _, b := range [...][]byte{
+				[]byte("<!DOCTYPE "), tokenizer.Text(), []byte(">"),
+			} {
+				_, err := writer.Write(b)
+				if err != nil {
+					return err
+				}
+			}
+		case html.CommentToken:
+			for _, b := range [...][]byte{
+				[]byte("<!--"), tokenizer.Text(), []byte("-->"),
+			} {
+				_, err := writer.Write(b)
+				if err != nil {
+					return err
+				}
+			}
+		case html.StartTagToken, html.SelfClosingTagToken, html.EndTagToken:
+			switch tokenType {
+			case html.StartTagToken, html.SelfClosingTagToken:
+				_, err := writer.Write([]byte("<"))
+				if err != nil {
+					return err
+				}
+			case html.EndTagToken:
+				_, err := writer.Write([]byte("</"))
+				if err != nil {
+					return err
+				}
+			}
+			var key, val []byte
+			name, moreAttr := tokenizer.TagName()
+			_, err := writer.Write(name)
+			if err != nil {
+				return err
+			}
+			isImgTag := bytes.Equal(name, []byte("img"))
+			for moreAttr {
+				key, val, moreAttr = tokenizer.TagAttr()
+				if isImgTag && bytes.Equal(key, []byte("src")) {
+					uri, err := url.Parse(string(val))
+					if err == nil && uri.Scheme == "" && uri.Host == "" {
+						switch path.Ext(uri.Path) {
+						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+							uri.Scheme = "https"
+							uri.Host = cdnDomain
+							if !strings.HasPrefix(uri.Path, "/") {
+								uri.Path = "/" + path.Join(urlPath, uri.Path)
+							}
+							val = []byte(uri.String())
+						}
+					}
+				}
+				for _, b := range [...][]byte{
+					[]byte(` `), key, []byte(`="`), val, []byte(`"`),
+				} {
+					_, err := writer.Write(b)
+					if err != nil {
+						return err
+					}
+				}
+			}
+			switch tokenType {
+			case html.StartTagToken, html.EndTagToken:
+				_, err = writer.Write([]byte(">"))
+				if err != nil {
+					return err
+				}
+			case html.SelfClosingTagToken:
+				_, err = writer.Write([]byte("/>"))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
 }
 
 var funcMap = map[string]any{

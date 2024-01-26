@@ -24,7 +24,9 @@ anything in pages/*
 anything in posts/*
     source file is directly correlated to an index.html in its output/posts/* folder
     output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
+whenever a post is created or deleted, we regenerate the PostList. Only for create and delete, for update we don't do anything because the user will potentially update a post many times.
 
+TODO: make it so GeneratePost and GeneratePostList take in a template as an argument (the template is parsed externally, so that it can potentially be reused many times by multiple goroutines).
 TODO: clipboard.go get paste to work
 TODO: rename.go
 TODO: site_generator.go GeneratePostList
