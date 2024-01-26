@@ -688,7 +688,6 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 }
 
 func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, urlPath string) error {
-	const escapedChars = "&'<>\"\r"
 	tokenizer := html.NewTokenizer(reader)
 	for {
 		tokenType := tokenizer.Next()
