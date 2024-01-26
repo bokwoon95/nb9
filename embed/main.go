@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"path"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -116,8 +118,18 @@ func main() {
 						return
 					}
 					if bytes.Equal(name, []byte("img")) && bytes.Equal(key, []byte("src")) {
-						url.Parse(string(val))
-						// TODO: how to determine if val is a link that has to be replaced with the CDN variant?
+						uri, err := url.Parse(string(val))
+						if err == nil && uri.Scheme == "" && uri.Host == "" {
+							switch path.Ext(uri.Path) {
+							case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+								uri.Scheme = "https"
+								uri.Host = "cdn.nbrew.io"
+								if !strings.HasPrefix(uri.Path, "/") {
+									uri.Path = "/rel/path/to/page/" + uri.Path
+								}
+								val = []byte(uri.String())
+							}
+						}
 					}
 					_, err = writer.Write(val)
 					if err != nil {

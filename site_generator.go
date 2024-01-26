@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"net/url"
 	"path"
 	"slices"
 	"strings"
@@ -658,22 +659,128 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 		}
 	}
 	defer writer.Close()
-	if siteGen.cdnDomain != "" {
-		err = executeAndRewriteCDNLinks(writer, tmpl, &pageData, siteGen.cdnDomain)
-		if err != nil {
-			return err
-		}
-	} else {
+	if siteGen.cdnDomain == "" {
 		err = tmpl.Execute(writer, &pageData)
 		if err != nil {
 			return &TemplateExecutionError{Err: err}
 		}
-		err = writer.Close()
+	} else {
+		pipeReader, pipeWriter := io.Pipe()
+		result := make(chan error, 1)
+		go func() {
+			result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, urlPath)
+		}()
+		err = tmpl.Execute(pipeWriter, &pageData)
+		if err != nil {
+			return &TemplateExecutionError{Err: err}
+		}
+		pipeWriter.Close()
+		err = <-result
 		if err != nil {
 			return err
 		}
 	}
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, urlPath string) error {
+	const escapedChars = "&'<>\"\r"
+	tokenizer := html.NewTokenizer(reader)
+	for {
+		tokenType := tokenizer.Next()
+		switch tokenType {
+		case html.ErrorToken:
+			err := tokenizer.Err()
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		case html.TextToken:
+			_, err := writer.Write(tokenizer.Text())
+			if err != nil {
+				return err
+			}
+		case html.DoctypeToken:
+			for _, b := range [...][]byte{
+				[]byte("<!DOCTYPE "), tokenizer.Text(), []byte(">"),
+			} {
+				_, err := writer.Write(b)
+				if err != nil {
+					return err
+				}
+			}
+		case html.CommentToken:
+			for _, b := range [...][]byte{
+				[]byte("<!--"), tokenizer.Text(), []byte("-->"),
+			} {
+				_, err := writer.Write(b)
+				if err != nil {
+					return err
+				}
+			}
+		case html.StartTagToken, html.SelfClosingTagToken, html.EndTagToken:
+			switch tokenType {
+			case html.StartTagToken, html.SelfClosingTagToken:
+				_, err := writer.Write([]byte("<"))
+				if err != nil {
+					return err
+				}
+			case html.EndTagToken:
+				_, err := writer.Write([]byte("</"))
+				if err != nil {
+					return err
+				}
+			}
+			var key, val []byte
+			name, moreAttr := tokenizer.TagName()
+			_, err := writer.Write(name)
+			if err != nil {
+				return err
+			}
+			isImgTag := bytes.Equal(name, []byte("img"))
+			for moreAttr {
+				key, val, moreAttr = tokenizer.TagAttr()
+				if isImgTag && bytes.Equal(key, []byte("src")) {
+					uri, err := url.Parse(string(val))
+					if err == nil && uri.Scheme == "" && uri.Host == "" {
+						switch path.Ext(uri.Path) {
+						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+							uri.Scheme = "https"
+							uri.Host = cdnDomain
+							if !strings.HasPrefix(uri.Path, "/") {
+								uri.Path = "/" + path.Join(urlPath, uri.Path)
+							}
+							val = []byte(uri.String())
+						}
+					}
+				}
+				for _, b := range [...][]byte{
+					[]byte(` `), key, []byte(`="`), val, []byte(`"`),
+				} {
+					_, err := writer.Write(b)
+					if err != nil {
+						return err
+					}
+				}
+			}
+			switch tokenType {
+			case html.StartTagToken, html.EndTagToken:
+				_, err = writer.Write([]byte(">"))
+				if err != nil {
+					return err
+				}
+			case html.SelfClosingTagToken:
+				_, err = writer.Write([]byte("/>"))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
 }
 
 func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, content string) error {
@@ -901,63 +1008,28 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, conten
 		}
 	}
 	defer writer.Close()
-	if siteGen.cdnDomain != "" {
-		err = executeAndRewriteCDNLinks(writer, tmpl, &postData, siteGen.cdnDomain)
-		if err != nil {
-			return err
-		}
-	} else {
+	if siteGen.cdnDomain == "" {
 		err = tmpl.Execute(writer, &postData)
 		if err != nil {
 			return &TemplateExecutionError{Err: err}
 		}
-		err = writer.Close()
+	} else {
+		pipeReader, pipeWriter := io.Pipe()
+		result := make(chan error, 1)
+		go func() {
+			result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, urlPath)
+		}()
+		err = tmpl.Execute(pipeWriter, &postData)
+		if err != nil {
+			return &TemplateExecutionError{Err: err}
+		}
+		pipeWriter.Close()
+		err = <-result
 		if err != nil {
 			return err
 		}
 	}
-	return nil
-}
-
-func executeAndRewriteCDNLinks(writer io.WriteCloser, tmpl *template.Template, data any, cdnDomain string) error {
-	// TODO: stream template output into a pipeWriter, pass the pipeReader end
-	// into a golang.org/x/net/html.Tokenizer and iterate over tokens, looking
-	// for anchor tags and rewriting their href attribute to a CDN version if
-	// applicable.
-	pipeReader, pipeWriter := io.Pipe()
-	result := make(chan error, 1)
-	go func() {
-		tokenizer := html.NewTokenizer(pipeReader)
-		for {
-			tokenType := tokenizer.Next()
-			switch tokenType {
-			case html.ErrorToken:
-				err := tokenizer.Err()
-				if err != io.EOF {
-					result <- err
-					return
-				}
-				result <- writer.Close()
-				return
-			case html.TextToken, html.CommentToken, html.DoctypeToken:
-				_, err := writer.Write(tokenizer.Text())
-				if err != nil {
-					result <- err
-					return
-				}
-			case html.StartTagToken, html.SelfClosingTagToken, html.EndTagToken:
-				// TODO: write the start tag manually using
-				// tokenizer.TagName() and tokenizer.TagAttr() in a loop
-				// (need to port attribute escaping code over).
-			}
-		}
-	}()
-	err := tmpl.Execute(pipeWriter, data)
-	if err != nil {
-		return &TemplateExecutionError{Err: err}
-	}
-	pipeWriter.Close()
-	err = <-result
+	err = writer.Close()
 	if err != nil {
 		return err
 	}
