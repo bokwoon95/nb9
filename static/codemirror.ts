@@ -95,10 +95,6 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
     }),
   });
 
-  // Replace the textarea with the codemirror editor.
-  textarea.style.display = "none";
-  textarea.after(editorView.dom);
-
   // Restore cursor position from localStorage.
   const position = Number(localStorage.getItem(`${window.location.pathname}:${index}`));
   if (position && position <= textarea.value.length) {
@@ -106,27 +102,6 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
       selection: { anchor: position, head: position },
     });
   }
-
-  // If the textarea has autofocus on, shift focus to the codemirror editor.
-  if (textarea.hasAttribute("autofocus")) {
-    const cmContent = editorView.dom.querySelector<HTMLElement>(".cm-content");
-    if (cmContent) {
-      cmContent.focus();
-    }
-  }
-
-  // On submit, synchronize the codemirror editor's contents with the
-  // textarea it is paired with (before the form is submitted).
-  form.addEventListener("submit", function() {
-    // Save the cursor position to localStorage.
-    const ranges = editorView.state.selection.ranges;
-    if (ranges.length > 0) {
-      const position = ranges[0].from;
-      localStorage.setItem(`${window.location.pathname}:${index}`, position.toString());
-    }
-    // Copy the codemirror editor's contents to the textarea.
-    textarea.value = editorView.state.doc.toString();
-  });
 
   // Configure language.
   const ext = dataCodemirror.getAttribute("data-codemirror")?.trim();
@@ -182,4 +157,29 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
       });
     }
   }
+
+  // Replace the textarea with the codemirror editor.
+  textarea.style.display = "none";
+  textarea.after(editorView.dom);
+
+  // If the textarea has autofocus on, shift focus to the codemirror editor.
+  if (textarea.hasAttribute("autofocus")) {
+    const cmContent = editorView.dom.querySelector<HTMLElement>(".cm-content");
+    if (cmContent) {
+      cmContent.focus();
+    }
+  }
+
+  // On submit, synchronize the codemirror editor's contents with the
+  // textarea it is paired with (before the form is submitted).
+  form.addEventListener("submit", function() {
+    // Save the cursor position to localStorage.
+    const ranges = editorView.state.selection.ranges;
+    if (ranges.length > 0) {
+      const position = ranges[0].from;
+      localStorage.setItem(`${window.location.pathname}:${index}`, position.toString());
+    }
+    // Copy the codemirror editor's contents to the textarea.
+    textarea.value = editorView.state.doc.toString();
+  });
 }
