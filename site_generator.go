@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"html/template"
@@ -15,6 +16,7 @@ import (
 	"net/url"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -988,7 +990,40 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, tmpl *template.T
 	return nil
 }
 
+type Post struct {
+	Category         string
+	Name             string
+	Title            string
+	Preview          string
+	Content          template.HTML
+	CreationTime     time.Time
+	ModificationTime time.Time
+}
+
+type PostListData struct {
+	Site       Site
+	Category   string
+	Pagination Pagination
+	Posts      []Post
+}
+
 func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, tmpl *template.Template, category string) error {
+	var settings struct {
+		PostsPerPage int `json:"postsPerPage"`
+	}
+	b, err := fs.ReadFile(siteGen.fsys.WithContext(ctx), path.Join(siteGen.sitePrefix, "postlist.json"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if len(b) > 0 {
+		err := json.Unmarshal(b, &settings)
+		if err != nil {
+			return err
+		}
+	}
+	if settings.PostsPerPage <= 0 {
+		settings.PostsPerPage = 100
+	}
 	return nil
 }
 
@@ -1139,3 +1174,212 @@ type TemplateExecutionError struct{ Err error }
 func (e *TemplateExecutionError) Error() string { return e.Err.Error() }
 
 func (e *TemplateExecutionError) Unwrap() error { return e.Err }
+
+type Pagination struct {
+	First    string
+	Previous string
+	Current  string
+	Next     string
+	Last     string
+	Numbers  []string
+}
+
+func NewPagination(currentPage, lastPage, visiblePages int) Pagination {
+	const numConsecutiveNeighbours = 2
+	if visiblePages%2 == 0 {
+		panic("even number of visiblePages")
+	}
+	minVisiblePages := (numConsecutiveNeighbours * 2) + 1
+	if visiblePages < minVisiblePages {
+		panic("visiblePages cannot be lower than " + strconv.Itoa(minVisiblePages))
+	}
+	pagination := Pagination{
+		First:   "1",
+		Current: strconv.Itoa(currentPage),
+		Last:    strconv.Itoa(lastPage),
+	}
+	previous := currentPage - 1
+	if previous >= 1 {
+		pagination.Previous = strconv.Itoa(previous)
+	}
+	next := currentPage + 1
+	if next <= lastPage {
+		pagination.Next = strconv.Itoa(next)
+	}
+	// If there are fewer pages than visible pages, iterate through all the
+	// page numbers.
+	if lastPage <= visiblePages {
+		pagination.Numbers = make([]string, 0, lastPage)
+		for page := 1; page <= lastPage; page++ {
+			pagination.Numbers = append(pagination.Numbers, strconv.Itoa(page))
+		}
+		return pagination
+	}
+	// Slots corresponds to the available slots in pagination.Numbers, storing
+	// the page numbers as integers. They will be converted to strings later.
+	slots := make([]int, visiblePages)
+	// A unit is a tenth of the maximum number of pages. The rationale is that
+	// users have to paginate at most 10 such units to get from start to end,
+	// no matter how many pages there are.
+	unit := lastPage / 10
+	if currentPage-1 < len(slots)>>1 {
+		// If there are fewer pages on the left than half of the slots, the
+		// current page will skew more towards the left. We fill in consecutive
+		// page numbers from left to right, then fill in the remaining slots.
+		numConsecutive := (currentPage - 1) + 1 + numConsecutiveNeighbours
+		consecutiveStart := 0
+		consecutiveEnd := numConsecutive - 1
+		page := 1
+		for i := consecutiveStart; i <= consecutiveEnd; i++ {
+			slots[i] = page
+			page += 1
+		}
+		// The last slot is always the last page.
+		slots[len(slots)-1] = lastPage
+		// Fill in the remaining slots with either an exponentially changing or
+		// linearly changing number depending on which is more appropriate.
+		remainingSlots := slots[consecutiveEnd+1 : len(slots)-1]
+		delta := numConsecutiveNeighbours + len(remainingSlots)
+		shift := 0
+		for i := len(slots) - 2; i >= consecutiveEnd+1; i-- {
+			exponentialNum := currentPage + unit>>shift
+			linearNum := currentPage + delta
+			if exponentialNum > linearNum && exponentialNum < lastPage {
+				slots[i] = exponentialNum
+			} else {
+				slots[i] = linearNum
+			}
+			shift += 1
+			delta -= 1
+		}
+	} else if lastPage-currentPage < len(slots)>>1 {
+		// If there are fewer pages on the right than half of the slots, the
+		// current page will skew more towards the right. We fill in
+		// consecutive page numbers from the right to left, then fill in the
+		// remaining slots.
+		numConsecutive := (lastPage - currentPage) + 1 + numConsecutiveNeighbours
+		consecutiveStart := len(slots) - 1
+		consecutiveEnd := len(slots) - numConsecutive
+		page := lastPage
+		for i := consecutiveStart; i >= consecutiveEnd; i-- {
+			slots[i] = page
+			page -= 1
+		}
+		// The first slot is always the first page.
+		slots[0] = 1
+		// Fill in the remaining slots with either an exponentially changing or
+		// linearly changing number depending on which is more appropriate.
+		remainingSlots := slots[1:consecutiveEnd]
+		delta := numConsecutiveNeighbours + len(remainingSlots)
+		shift := 0
+		for i := 1; i < consecutiveEnd; i++ {
+			exponentialNum := currentPage - unit>>shift
+			linearNum := currentPage - delta
+			if exponentialNum < linearNum && exponentialNum > 1 {
+				slots[i] = exponentialNum
+			} else {
+				slots[i] = linearNum
+			}
+			shift += 1
+			delta -= 1
+		}
+	} else {
+		// If we reach here, it means the current page is directly in the
+		// center the slots. Fill in the consecutive band of numbers around the
+		// center, then fill in the remaining slots to the left and to the
+		// right.
+		consecutiveStart := len(slots)>>1 - numConsecutiveNeighbours
+		consecutiveEnd := len(slots)>>1 + numConsecutiveNeighbours
+		page := currentPage - numConsecutiveNeighbours
+		for i := consecutiveStart; i <= consecutiveEnd; i++ {
+			slots[i] = page
+			page += 1
+		}
+		// The first slot is always the first page.
+		slots[0] = 1
+		// The last slot is always the last page.
+		slots[len(slots)-1] = lastPage
+		// Fill in the remaining slots on the left with either an exponentially
+		// changing or linearly changing number depending on which is more
+		// appropriate.
+		remainingSlots := slots[1:consecutiveStart]
+		delta := numConsecutiveNeighbours + len(remainingSlots)
+		shift := 0
+		for i := 1; i < consecutiveStart; i++ {
+			exponentialNum := currentPage - unit>>shift
+			linearNum := currentPage - delta
+			if exponentialNum < linearNum && exponentialNum > 1 {
+				slots[i] = exponentialNum
+			} else {
+				slots[i] = linearNum
+			}
+			shift += 1
+			delta -= 1
+		}
+		// Fill in the remaining slots on the right with either an exponentially
+		// changing or linearly changing number depending on which is more
+		// appropriate.
+		remainingSlots = slots[consecutiveEnd+1 : len(slots)-1]
+		delta = numConsecutiveNeighbours + len(remainingSlots)
+		shift = 0
+		for i := len(slots) - 2; i >= consecutiveEnd+1; i-- {
+			exponentialNum := currentPage + unit>>shift
+			linearNum := currentPage + delta
+			if exponentialNum > linearNum && exponentialNum < lastPage {
+				slots[i] = exponentialNum
+			} else {
+				slots[i] = linearNum
+			}
+			shift += 1
+			delta -= 1
+		}
+	}
+	// Convert the page numbers in the slots to strings.
+	pagination.Numbers = make([]string, len(slots))
+	for i, num := range slots {
+		pagination.Numbers[i] = strconv.Itoa(num)
+	}
+	return pagination
+}
+
+func (p Pagination) All() []string {
+	lastPage, err := strconv.Atoi(p.Last)
+	if err != nil {
+		return nil
+	}
+	numbers := make([]string, 0, lastPage)
+	for page := 1; page <= lastPage; page++ {
+		numbers = append(numbers, strconv.Itoa(page))
+	}
+	return numbers
+}
+
+type AtomFeed struct {
+	XMLName xml.Name    `xml:"feed"`
+	Xmlns   string      `xml:"xmlns,attr"`
+	ID      string      `xml:"id"`
+	Title   string      `xml:"title"`
+	Updated string      `xml:"updated"`
+	Link    []AtomLink  `xml:"link"`
+	Entry   []AtomEntry `xml:"entry"`
+}
+
+type AtomEntry struct {
+	ID        string     `xml:"id"`
+	Title     string     `xml:"title"`
+	Published string     `xml:"published"`
+	Updated   string     `xml:"updated"`
+	Link      []AtomLink `xml:"link"`
+	Summary   AtomText   `xml:"summary"`
+	Content   AtomText   `xml:"content"`
+}
+
+type AtomLink struct {
+	Href string `xml:"href,attr"`
+	Rel  string `xml:"rel,attr"`
+}
+
+type AtomText struct {
+	Type    string `xml:"type,attr"`
+	Content string `xml:",chardata"`
+}
