@@ -102,7 +102,8 @@
     </button>
     <button type='submit' class='button ba ph3 br2'>save</button>
   </div>
-  <div data-codemirror='{{ ext $.FilePath }}'>
+  <input type='hidden' name='ext' value='{{ ext $.FilePath }}'>
+  <div data-codemirror>
     <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code' autofocus>{{ $.Content }}</textarea>
   </div>
   <button type='submit' class='button ba br2 pa2 mv2 w-100'>save</button>
