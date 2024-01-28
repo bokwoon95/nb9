@@ -212,12 +212,12 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 
 			// We put a nil pointer into the templateCache first. This is to
 			// indicate that we have already seen this template. If parsing
-			// succeeds, we simply overwrite the cachedTemplate entry. If we
-			// fail, the cachedTemplate pointer stays nil and should be treated
-			// as a signal by other goroutines that parsing this template has
-			// errors. Other goroutines are blocked from accessing the
-			// cachedTemplate pointer until the wait channel is closed by the
-			// defer function below (once this goroutine exits).
+			// succeeds, we simply overwrite the nil entry with the parsed
+			// template. If we fail, the cachedTemplate pointer stays nil and
+			// should be treated as a signal by other goroutines that parsing
+			// this template has errors. Other goroutines are blocked from
+			// accessing the cachedTemplate pointer until the wait channel is
+			// closed by the defer function below (once this goroutine exits).
 			wait = make(chan struct{})
 			siteGen.mu.Lock()
 			siteGen.templateCache[externalName] = nil
@@ -277,11 +277,11 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 				externalTemplateErrs[i] = err
 				return nil
 			}
-			// NOTE: Before we execute any template it must be cloned. This is
-			// because once a template has been executed it is no longer
-			// pristine i.e. it cannot be added to another template using
-			// AddParseTree (html/template has this restriction in order for
-			// its contextually auto-escaped HTML feature to work).
+			// Important! Before we execute any template, it must be cloned.
+			// This is because once a template has been executed it is no
+			// longer pristine i.e. it cannot be added to another template
+			// using AddParseTree (html/template has this restriction in order
+			// for its contextually auto-escaped HTML feature to work).
 			externalTemplates[i], err = externalTemplate.Clone()
 			if err != nil {
 				externalTemplateErrs[i] = err
@@ -686,7 +686,100 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 	return nil
 }
 
-func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, content string) error {
+func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Template, error) {
+	return siteGen.template(ctx, "post.html")
+}
+
+func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context) (*template.Template, error) {
+	return siteGen.template(ctx, "postlist.html")
+}
+
+func (siteGen *SiteGenerator) template(ctx context.Context, name string) (*template.Template, error) {
+	var err error
+	var text sql.NullString
+	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+		text, err = sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
+			Values: []any{
+				sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "output/themes", name)),
+			},
+		}, func(row *sq.Row) sql.NullString {
+			return row.NullString("text")
+		})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	} else {
+		file, err := siteGen.fsys.WithContext(ctx).Open(path.Join(siteGen.sitePrefix, "output/themes", name))
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return nil, err
+			}
+		} else {
+			defer file.Close()
+			fileInfo, err := file.Stat()
+			if err != nil {
+				return nil, err
+			}
+			if fileInfo.IsDir() {
+				return nil, fmt.Errorf("%s is not a file", path.Join(siteGen.sitePrefix, "output/themes", name))
+			}
+			var b strings.Builder
+			b.Grow(int(fileInfo.Size()))
+			_, err = io.Copy(&b, file)
+			if err != nil {
+				return nil, err
+			}
+			err = file.Close()
+			if err != nil {
+				return nil, err
+			}
+			text = sql.NullString{String: b.String(), Valid: true}
+		}
+	}
+	if !text.Valid {
+		file, err := RuntimeFS.Open(path.Join("embed", name))
+		if err != nil {
+			return nil, err
+		}
+		fileInfo, err := file.Stat()
+		if err != nil {
+			return nil, err
+		}
+		if fileInfo.IsDir() {
+			return nil, fmt.Errorf("%s is not a file", path.Join("embed", name))
+		}
+		var b strings.Builder
+		b.Grow(int(fileInfo.Size()))
+		_, err = io.Copy(&b, file)
+		if err != nil {
+			return nil, err
+		}
+		err = file.Close()
+		if err != nil {
+			return nil, err
+		}
+		text = sql.NullString{String: b.String(), Valid: true}
+	}
+	const doctype = "<!DOCTYPE html>"
+	text.String = strings.TrimSpace(text.String)
+	if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
+		text.String = "<!DOCTYPE html>" +
+			"\n<html lang='{{ $.Site.Lang }}'>" +
+			"\n<meta charset='utf-8'>" +
+			"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+			"\n" + text.String
+	}
+	tmpl, err := siteGen.ParseTemplate(ctx, "/"+path.Join("themes", name), text.String, []string{"/" + path.Join("themes", name)})
+	if err != nil {
+		return nil, err
+	}
+	return tmpl, nil
+}
+
+func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, tmpl *template.Template, filePath, content string) error {
 	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
 	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	postData := PostData{
@@ -713,92 +806,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, conten
 	copy(timestamp[len(timestamp)-5:], b)
 	postData.CreationTime = time.Unix(int64(binary.BigEndian.Uint64(timestamp[:])), 0)
 	var err error
-	var tmpl *template.Template
 	g1, ctx1 := errgroup.WithContext(ctx)
-	g1.Go(func() error {
-		var err error
-		var text sql.NullString
-		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-			text, err = sq.FetchOne(ctx1, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
-				Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
-				Values: []any{
-					sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "output/themes/post.html")),
-				},
-			}, func(row *sq.Row) sql.NullString {
-				return row.NullString("text")
-			})
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-		} else {
-			file, err := siteGen.fsys.WithContext(ctx1).Open(path.Join(siteGen.sitePrefix, "output/themes/post.html"))
-			if err != nil {
-				if !errors.Is(err, fs.ErrNotExist) {
-					return err
-				}
-			} else {
-				defer file.Close()
-				fileInfo, err := file.Stat()
-				if err != nil {
-					return err
-				}
-				if fileInfo.IsDir() {
-					return fmt.Errorf("%s is not a file", filePath)
-				}
-				var b strings.Builder
-				b.Grow(int(fileInfo.Size()))
-				_, err = io.Copy(&b, file)
-				if err != nil {
-					return err
-				}
-				err = file.Close()
-				if err != nil {
-					return err
-				}
-				text = sql.NullString{String: b.String(), Valid: true}
-			}
-		}
-		if !text.Valid {
-			file, err := RuntimeFS.Open("embed/post.html")
-			if err != nil {
-				return err
-			}
-			fileInfo, err := file.Stat()
-			if err != nil {
-				return err
-			}
-			if fileInfo.IsDir() {
-				return fmt.Errorf("%s is not a file", filePath)
-			}
-			var b strings.Builder
-			b.Grow(int(fileInfo.Size()))
-			_, err = io.Copy(&b, file)
-			if err != nil {
-				return err
-			}
-			err = file.Close()
-			if err != nil {
-				return err
-			}
-			text = sql.NullString{String: b.String(), Valid: true}
-		}
-		const doctype = "<!DOCTYPE html>"
-		text.String = strings.TrimSpace(text.String)
-		if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
-			text.String = "<!DOCTYPE html>" +
-				"\n<html lang='{{ $.Site.Lang }}'>" +
-				"\n<meta charset='utf-8'>" +
-				"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
-				"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
-				"\n" + text.String
-		}
-		tmpl, err = siteGen.ParseTemplate(ctx1, "/themes/post.html", text.String, []string{"/themes/post.html"})
-		if err != nil {
-			return err
-		}
-		return nil
-	})
 	g1.Go(func() error {
 		err := ctx1.Err()
 		if err != nil {

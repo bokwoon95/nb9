@@ -482,7 +482,13 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				}
 			}
 		case "posts":
-			err := siteGen.GeneratePost(r.Context(), filePath, response.Content)
+			tmpl, err := siteGen.PostTemplate(r.Context())
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			err = siteGen.GeneratePost(r.Context(), tmpl, filePath, response.Content)
 			if err != nil {
 				var templateErrors TemplateErrors
 				var templateExecutionError *TemplateExecutionError

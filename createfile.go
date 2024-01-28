@@ -282,9 +282,14 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 					getLogger(r.Context()).Error(err.Error())
 				}
 			case "posts":
-				err := siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name), "")
+				tmpl, err := siteGen.PostTemplate(r.Context())
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
+				} else {
+					err = siteGen.GeneratePost(r.Context(), tmpl, path.Join(response.Parent, response.Name), "")
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+					}
 				}
 			}
 		}
