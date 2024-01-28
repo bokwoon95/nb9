@@ -559,11 +559,10 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 					return page
 				}
 				line = strings.TrimSpace(strings.TrimPrefix(line, "#title"))
-				n := strings.Index(line, "-->")
-				if n < 0 {
+				if !strings.HasSuffix(line, "-->") {
 					return page
 				}
-				page.Title = strings.TrimSpace(line[:n])
+				page.Title = strings.TrimSpace(strings.TrimSuffix(line, "-->"))
 				return page
 			})
 			if err != nil {
@@ -616,11 +615,11 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 							break
 						}
 						line = bytes.TrimSpace(bytes.TrimPrefix(line, []byte("#title")))
-						n := bytes.Index(line, []byte("-->"))
-						if n < 0 {
+						if !bytes.HasSuffix(line, []byte("-->")) {
 							break
 						}
-						pageData.ChildPages[i].Title = string(bytes.TrimSpace(line[:n]))
+						pageData.ChildPages[i].Title = string(bytes.TrimSpace(bytes.TrimSuffix(line, []byte("-->"))))
+						break
 					}
 					return nil
 				})
