@@ -41,6 +41,15 @@ type SiteGenerator struct {
 	templateInProgress map[string]chan struct{}
 }
 
+type Site struct {
+	Title      string
+	Favicon    template.URL
+	Emoji      string
+	Lang       string
+	Categories []string
+	CodeStyle  string
+}
+
 func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, cdnDomain string) (*SiteGenerator, error) {
 	siteGen := &SiteGenerator{
 		fsys:               fsys,
@@ -347,6 +356,27 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 		}
 	}
 	return finalTemplate.Lookup(name), nil
+}
+
+type PageData struct {
+	Site             Site
+	Parent           string
+	Name             string
+	ChildPages       []Page
+	Markdown         map[string]template.HTML
+	Images           []Image
+	ModificationTime time.Time
+}
+
+type Page struct {
+	Parent string
+	Name   string
+	Title  string
+}
+
+type Image struct {
+	Parent string
+	Name   string
 }
 
 func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, content string) error {
@@ -779,6 +809,17 @@ func (siteGen *SiteGenerator) template(ctx context.Context, name string) (*templ
 	return tmpl, nil
 }
 
+type PostData struct {
+	Site             Site
+	Category         string
+	Name             string
+	Title            string
+	Content          template.HTML
+	Images           []Image
+	CreationTime     time.Time
+	ModificationTime time.Time
+}
+
 func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, tmpl *template.Template, filePath, content string) error {
 	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
 	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
@@ -947,7 +988,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, tmpl *template.T
 	return nil
 }
 
-func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, filePath, content string) error {
+func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, tmpl *template.Template, category string) error {
 	return nil
 }
 
