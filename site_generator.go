@@ -1024,6 +1024,14 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, tmpl *templa
 	if settings.PostsPerPage <= 0 {
 		settings.PostsPerPage = 100
 	}
+	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+		_ = remoteFS
+		return nil
+	}
+	// TODO: calculate the lastPage
+	// TODO: func generate(currentPage int, posts []Post) error
+	// TODO: then loop over a cursor and accumulate until we have enough for a page, then spin off a separate goroutine.
+	// TODO: what is the best way to paginate the posts in a category in batches
 	return nil
 }
 
