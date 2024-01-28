@@ -99,13 +99,13 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
   const position = Number(localStorage.getItem(`${window.location.pathname}:${index}`));
   if (position && position <= textarea.value.length) {
     editor.dispatch({
-      selection: {anchor: position, head: position},
+      selection: { anchor: position, head: position },
     });
   }
 
+  // Configure language.
   const extElement = form.elements["ext"];
   if (extElement) {
-    // Configure language.
     const configureLanguage = function() {
       if (extElement.value == ".html") {
         editor.dispatch({
@@ -134,35 +134,37 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
     }
     configureLanguage();
     extElement.addEventListener("change", configureLanguage);
-    // Configure word wrap.
-    let wordwrapEnabled = false;
-    if (localStorage.getItem(`wordwrap:${extElement.value}`) == "true") {
-      wordwrapEnabled = true;
-    } else {
-      wordwrapEnabled = extElement.value != ".html" && extElement.value != ".css" && extElement.value != ".js";
-    }
-    if (wordwrapEnabled) {
-      editor.dispatch({
-        effects: wordwrap.reconfigure(EditorView.lineWrapping),
-      });
-    }
-    const wordwrapInput = document.querySelector<HTMLInputElement>(`input[type=checkbox]#wordwrap\\:${index}`);
-    if (wordwrapInput) {
-      wordwrapInput.checked = wordwrapEnabled;
-      wordwrapInput.addEventListener("change", function() {
-        if (wordwrapInput.checked) {
-          localStorage.setItem(`wordwrap:${extElement.value}`, "true");
-          editor.dispatch({
-            effects: wordwrap.reconfigure(EditorView.lineWrapping),
-          });
-        } else {
-          localStorage.setItem(`wordwrap:${extElement.value}`, "false");
-          editor.dispatch({
-            effects: wordwrap.reconfigure([]),
-          });
-        }
-      });
-    }
+  }
+
+  // Configure word wrap.
+  const ext = extElement ? extElement.value : "";
+  let wordwrapEnabled = false;
+  if (localStorage.getItem(`wordwrap:${ext}`) == "true") {
+    wordwrapEnabled = true;
+  } else {
+    wordwrapEnabled = ext != ".html" && ext != ".css" && ext != ".js";
+  }
+  if (wordwrapEnabled) {
+    editor.dispatch({
+      effects: wordwrap.reconfigure(EditorView.lineWrapping),
+    });
+  }
+  const wordwrapInput = document.querySelector<HTMLInputElement>(`input[type=checkbox]#wordwrap\\:${index}`);
+  if (wordwrapInput) {
+    wordwrapInput.checked = wordwrapEnabled;
+    wordwrapInput.addEventListener("change", function() {
+      if (wordwrapInput.checked) {
+        localStorage.setItem(`wordwrap:${ext}`, "true");
+        editor.dispatch({
+          effects: wordwrap.reconfigure(EditorView.lineWrapping),
+        });
+      } else {
+        localStorage.setItem(`wordwrap:${ext}`, "false");
+        editor.dispatch({
+          effects: wordwrap.reconfigure([]),
+        });
+      }
+    });
   }
 
   // Replace the textarea with the codemirror editor.
