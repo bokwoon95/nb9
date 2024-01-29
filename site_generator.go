@@ -1003,6 +1003,50 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 				return err
 			}
 		}
+		filePaths, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format: "SELECT {*}" +
+				" FROM files" +
+				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {parent})" +
+				" AND is_dir",
+			Values: []any{
+				sq.StringParam("parent", path.Join(siteGen.sitePrefix, "posts", category)),
+			},
+		}, func(row *sq.Row) string {
+			return row.String("file_path")
+		})
+		if err != nil {
+			return err
+		}
+		g2, ctx2 := errgroup.WithContext(ctx)
+		for _, filePath := range filePaths {
+			filePath := filePath
+			n, err := strconv.Atoi(path.Base(filePath))
+			if err != nil {
+				continue
+			}
+			if n <= lastPage {
+				continue
+			}
+			g2.Go(func() error {
+				_, err := sq.Exec(ctx2, remoteFS.filesDB, sq.Query{
+					Dialect: remoteFS.filesDialect,
+					Format:  "DELETE FROM files WHERE file_path = {filePath} OR file_path LIKE {pattern} ESCAPE '\\'",
+					Values: []any{
+						sq.StringParam("filePath", filePath),
+						sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(filePath)+"/%"),
+					},
+				})
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+		}
+		err = g2.Wait()
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 	dirFiles, err := siteGen.fsys.ReadDir(path.Join(siteGen.sitePrefix, "posts", category))
