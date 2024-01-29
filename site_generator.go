@@ -26,18 +26,15 @@ import (
 
 	"github.com/bokwoon95/nb9/sq"
 	"github.com/yuin/goldmark"
-	highlighting "github.com/yuin/goldmark-highlighting"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/net/html"
 	"golang.org/x/sync/errgroup"
 )
 
 type SiteGenerator struct {
+	Site               Site
 	fsys               FS
-	site               Site
 	sitePrefix         string
+	contentDomain      string
 	cdnDomain          string
 	mu                 sync.Mutex
 	templateCache      map[string]*template.Template
@@ -53,10 +50,11 @@ type Site struct {
 	CodeStyle  string
 }
 
-func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, cdnDomain string) (*SiteGenerator, error) {
+func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, cdnDomain string) (*SiteGenerator, error) {
 	siteGen := &SiteGenerator{
 		fsys:               fsys,
 		sitePrefix:         sitePrefix,
+		contentDomain:      contentDomain,
 		cdnDomain:          cdnDomain,
 		mu:                 sync.Mutex{},
 		templateCache:      make(map[string]*template.Template),
@@ -67,27 +65,27 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, cdnDomain string
 		return nil, err
 	}
 	if len(b) > 0 {
-		err := json.Unmarshal(b, &siteGen.site)
+		err := json.Unmarshal(b, &siteGen.Site)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if siteGen.site.Title == "" {
-		siteGen.site.Title = "My Blog"
+	if siteGen.Site.Title == "" {
+		siteGen.Site.Title = "My Blog"
 	}
-	if siteGen.site.Emoji == "" {
-		siteGen.site.Emoji = "☕"
+	if siteGen.Site.Emoji == "" {
+		siteGen.Site.Emoji = "☕"
 	}
-	if siteGen.site.Favicon == "" {
-		siteGen.site.Favicon = template.URL("data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>" + siteGen.site.Emoji + "</text></svg>")
+	if siteGen.Site.Favicon == "" {
+		siteGen.Site.Favicon = template.URL("data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>" + siteGen.Site.Emoji + "</text></svg>")
 	}
-	if siteGen.site.Lang == "" {
-		siteGen.site.Lang = "en"
+	if siteGen.Site.Lang == "" {
+		siteGen.Site.Lang = "en"
 	}
-	if siteGen.site.CodeStyle == "" {
-		siteGen.site.CodeStyle = "onedark"
+	if siteGen.Site.CodeStyle == "" {
+		siteGen.Site.CodeStyle = "onedark"
 	}
-	if siteGen.site.Categories == nil {
+	if siteGen.Site.Categories == nil {
 		if remoteFS, ok := fsys.(*RemoteFS); ok {
 			categories, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
@@ -105,7 +103,7 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, cdnDomain string
 			if err != nil {
 				return nil, err
 			}
-			siteGen.site.Categories = categories
+			siteGen.Site.Categories = categories
 		} else {
 			dirEntries, err := fsys.ReadDir(path.Join(sitePrefix, "posts"))
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -115,7 +113,7 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, cdnDomain string
 				if !dirEntry.IsDir() {
 					continue
 				}
-				siteGen.site.Categories = append(siteGen.site.Categories, dirEntry.Name())
+				siteGen.Site.Categories = append(siteGen.Site.Categories, dirEntry.Name())
 			}
 		}
 	}
@@ -382,7 +380,7 @@ type Image struct {
 	Name   string
 }
 
-func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, content string) error {
+func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, content string, markdown goldmark.Markdown) error {
 	urlPath := strings.TrimPrefix(filePath, "pages/")
 	if urlPath == "index.html" {
 		urlPath = ""
@@ -391,7 +389,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 	}
 	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	pageData := PageData{
-		Site:             siteGen.site,
+		Site:             siteGen.Site,
 		Parent:           path.Dir(urlPath),
 		Name:             path.Base(urlPath),
 		ModificationTime: time.Now().UTC(),
@@ -421,14 +419,14 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 	})
 	g1.Go(func() error {
 		markdownMu := sync.Mutex{}
-		markdown := goldmark.New(
-			goldmark.WithParserOptions(parser.WithAttribute()),
-			goldmark.WithExtensions(
-				extension.Table,
-				highlighting.NewHighlighting(highlighting.WithStyle(pageData.Site.CodeStyle)),
-			),
-			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-		)
+		// markdown := goldmark.New(
+		// 	goldmark.WithParserOptions(parser.WithAttribute()),
+		// 	goldmark.WithExtensions(
+		// 		extension.Table,
+		// 		highlighting.NewHighlighting(highlighting.WithStyle(pageData.Site.CodeStyle)),
+		// 	),
+		// 	goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+		// )
 		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
 			cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
@@ -719,99 +717,6 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 	return nil
 }
 
-func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Template, error) {
-	return siteGen.template(ctx, "post.html")
-}
-
-func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context) (*template.Template, error) {
-	return siteGen.template(ctx, "postlist.html")
-}
-
-func (siteGen *SiteGenerator) template(ctx context.Context, name string) (*template.Template, error) {
-	var err error
-	var text sql.NullString
-	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		text, err = sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
-			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
-			Values: []any{
-				sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "output/themes", name)),
-			},
-		}, func(row *sq.Row) sql.NullString {
-			return row.NullString("text")
-		})
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, err
-		}
-	} else {
-		file, err := siteGen.fsys.WithContext(ctx).Open(path.Join(siteGen.sitePrefix, "output/themes", name))
-		if err != nil {
-			if !errors.Is(err, fs.ErrNotExist) {
-				return nil, err
-			}
-		} else {
-			defer file.Close()
-			fileInfo, err := file.Stat()
-			if err != nil {
-				return nil, err
-			}
-			if fileInfo.IsDir() {
-				return nil, fmt.Errorf("%s is not a file", path.Join(siteGen.sitePrefix, "output/themes", name))
-			}
-			var b strings.Builder
-			b.Grow(int(fileInfo.Size()))
-			_, err = io.Copy(&b, file)
-			if err != nil {
-				return nil, err
-			}
-			err = file.Close()
-			if err != nil {
-				return nil, err
-			}
-			text = sql.NullString{String: b.String(), Valid: true}
-		}
-	}
-	if !text.Valid {
-		file, err := RuntimeFS.Open(path.Join("embed", name))
-		if err != nil {
-			return nil, err
-		}
-		fileInfo, err := file.Stat()
-		if err != nil {
-			return nil, err
-		}
-		if fileInfo.IsDir() {
-			return nil, fmt.Errorf("%s is not a file", path.Join("embed", name))
-		}
-		var b strings.Builder
-		b.Grow(int(fileInfo.Size()))
-		_, err = io.Copy(&b, file)
-		if err != nil {
-			return nil, err
-		}
-		err = file.Close()
-		if err != nil {
-			return nil, err
-		}
-		text = sql.NullString{String: b.String(), Valid: true}
-	}
-	const doctype = "<!DOCTYPE html>"
-	text.String = strings.TrimSpace(text.String)
-	if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
-		text.String = "<!DOCTYPE html>" +
-			"\n<html lang='{{ $.Site.Lang }}'>" +
-			"\n<meta charset='utf-8'>" +
-			"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
-			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
-			"\n" + text.String
-	}
-	tmpl, err := siteGen.ParseTemplate(ctx, "/"+path.Join("themes", name), text.String, []string{"/" + path.Join("themes", name)})
-	if err != nil {
-		return nil, err
-	}
-	return tmpl, nil
-}
-
 type PostData struct {
 	Site             Site
 	Category         string
@@ -823,11 +728,11 @@ type PostData struct {
 	ModificationTime time.Time
 }
 
-func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, tmpl *template.Template, filePath, content string) error {
+func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, content string, markdown goldmark.Markdown, tmpl *template.Template) error {
 	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
 	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	postData := PostData{
-		Site:             siteGen.site,
+		Site:             siteGen.Site,
 		Category:         path.Dir(strings.TrimPrefix(urlPath, "posts/")),
 		Name:             path.Base(strings.TrimPrefix(urlPath, "posts/")),
 		ModificationTime: time.Now().UTC(),
@@ -856,14 +761,6 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, tmpl *template.T
 		if err != nil {
 			return err
 		}
-		markdown := goldmark.New(
-			goldmark.WithParserOptions(parser.WithAttribute()),
-			goldmark.WithExtensions(
-				extension.Table,
-				highlighting.NewHighlighting(highlighting.WithStyle(siteGen.site.CodeStyle)),
-			),
-			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-		)
 		contentBytes := []byte(content)
 		// Title
 		var line []byte
@@ -999,6 +896,7 @@ type Post struct {
 	Content          template.HTML
 	CreationTime     time.Time
 	ModificationTime time.Time
+	text             []byte
 }
 
 type PostListData struct {
@@ -1008,7 +906,7 @@ type PostListData struct {
 	Posts      []Post
 }
 
-func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, tmpl *template.Template, category string) error {
+func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category string, tmpl *template.Template, markdown goldmark.Markdown) error {
 	var settings struct {
 		PostsPerPage int `json:"postsPerPage"`
 	}
@@ -1030,11 +928,11 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, tmpl *templa
 			Dialect: remoteFS.filesDialect,
 			Format: "SELECT {*}" +
 				" FROM files" +
-				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
+				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {parent})" +
 				" AND NOT is_dir" +
 				" AND file_path LIKE '%.md'",
 			Values: []any{
-				sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "posts", category)),
+				sq.StringParam("parent", path.Join(siteGen.sitePrefix, "posts", category)),
 			},
 		}, func(row *sq.Row) int {
 			return row.Int("COUNT(*)")
@@ -1042,14 +940,398 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, tmpl *templa
 		if err != nil {
 			return err
 		}
+		page := 1
 		lastPage := int(math.Ceil(float64(count) / float64(settings.PostsPerPage)))
-		_ = lastPage
+		batch := make([]Post, 0, settings.PostsPerPage)
+		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format: "SELECT {*}" +
+				" FROM files" +
+				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {parent})" +
+				" AND NOT is_dir" +
+				" AND file_path LIKE '%.md'" +
+				" ORDER BY file_path DESC",
+			Values: []any{
+				sq.StringParam("parent", path.Join(siteGen.sitePrefix, "posts", category)),
+			},
+		}, func(row *sq.Row) Post {
+			var post Post
+			post.Category = category
+			post.Name = path.Base(row.String("file_path"))
+			post.ModificationTime = row.Time("mod_time")
+			post.text = bufPool.Get().(*bytes.Buffer).Bytes()
+			row.Scan(&post.text, "text")
+			return post
+		})
+		defer cursor.Close()
+		g1, ctx1 := errgroup.WithContext(ctx)
+		for cursor.Next() {
+			post, err := cursor.Result()
+			if err != nil {
+				return err
+			}
+			batch = append(batch, post)
+			if len(batch) >= settings.PostsPerPage {
+				posts := slices.Clone(batch)
+				batch = batch[:0]
+				currentPage := page
+				page++
+				g1.Go(func() error {
+					return siteGen.generatePostList(ctx1, category, tmpl, markdown, posts, currentPage, lastPage)
+				})
+			}
+		}
+		err = cursor.Close()
+		if err != nil {
+			return err
+		}
+		if len(batch) > 0 {
+			g1.Go(func() error {
+				return siteGen.generatePostList(ctx1, category, tmpl, markdown, batch, page, lastPage)
+			})
+		}
+		err = g1.Wait()
+		if err != nil {
+			return err
+		}
 		return nil
 	}
-	// TODO: calculate the lastPage
-	// TODO: func generate(currentPage int, posts []Post) error
-	// TODO: then loop over a cursor and accumulate until we have enough for a page, then spin off a separate goroutine.
-	// TODO: what is the best way to paginate the posts in a category in batches
+	dirFiles, err := siteGen.fsys.ReadDir(path.Join(siteGen.sitePrefix, "posts", category))
+	if err != nil {
+		return err
+	}
+	n := 0
+	for _, dirFile := range dirFiles {
+		if dirFile.IsDir() {
+			continue
+		}
+		if !strings.HasSuffix(dirFile.Name(), ".md") {
+			continue
+		}
+		dirFiles[n] = dirFile
+		n++
+	}
+	dirFiles = dirFiles[:n]
+	slices.Reverse(dirFiles)
+	page := 1
+	lastPage := int(math.Ceil(float64(len(dirFiles)) / float64(settings.PostsPerPage)))
+	batch := make([]Post, 0, settings.PostsPerPage)
+	g1, ctx1 := errgroup.WithContext(ctx)
+	for _, dirFile := range dirFiles {
+		fileInfo, err := dirFile.Info()
+		if err != nil {
+			return err
+		}
+		batch = append(batch, Post{
+			Category:         category,
+			Name:             fileInfo.Name(),
+			ModificationTime: fileInfo.ModTime(),
+		})
+		if len(batch) >= settings.PostsPerPage {
+			posts := slices.Clone(batch)
+			batch = batch[:0]
+			currentPage := page
+			page++
+			g1.Go(func() error {
+				return siteGen.generatePostList(ctx1, category, tmpl, markdown, posts, currentPage, lastPage)
+			})
+		}
+	}
+	if len(batch) > 0 {
+		g1.Go(func() error {
+			return siteGen.generatePostList(ctx1, category, tmpl, markdown, batch, page, lastPage)
+		})
+	}
+	err = g1.Wait()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category string, tmpl *template.Template, markdown goldmark.Markdown, posts []Post, currentPage, lastPage int) error {
+	n := 0
+	for _, post := range posts {
+		prefix, _, ok := strings.Cut(post.Name, "-")
+		if !ok || prefix == "" || len(prefix) > 8 {
+			if post.text != nil && len(post.text) <= maxPoolableBufferCapacity {
+				post.text = post.text[:0]
+				bufPool.Put(bytes.NewBuffer(post.text))
+				post.text = nil
+			}
+			continue
+		}
+		b, _ := base32Encoding.DecodeString(fmt.Sprintf("%08s", prefix))
+		if len(b) != 5 {
+			if post.text != nil && len(post.text) <= maxPoolableBufferCapacity {
+				post.text = post.text[:0]
+				bufPool.Put(bytes.NewBuffer(post.text))
+				post.text = nil
+			}
+			continue
+		}
+		var timestamp [8]byte
+		copy(timestamp[len(timestamp)-5:], b)
+		post.CreationTime = time.Unix(int64(binary.BigEndian.Uint64(timestamp[:])), 0)
+		posts[n] = post
+		n++
+	}
+	posts = posts[:n]
+	g1, ctx1 := errgroup.WithContext(ctx)
+	for i := range posts {
+		i := i
+		g1.Go(func() error {
+			if posts[i].text != nil {
+				defer func() {
+					if len(posts[i].text) <= maxPoolableBufferCapacity {
+						posts[i].text = posts[i].text[:0]
+						bufPool.Put(bytes.NewBuffer(posts[i].text))
+						posts[i].text = nil
+					}
+				}()
+			} else {
+				file, err := siteGen.fsys.WithContext(ctx1).Open(path.Join(siteGen.sitePrefix, "posts", category, posts[i].Name))
+				if err != nil {
+					return err
+				}
+				defer file.Close()
+				buf := bufPool.Get().(*bytes.Buffer)
+				defer func() {
+					if buf.Cap() <= maxPoolableBufferCapacity {
+						buf.Reset()
+						bufPool.Put(buf)
+						posts[i].text = nil
+					}
+				}()
+				_, err = buf.ReadFrom(file)
+				if err != nil {
+					return err
+				}
+				posts[i].text = buf.Bytes()
+			}
+			var line []byte
+			remainder := posts[i].text
+			for len(remainder) > 0 {
+				line, remainder, _ = bytes.Cut(remainder, []byte("\n"))
+				line = bytes.TrimSpace(line)
+				if len(line) == 0 {
+					continue
+				}
+				if posts[i].Title == "" {
+					posts[i].Title = stripMarkdownStyles(line)
+					continue
+				}
+				if posts[i].Preview == "" {
+					posts[i].Preview = stripMarkdownStyles(line)
+					continue
+				}
+				break
+			}
+			var b strings.Builder
+			err := markdown.Convert(posts[i].text, &b)
+			if err != nil {
+				return err
+			}
+			posts[i].Content = template.HTML(b.String())
+			return nil
+		})
+	}
+	err := g1.Wait()
+	if err != nil {
+		return err
+	}
+	postListData := PostListData{
+		Site:       siteGen.Site,
+		Category:   category,
+		Pagination: NewPagination(currentPage, lastPage, 9),
+		Posts:      posts,
+	}
+	outputDir := path.Join(siteGen.sitePrefix, "output/posts", postListData.Category)
+	if currentPage != 1 {
+		writer, err := siteGen.fsys.WithContext(ctx1).OpenWriter(path.Join(outputDir, strconv.Itoa(currentPage), "index.html"), 0644)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			err := siteGen.fsys.WithContext(ctx1).MkdirAll(path.Join(outputDir, strconv.Itoa(currentPage)), 0755)
+			if err != nil {
+				return err
+			}
+			writer, err = siteGen.fsys.WithContext(ctx1).OpenWriter(path.Join(outputDir, strconv.Itoa(currentPage), "index.html"), 0644)
+			if err != nil {
+				return err
+			}
+		}
+		defer writer.Close()
+		if siteGen.cdnDomain == "" {
+			err = tmpl.Execute(writer, &postListData)
+			if err != nil {
+				return &TemplateExecutionError{Err: err}
+			}
+		} else {
+			pipeReader, pipeWriter := io.Pipe()
+			result := make(chan error, 1)
+			go func() {
+				result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, "")
+			}()
+			err = tmpl.Execute(pipeWriter, &postListData)
+			if err != nil {
+				return &TemplateExecutionError{Err: err}
+			}
+			pipeWriter.Close()
+			err = <-result
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	g2, ctx2 := errgroup.WithContext(ctx)
+	g2.Go(func() error {
+		writer, err := siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			err := siteGen.fsys.WithContext(ctx2).MkdirAll(outputDir, 0755)
+			if err != nil {
+				return err
+			}
+			writer, err = siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+			if err != nil {
+				return err
+			}
+		}
+		defer writer.Close()
+		if siteGen.cdnDomain == "" {
+			err = tmpl.Execute(writer, &postListData)
+			if err != nil {
+				return &TemplateExecutionError{Err: err}
+			}
+		} else {
+			pipeReader, pipeWriter := io.Pipe()
+			result := make(chan error, 1)
+			go func() {
+				result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, "")
+			}()
+			err = tmpl.Execute(pipeWriter, &postListData)
+			if err != nil {
+				return &TemplateExecutionError{Err: err}
+			}
+			pipeWriter.Close()
+			err = <-result
+			if err != nil {
+				return err
+			}
+		}
+		if lastPage > 1 {
+			file, err := siteGen.fsys.WithContext(ctx2).Open(path.Join(outputDir, "index.html"))
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			writer, err := siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "1", "index.html"), 0644)
+			if err != nil {
+				if !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+				err := siteGen.fsys.WithContext(ctx2).MkdirAll(path.Join(outputDir, "1"), 0755)
+				if err != nil {
+					return err
+				}
+				writer, err = siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "1", "index.html"), 0644)
+				if err != nil {
+					return err
+				}
+			}
+			defer writer.Close()
+			_, err = io.Copy(writer, file)
+			if err != nil {
+				return err
+			}
+			err = writer.Close()
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	g2.Go(func() error {
+		contentDomain := siteGen.sitePrefix
+		if !strings.Contains(siteGen.sitePrefix, ".") {
+			contentDomain = siteGen.sitePrefix + "." + siteGen.contentDomain
+		}
+		feed := AtomFeed{
+			Xmlns:   "http://www.w3.org/2005/Atom",
+			ID:      "https://" + contentDomain,
+			Title:   siteGen.Site.Title,
+			Updated: time.Now().UTC().Format("2006-01-02 15:04:05Z"),
+			Link: []AtomLink{{
+				Href: "https://" + contentDomain + "/" + path.Join("posts", postListData.Category) + "/index.atom",
+				Rel:  "self",
+			}, {
+				Href: "https://" + contentDomain + "/" + path.Join("posts", postListData.Category) + "/",
+				Rel:  "alternate",
+			}},
+			Entry: make([]AtomEntry, len(postListData.Posts)),
+		}
+		for i, post := range postListData.Posts {
+			// ID: tag:bokwoon.nbrew.io,yyyy-mm-dd:1jjdz28
+			var timestamp [8]byte
+			binary.BigEndian.PutUint64(timestamp[:], uint64(post.CreationTime.Unix()))
+			prefix := strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
+			feed.Entry[i] = AtomEntry{
+				ID:        "tag:" + contentDomain + "," + post.CreationTime.UTC().Format("2006-01-02") + ":" + prefix,
+				Title:     post.Title,
+				Published: post.CreationTime.UTC().Format("2006-01-02 15:04:05Z"),
+				Updated:   post.ModificationTime.UTC().Format("2006-01-02 15:04:05Z"),
+				Link: []AtomLink{{
+					Href: "https://" + contentDomain + "/" + path.Join("posts", post.Category, post.Name) + "/",
+					Rel:  "alternate",
+				}},
+				Summary: AtomText{
+					Type:    "text",
+					Content: string(post.Preview),
+				},
+				Content: AtomText{
+					Type:    "html",
+					Content: string(post.Content),
+				},
+			}
+		}
+		writer, err := siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "index.atom"), 0644)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			err := siteGen.fsys.WithContext(ctx2).MkdirAll(outputDir, 0755)
+			if err != nil {
+				return err
+			}
+			writer, err = siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "index.atom"), 0644)
+			if err != nil {
+				return err
+			}
+		}
+		defer writer.Close()
+		_, err = writer.Write([]byte(xml.Header))
+		if err != nil {
+			return err
+		}
+		err = xml.NewEncoder(writer).Encode(&feed)
+		if err != nil {
+			return err
+		}
+		err = writer.Close()
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	err = g2.Wait()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1116,10 +1398,14 @@ func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, urlPath string) 
 						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
 							uri.Scheme = "https"
 							uri.Host = cdnDomain
-							if !strings.HasPrefix(uri.Path, "/") {
-								uri.Path = "/" + path.Join(urlPath, uri.Path)
+							if strings.HasPrefix(uri.Path, "/") {
+								val = []byte(uri.String())
+							} else {
+								if urlPath != "" {
+									uri.Path = "/" + path.Join(urlPath, uri.Path)
+									val = []byte(uri.String())
+								}
 							}
-							val = []byte(uri.String())
 						}
 					}
 				}
@@ -1408,4 +1694,97 @@ type AtomLink struct {
 type AtomText struct {
 	Type    string `xml:"type,attr"`
 	Content string `xml:",chardata"`
+}
+
+func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Template, error) {
+	return siteGen.template(ctx, "post.html")
+}
+
+func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context) (*template.Template, error) {
+	return siteGen.template(ctx, "postlist.html")
+}
+
+func (siteGen *SiteGenerator) template(ctx context.Context, name string) (*template.Template, error) {
+	var err error
+	var text sql.NullString
+	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+		text, err = sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
+			Values: []any{
+				sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "output/themes", name)),
+			},
+		}, func(row *sq.Row) sql.NullString {
+			return row.NullString("text")
+		})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	} else {
+		file, err := siteGen.fsys.WithContext(ctx).Open(path.Join(siteGen.sitePrefix, "output/themes", name))
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return nil, err
+			}
+		} else {
+			defer file.Close()
+			fileInfo, err := file.Stat()
+			if err != nil {
+				return nil, err
+			}
+			if fileInfo.IsDir() {
+				return nil, fmt.Errorf("%s is not a file", path.Join(siteGen.sitePrefix, "output/themes", name))
+			}
+			var b strings.Builder
+			b.Grow(int(fileInfo.Size()))
+			_, err = io.Copy(&b, file)
+			if err != nil {
+				return nil, err
+			}
+			err = file.Close()
+			if err != nil {
+				return nil, err
+			}
+			text = sql.NullString{String: b.String(), Valid: true}
+		}
+	}
+	if !text.Valid {
+		file, err := RuntimeFS.Open(path.Join("embed", name))
+		if err != nil {
+			return nil, err
+		}
+		fileInfo, err := file.Stat()
+		if err != nil {
+			return nil, err
+		}
+		if fileInfo.IsDir() {
+			return nil, fmt.Errorf("%s is not a file", path.Join("embed", name))
+		}
+		var b strings.Builder
+		b.Grow(int(fileInfo.Size()))
+		_, err = io.Copy(&b, file)
+		if err != nil {
+			return nil, err
+		}
+		err = file.Close()
+		if err != nil {
+			return nil, err
+		}
+		text = sql.NullString{String: b.String(), Valid: true}
+	}
+	const doctype = "<!DOCTYPE html>"
+	text.String = strings.TrimSpace(text.String)
+	if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
+		text.String = "<!DOCTYPE html>" +
+			"\n<html lang='{{ $.Site.Lang }}'>" +
+			"\n<meta charset='utf-8'>" +
+			"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+			"\n" + text.String
+	}
+	tmpl, err := siteGen.ParseTemplate(ctx, "/"+path.Join("themes", name), text.String, []string{"/" + path.Join("themes", name)})
+	if err != nil {
+		return nil, err
+	}
+	return tmpl, nil
 }

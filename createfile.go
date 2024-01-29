@@ -11,6 +11,12 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
 func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -269,15 +275,23 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 		if head == "pages" || head == "posts" {
-			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.CDNDomain)
+			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
+			markdown := goldmark.New(
+				goldmark.WithParserOptions(parser.WithAttribute()),
+				goldmark.WithExtensions(
+					extension.Table,
+					highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
+				),
+				goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+			)
 			switch head {
 			case "pages":
-				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name), "")
+				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name), "", markdown)
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
 				}
@@ -286,7 +300,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
 				} else {
-					err = siteGen.GeneratePost(r.Context(), tmpl, path.Join(response.Parent, response.Name), "")
+					err = siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name), "", markdown, tmpl)
 					if err != nil {
 						getLogger(r.Context()).Error(err.Error())
 					}
