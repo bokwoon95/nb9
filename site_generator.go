@@ -1010,7 +1010,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {parent})" +
 				" AND is_dir",
 			Values: []any{
-				sq.StringParam("parent", path.Join(siteGen.sitePrefix, "posts", category)),
+				sq.StringParam("parent", path.Join(siteGen.sitePrefix, "output/posts", category)),
 			},
 		}, func(row *sq.Row) string {
 			return row.String("file_path")
@@ -1049,29 +1049,29 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		}
 		return nil
 	}
-	dirFiles, err := siteGen.fsys.ReadDir(path.Join(siteGen.sitePrefix, "posts", category))
+	dirEntries, err := siteGen.fsys.WithContext(ctx).ReadDir(path.Join(siteGen.sitePrefix, "posts", category))
 	if err != nil {
 		return err
 	}
 	n := 0
-	for _, dirFile := range dirFiles {
-		if dirFile.IsDir() {
+	for _, dirEntry := range dirEntries {
+		if dirEntry.IsDir() {
 			continue
 		}
-		if !strings.HasSuffix(dirFile.Name(), ".md") {
+		if !strings.HasSuffix(dirEntry.Name(), ".md") {
 			continue
 		}
-		dirFiles[n] = dirFile
+		dirEntries[n] = dirEntry
 		n++
 	}
-	dirFiles = dirFiles[:n]
-	slices.Reverse(dirFiles)
+	dirEntries = dirEntries[:n]
+	slices.Reverse(dirEntries)
 	page := 1
-	lastPage := int(math.Ceil(float64(len(dirFiles)) / float64(settings.PostsPerPage)))
+	lastPage := int(math.Ceil(float64(len(dirEntries)) / float64(settings.PostsPerPage)))
 	batch := make([]Post, 0, settings.PostsPerPage)
 	g1, ctx1 := errgroup.WithContext(ctx)
-	for _, dirFile := range dirFiles {
-		fileInfo, err := dirFile.Info()
+	for _, dirEntry := range dirEntries {
+		fileInfo, err := dirEntry.Info()
 		if err != nil {
 			return err
 		}
@@ -1104,6 +1104,32 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		if err != nil {
 			return err
 		}
+	}
+
+	dirEntries, err = siteGen.fsys.WithContext(ctx).ReadDir(path.Join(siteGen.sitePrefix, "output/posts", category))
+	if err != nil {
+		return err
+	}
+	g2, ctx2 := errgroup.WithContext(ctx)
+	for _, dirEntry := range dirEntries {
+		dirEntry := dirEntry
+		if !dirEntry.IsDir() {
+			continue
+		}
+		n, err := strconv.Atoi(dirEntry.Name())
+		if err != nil {
+			continue
+		}
+		if n <= lastPage {
+			continue
+		}
+		g2.Go(func() error {
+			return siteGen.fsys.WithContext(ctx2).RemoveAll(path.Join(siteGen.sitePrefix, "output/posts", category, strconv.Itoa(n)))
+		})
+	}
+	err = g2.Wait()
+	if err != nil {
+		return err
 	}
 	return nil
 }
