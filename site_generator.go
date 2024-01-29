@@ -13,6 +13,7 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"math"
 	"net/url"
 	"path"
 	"slices"
@@ -1025,7 +1026,24 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, tmpl *templa
 		settings.PostsPerPage = 100
 	}
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		_ = remoteFS
+		count, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format: "SELECT {*}" +
+				" FROM files" +
+				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
+				" AND NOT is_dir" +
+				" AND file_path LIKE '%.md'",
+			Values: []any{
+				sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "posts", category)),
+			},
+		}, func(row *sq.Row) int {
+			return row.Int("COUNT(*)")
+		})
+		if err != nil {
+			return err
+		}
+		lastPage := int(math.Ceil(float64(count) / float64(settings.PostsPerPage)))
+		_ = lastPage
 		return nil
 	}
 	// TODO: calculate the lastPage
