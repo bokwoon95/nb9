@@ -1105,7 +1105,6 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			return err
 		}
 	}
-
 	dirEntries, err = siteGen.fsys.WithContext(ctx).ReadDir(path.Join(siteGen.sitePrefix, "output/posts", category))
 	if err != nil {
 		return err
