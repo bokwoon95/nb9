@@ -32,6 +32,11 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
 type SMTPConfig struct {
@@ -609,28 +614,35 @@ func main() {
 				return err
 			}
 		}
-		for _, pair := range [][2]string{
-			{"pages/index.html", "embed/index.html"},
-			{"output/themes/post.html", "embed/post.html"},
-			{"output/themes/postlist.html", "embed/postlist.html"},
-		} {
-			name, fallback := pair[0], pair[1]
-			_, err := fs.Stat(nbrew.FS, name)
-			if err == nil {
-				continue
-			}
+		siteGen, err := nb9.NewSiteGenerator(context.Background(), nbrew.FS, "", nbrew.ContentDomain, nbrew.CDNDomain)
+		if err != nil {
+			return err
+		}
+		markdown := goldmark.New(
+			goldmark.WithParserOptions(parser.WithAttribute()),
+			goldmark.WithExtensions(
+				extension.Table,
+				highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
+			),
+			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+		)
+		_, err = fs.Stat(nbrew.FS, "pages/index.html")
+		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
-			file, err := nb9.RuntimeFS.Open(fallback)
+			if siteGen == nil {
+			}
+			b, err := fs.ReadFile(nb9.RuntimeFS, "embed/index.html")
 			if err != nil {
 				return err
 			}
-			writer, err := nbrew.FS.OpenWriter(name, 0644)
+			writer, err := nbrew.FS.OpenWriter("pages/index.html", 0644)
 			if err != nil {
 				return err
 			}
-			_, err = io.Copy(writer, file)
+			defer writer.Close()
+			_, err = writer.Write(b)
 			if err != nil {
 				return err
 			}
@@ -638,13 +650,65 @@ func main() {
 			if err != nil {
 				return err
 			}
-			err = file.Close()
+			err = siteGen.GeneratePage(context.Background(), "pages/index.html", string(b), markdown)
 			if err != nil {
 				return err
 			}
-			// TODO: if stat doesn't exist, regenerate index.html and postlist.html.
 		}
-		// pages/index.html, themes/post.html, themes/postlist.html
+		_, err = fs.Stat(nbrew.FS, "output/themes/post.html")
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			b, err := fs.ReadFile(nb9.RuntimeFS, "embed/post.html")
+			if err != nil {
+				return err
+			}
+			writer, err := nbrew.FS.OpenWriter("output/themes/post.html", 0644)
+			if err != nil {
+				return err
+			}
+			defer writer.Close()
+			_, err = writer.Write(b)
+			if err != nil {
+				return err
+			}
+			err = writer.Close()
+			if err != nil {
+				return err
+			}
+		}
+		_, err = fs.Stat(nbrew.FS, "output/themes/postlist.html")
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			b, err := fs.ReadFile(nb9.RuntimeFS, "embed/postlist.html")
+			if err != nil {
+				return err
+			}
+			writer, err := nbrew.FS.OpenWriter("output/themes/postlist.html", 0644)
+			if err != nil {
+				return err
+			}
+			defer writer.Close()
+			_, err = writer.Write(b)
+			if err != nil {
+				return err
+			}
+			err = writer.Close()
+			if err != nil {
+				return err
+			}
+			tmpl, err := siteGen.PostListTemplate(context.Background(), "")
+			if err != nil {
+				return err
+			}
+			err = siteGen.GeneratePostList(context.Background(), "", tmpl, markdown)
+			if err != nil {
+				return err
+			}
+		}
 
 		// TODO:
 		// go install github.com/notebrew/notebrew/notebrew

@@ -963,6 +963,9 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			row.Scan(&post.text, "text")
 			return post
 		})
+		if err != nil {
+			return err
+		}
 		defer cursor.Close()
 		g1, ctx1 := errgroup.WithContext(ctx)
 		for cursor.Next() {
@@ -993,6 +996,12 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		err = g1.Wait()
 		if err != nil {
 			return err
+		}
+		if page == 1 && len(batch) == 0 {
+			err := siteGen.generatePostList(ctx, category, tmpl, markdown, nil, 1, 1)
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -1045,6 +1054,12 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 	err = g1.Wait()
 	if err != nil {
 		return err
+	}
+	if page == 1 && len(batch) == 0 {
+		err := siteGen.generatePostList(ctx, category, tmpl, markdown, nil, 1, 1)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1184,6 +1199,10 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 				return err
 			}
 		}
+		err = writer.Close()
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 	g2, ctx2 := errgroup.WithContext(ctx)
@@ -1224,6 +1243,10 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 				return err
 			}
 		}
+		err = writer.Close()
+		if err != nil {
+			return err
+		}
 		if lastPage > 1 {
 			file, err := siteGen.fsys.WithContext(ctx2).Open(path.Join(outputDir, "index.html"))
 			if err != nil {
@@ -1259,7 +1282,11 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 	g2.Go(func() error {
 		contentDomain := siteGen.sitePrefix
 		if !strings.Contains(siteGen.sitePrefix, ".") {
-			contentDomain = siteGen.sitePrefix + "." + siteGen.contentDomain
+			if siteGen.sitePrefix != "" {
+				contentDomain = siteGen.sitePrefix + "." + siteGen.contentDomain
+			} else {
+				contentDomain = siteGen.contentDomain
+			}
 		}
 		feed := AtomFeed{
 			Xmlns:   "http://www.w3.org/2005/Atom",
@@ -1318,7 +1345,9 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 		if err != nil {
 			return err
 		}
-		err = xml.NewEncoder(writer).Encode(&feed)
+		encoder := xml.NewEncoder(writer)
+		encoder.Indent("", "  ")
+		err = encoder.Encode(&feed)
 		if err != nil {
 			return err
 		}
@@ -1697,11 +1726,174 @@ type AtomText struct {
 }
 
 func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Template, error) {
-	return siteGen.template(ctx, "post.html")
+	var err error
+	var text sql.NullString
+	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+		text, err = sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
+			Values: []any{
+				sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "output/themes/post.html")),
+			},
+		}, func(row *sq.Row) sql.NullString {
+			return row.NullString("text")
+		})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	} else {
+		file, err := siteGen.fsys.WithContext(ctx).Open(path.Join(siteGen.sitePrefix, "output/themes/post.html"))
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return nil, err
+			}
+		} else {
+			defer file.Close()
+			fileInfo, err := file.Stat()
+			if err != nil {
+				return nil, err
+			}
+			if fileInfo.IsDir() {
+				return nil, fmt.Errorf("%s is not a file", path.Join(siteGen.sitePrefix, "output/themes/post.html"))
+			}
+			var b strings.Builder
+			b.Grow(int(fileInfo.Size()))
+			_, err = io.Copy(&b, file)
+			if err != nil {
+				return nil, err
+			}
+			err = file.Close()
+			if err != nil {
+				return nil, err
+			}
+			text = sql.NullString{String: b.String(), Valid: true}
+		}
+	}
+	if !text.Valid {
+		file, err := RuntimeFS.Open("embed/post.html")
+		if err != nil {
+			return nil, err
+		}
+		fileInfo, err := file.Stat()
+		if err != nil {
+			return nil, err
+		}
+		if fileInfo.IsDir() {
+			return nil, fmt.Errorf("embed/post.html is not a file")
+		}
+		var b strings.Builder
+		b.Grow(int(fileInfo.Size()))
+		_, err = io.Copy(&b, file)
+		if err != nil {
+			return nil, err
+		}
+		err = file.Close()
+		if err != nil {
+			return nil, err
+		}
+		text = sql.NullString{String: b.String(), Valid: true}
+	}
+	const doctype = "<!DOCTYPE html>"
+	text.String = strings.TrimSpace(text.String)
+	if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
+		text.String = "<!DOCTYPE html>" +
+			"\n<html lang='{{ $.Site.Lang }}'>" +
+			"\n<meta charset='utf-8'>" +
+			"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+			"\n" + text.String
+	}
+	tmpl, err := siteGen.ParseTemplate(ctx, "/themes/post.html", text.String, []string{"/themes/post.html"})
+	if err != nil {
+		return nil, err
+	}
+	return tmpl, nil
 }
 
-func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context) (*template.Template, error) {
-	return siteGen.template(ctx, "postlist.html")
+func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category string) (*template.Template, error) {
+	var err error
+	var text sql.NullString
+	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+		text, err = sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
+			Values: []any{
+				sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "output/themes/postlist.html")),
+			},
+		}, func(row *sq.Row) sql.NullString {
+			return row.NullString("text")
+		})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	} else {
+		file, err := siteGen.fsys.WithContext(ctx).Open(path.Join(siteGen.sitePrefix, "output/themes/postlist.html"))
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return nil, err
+			}
+		} else {
+			defer file.Close()
+			fileInfo, err := file.Stat()
+			if err != nil {
+				return nil, err
+			}
+			if fileInfo.IsDir() {
+				return nil, fmt.Errorf("%s is not a file", path.Join(siteGen.sitePrefix, "output/themes/postlist.html"))
+			}
+			var b strings.Builder
+			b.Grow(int(fileInfo.Size()))
+			_, err = io.Copy(&b, file)
+			if err != nil {
+				return nil, err
+			}
+			err = file.Close()
+			if err != nil {
+				return nil, err
+			}
+			text = sql.NullString{String: b.String(), Valid: true}
+		}
+	}
+	if !text.Valid {
+		file, err := RuntimeFS.Open("embed/postlist.html")
+		if err != nil {
+			return nil, err
+		}
+		fileInfo, err := file.Stat()
+		if err != nil {
+			return nil, err
+		}
+		if fileInfo.IsDir() {
+			return nil, fmt.Errorf("embed/postlist.html is not a file")
+		}
+		var b strings.Builder
+		b.Grow(int(fileInfo.Size()))
+		_, err = io.Copy(&b, file)
+		if err != nil {
+			return nil, err
+		}
+		err = file.Close()
+		if err != nil {
+			return nil, err
+		}
+		text = sql.NullString{String: b.String(), Valid: true}
+	}
+	const doctype = "<!DOCTYPE html>"
+	text.String = strings.TrimSpace(text.String)
+	if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
+		text.String = "<!DOCTYPE html>" +
+			"\n<html lang='{{ $.Site.Lang }}'>" +
+			"\n<meta charset='utf-8'>" +
+			"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+			"\n<link rel='alternate' href='/" + path.Join("posts", category) + "/index.atom' type='application/atom+xml'>" +
+			"\n" + text.String
+	}
+	tmpl, err := siteGen.ParseTemplate(ctx, "/themes/postlist.html", text.String, []string{"/themes/postlist.html"})
+	if err != nil {
+		return nil, err
+	}
+	return tmpl, nil
 }
 
 func (siteGen *SiteGenerator) template(ctx context.Context, name string) (*template.Template, error) {

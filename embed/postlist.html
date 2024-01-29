@@ -12,21 +12,21 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
 </div>
 <hr>
 <h1>{{ if $.Category }}{{ $.Category }}{{ else }}posts{{ end }}</h1>
-{{- if $.PostList }}
-<ul>
-  {{- range $post := $.PostList }}
-  <li style='margin: 1rem 0;'>
-    <div>
-      <span style='font-weight: bold;'>{{ $post.Title }}</span>
-      <span style='margin-left: 0.5rem; font-size: 0.875rem; color: #555555;'>{{ $post.CreationTime.Format "2006-01-02" }}</span>
-    </div>
-    <div title='{{ $post.Preview }}' style='margin: 0.25rem 0; font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>
-      {{ $post.Preview }}
-    </div>
-    <div><a href='{{ $post.Name }}/'>read more</a></div>
-  </li>
-  {{- end }}
-</ul>
+{{- if $.Posts }}
+  <ul>
+    {{- range $post := $.Posts }}
+    <li style='margin: 1rem 0;'>
+      <div>
+        <span style='font-weight: bold;'>{{ $post.Title }}</span>
+        <span style='margin-left: 0.5rem; font-size: 0.875rem; color: #555555;'>{{ $post.CreationTime.Format "2006-01-02" }}</span>
+      </div>
+      <div title='{{ $post.Preview }}' style='margin: 0.25rem 0; font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>
+        {{ $post.Preview }}
+      </div>
+      <div><a href='{{ $post.Name }}/'>read more</a></div>
+    </li>
+    {{- end }}
+  </ul>
   {{- if ne $.Pagination.First $.Pagination.Last }}
   <div>
     {{- if ne $.Pagination.Current $.Pagination.First }}
@@ -47,5 +47,5 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
   </div>
   {{- end }}
 {{- else }}
-<p>No posts</p>
+  <p>No posts</p>
 {{- end }}
