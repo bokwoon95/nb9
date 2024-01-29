@@ -30,8 +30,6 @@ TODO: createfile to allow users to specify the text body as well, and for notes 
 TODO: when a category is created, also create the post list. when a category is deleted, also delete the post list.
 TODO: clipboard.go get paste to work
 TODO: rename.go
-TODO: site_generator.go GeneratePostList
-    TODO: executeAndRewriteCDNLinks
 TODO: download.go
     - "download" becomes a new contextual button users can use on selected files, just like cut/copy/delete.
     - a new "download site" button becomes added to a site, which people can use to export their site folders (and upload it back using plain old uploadfile).
