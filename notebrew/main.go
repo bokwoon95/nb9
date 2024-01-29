@@ -631,8 +631,6 @@ func main() {
 			if !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
-			if siteGen == nil {
-			}
 			b, err := fs.ReadFile(nb9.RuntimeFS, "embed/index.html")
 			if err != nil {
 				return err
