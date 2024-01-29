@@ -26,6 +26,7 @@ anything in posts/*
     output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
 whenever a post is created or deleted, we regenerate the PostList. Only for create and delete, for update we don't do anything because the user will potentially update a post many times.
 
+TODO: move "view list" over to the right hand side of the breadcrumb path, away from the dropdown menu.
 TODO: createfile to allow users to specify the text body as well, and for notes and output/themes allow them to pick the file extension type. The editor should switch syntax highlighting dynamically, depending on the value in the select input.
 TODO: clipboard.go get paste to work
 TODO: rename.go

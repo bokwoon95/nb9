@@ -95,7 +95,6 @@
         {{ template "octicons-triangle-down" }}
       </summary>
       <form class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
-        <div class='ma2 tr'><a href='' class='nowrap'>view list</a></div>
         <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate list</button></div>
       </form>
     </details>
@@ -157,7 +156,13 @@
   </div>
   {{- end }}
 </div>
-<div class='bb pb2'>{{ generateBreadcrumbLinks $.SitePrefix $.FilePath }}</div>
+<div class='bb pb2 flex'>
+  <div>{{ generateBreadcrumbLinks $.SitePrefix $.FilePath }}</div>
+  <div class='flex-grow-1'></div>
+  {{- if eq (head $.FilePath) "posts" }}
+  <div><a href=''>view posts</a></div>
+  {{- end }}
+</div>
 {{- if $.Files }}
 <form>
   <input type='hidden' name='parent' value='{{ $.FilePath }}'>
