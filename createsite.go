@@ -297,7 +297,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 		}
-		siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, "", nbrew.ContentDomain, nbrew.CDNDomain)
+		siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -318,7 +318,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		writer, err := nbrew.FS.OpenWriter("pages/index.html", 0644)
+		writer, err := nbrew.FS.OpenWriter(path.Join(sitePrefix, "pages/index.html"), 0644)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -350,7 +350,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		writer, err = nbrew.FS.OpenWriter("output/themes/post.html", 0644)
+		writer, err = nbrew.FS.OpenWriter(path.Join(sitePrefix, "output/themes/post.html"), 0644)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -376,7 +376,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		writer, err = nbrew.FS.OpenWriter("output/themes/postlist.html", 0644)
+		writer, err = nbrew.FS.OpenWriter(path.Join(sitePrefix, "output/themes/postlist.html"), 0644)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)

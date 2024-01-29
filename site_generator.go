@@ -1280,24 +1280,28 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 		return nil
 	})
 	g2.Go(func() error {
+		scheme := "https://"
 		contentDomain := siteGen.sitePrefix
 		if !strings.Contains(siteGen.sitePrefix, ".") {
+			if siteGen.contentDomain == "localhost" || strings.HasPrefix(siteGen.contentDomain, "localhost:") {
+				scheme = "http://"
+			}
 			if siteGen.sitePrefix != "" {
-				contentDomain = siteGen.sitePrefix + "." + siteGen.contentDomain
+				contentDomain = strings.TrimPrefix(siteGen.sitePrefix, "@") + "." + siteGen.contentDomain
 			} else {
 				contentDomain = siteGen.contentDomain
 			}
 		}
 		feed := AtomFeed{
 			Xmlns:   "http://www.w3.org/2005/Atom",
-			ID:      "https://" + contentDomain,
+			ID:      scheme + contentDomain,
 			Title:   siteGen.Site.Title,
 			Updated: time.Now().UTC().Format("2006-01-02 15:04:05Z"),
 			Link: []AtomLink{{
-				Href: "https://" + contentDomain + "/" + path.Join("posts", postListData.Category) + "/index.atom",
+				Href: scheme + contentDomain + "/" + path.Join("posts", postListData.Category) + "/index.atom",
 				Rel:  "self",
 			}, {
-				Href: "https://" + contentDomain + "/" + path.Join("posts", postListData.Category) + "/",
+				Href: scheme + contentDomain + "/" + path.Join("posts", postListData.Category) + "/",
 				Rel:  "alternate",
 			}},
 			Entry: make([]AtomEntry, len(postListData.Posts)),
@@ -1313,7 +1317,7 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 				Published: post.CreationTime.UTC().Format("2006-01-02 15:04:05Z"),
 				Updated:   post.ModificationTime.UTC().Format("2006-01-02 15:04:05Z"),
 				Link: []AtomLink{{
-					Href: "https://" + contentDomain + "/" + path.Join("posts", post.Category, post.Name) + "/",
+					Href: scheme + contentDomain + "/" + path.Join("posts", post.Category, post.Name) + "/",
 					Rel:  "alternate",
 				}},
 				Summary: AtomText{
