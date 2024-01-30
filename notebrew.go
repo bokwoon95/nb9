@@ -299,22 +299,26 @@ var isForbiddenChar = [...]bool{
 
 func urlSafe(s string) string {
 	s = strings.TrimSpace(s)
+	var count int
 	var b strings.Builder
 	b.Grow(len(s))
 	for _, char := range s {
-		if utf8.RuneCountInString(b.String()) >= 80 {
+		if count >= 80 {
 			break
 		}
 		if char == ' ' {
 			b.WriteRune('-')
+			count++
 			continue
 		}
 		if char == '-' || (char >= '0' && char <= '9') || (char >= 'a' && char <= 'z') {
 			b.WriteRune(char)
+			count++
 			continue
 		}
 		if char >= 'A' && char <= 'Z' {
 			b.WriteRune(unicode.ToLower(char))
+			count++
 			continue
 		}
 		n := int(char)
@@ -322,6 +326,7 @@ func urlSafe(s string) string {
 			continue
 		}
 		b.WriteRune(char)
+		count++
 	}
 	return strings.Trim(b.String(), ".")
 }
