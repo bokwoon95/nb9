@@ -469,12 +469,12 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		case "pages":
 			err := siteGen.GeneratePage(r.Context(), filePath, response.Content, markdown)
 			if err != nil {
-				var templateParseErrors TemplateParseErrors
-				var templateExecutionError *TemplateExecutionError
-				if errors.As(err, &templateParseErrors) {
-					response.TemplateErrors = append(response.TemplateErrors, templateParseErrors.List()...)
-				} else if errors.As(err, &templateExecutionError) {
-					response.TemplateErrors = append(response.TemplateErrors, templateExecutionError.Error())
+				var parseErr TemplateParseError
+				var executionErr *TemplateExecutionError
+				if errors.As(err, &parseErr) {
+					response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
+				} else if errors.As(err, &executionErr) {
+					response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
 				} else {
 					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)
@@ -490,12 +490,12 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			}
 			err = siteGen.GeneratePost(r.Context(), filePath, response.Content, markdown, tmpl)
 			if err != nil {
-				var templateParseErrors TemplateParseErrors
-				var templateExecutionError *TemplateExecutionError
-				if errors.As(err, &templateParseErrors) {
-					response.TemplateErrors = append(response.TemplateErrors, templateParseErrors.List()...)
-				} else if errors.As(err, &templateExecutionError) {
-					response.TemplateErrors = append(response.TemplateErrors, templateExecutionError.Error())
+				var parseErr TemplateParseError
+				var executionErr *TemplateExecutionError
+				if errors.As(err, &parseErr) {
+					response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
+				} else if errors.As(err, &executionErr) {
+					response.TemplateErrors = append(response.TemplateErrors, executionErr.Error())
 				} else {
 					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)

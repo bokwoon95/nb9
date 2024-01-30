@@ -123,7 +123,7 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, c
 func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text string, callers []string) (*template.Template, error) {
 	currentTemplate, err := template.New(name).Funcs(funcMap).Parse(text)
 	if err != nil {
-		return nil, TemplateParseErrors{name: {err.Error()}}
+		return nil, TemplateParseError{name: {err.Error()}}
 	}
 	var errmsgs []string
 	internalTemplates := currentTemplate.Templates()
@@ -134,7 +134,7 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 		}
 	}
 	if len(errmsgs) > 0 {
-		return nil, TemplateParseErrors{name: errmsgs}
+		return nil, TemplateParseError{name: errmsgs}
 	}
 
 	// Get the list of external templates referenced by the current template.
@@ -170,7 +170,7 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 		}
 	}
 	if len(errmsgs) > 0 {
-		return nil, TemplateParseErrors{name: errmsgs}
+		return nil, TemplateParseError{name: errmsgs}
 	}
 	// sort | uniq deduplication.
 	slices.Sort(externalNames)
@@ -295,21 +295,21 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 	}
 	err = g.Wait()
 	if err != nil {
-		return nil, TemplateParseErrors{name: {err.Error()}}
+		return nil, TemplateParseError{name: {err.Error()}}
 	}
 
-	mergedErrs := make(TemplateParseErrors)
+	parseErrors := make(TemplateParseError)
 	for i, err := range externalTemplateErrs {
 		switch err := err.(type) {
 		case nil:
 			continue
-		case TemplateParseErrors:
+		case TemplateParseError:
 			for externalName, errmsgs := range err {
-				mergedErrs[externalName] = append(mergedErrs[externalName], errmsgs...)
+				parseErrors[externalName] = append(parseErrors[externalName], errmsgs...)
 			}
 		default:
 			externalName := externalNames[i]
-			mergedErrs[externalName] = append(mergedErrs[externalName], err.Error())
+			parseErrors[externalName] = append(parseErrors[externalName], err.Error())
 		}
 	}
 	var nilTemplateNames []string
@@ -323,10 +323,10 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 		}
 	}
 	if len(nilTemplateNames) > 0 {
-		mergedErrs[name] = append(mergedErrs[name], fmt.Sprintf("the following templates have errors: %s", strings.Join(nilTemplateNames, ", ")))
+		parseErrors[name] = append(parseErrors[name], fmt.Sprintf("the following templates have errors: %s", strings.Join(nilTemplateNames, ", ")))
 	}
-	if len(mergedErrs) > 0 {
-		return nil, mergedErrs
+	if len(parseErrors) > 0 {
+		return nil, parseErrors
 	}
 
 	finalTemplate := template.New(name).Funcs(funcMap)
@@ -1564,24 +1564,24 @@ var funcMap = map[string]any{
 	},
 }
 
-type TemplateParseErrors map[string][]string
+type TemplateParseError map[string][]string
 
-func (e TemplateParseErrors) Error() string {
-	b, _ := json.MarshalIndent(e, "", "  ")
+func (parseErrors TemplateParseError) Error() string {
+	b, _ := json.MarshalIndent(parseErrors, "", "  ")
 	return fmt.Sprintf("the following templates have errors: %s", string(b))
 }
 
-func (e TemplateParseErrors) List() []string {
+func (parseErr TemplateParseError) List() []string {
 	var n int
-	names := make([]string, 0, len(e))
-	for name, errmsgs := range e {
+	names := make([]string, 0, len(parseErr))
+	for name, errmsgs := range parseErr {
 		names = append(names, name)
 		n += len(errmsgs)
 	}
 	slices.Sort(names)
 	errmsgs := make([]string, 0, n)
 	for _, name := range names {
-		for _, errmsg := range e[name] {
+		for _, errmsg := range parseErr[name] {
 			errmsgs = append(errmsgs, name+": "+errmsg)
 		}
 	}
@@ -1590,9 +1590,13 @@ func (e TemplateParseErrors) List() []string {
 
 type TemplateExecutionError struct{ Err error }
 
-func (e *TemplateExecutionError) Error() string { return e.Err.Error() }
+func (executionErr *TemplateExecutionError) Error() string {
+	return executionErr.Err.Error()
+}
 
-func (e *TemplateExecutionError) Unwrap() error { return e.Err }
+func (executionErr *TemplateExecutionError) Unwrap() error {
+	return executionErr.Err
+}
 
 type Pagination struct {
 	First    string

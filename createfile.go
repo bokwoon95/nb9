@@ -320,10 +320,10 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			case "pages":
 				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name), response.Content, markdown)
 				if err != nil {
-					var templateParseErrors TemplateParseErrors
-					var templateExecutionError *TemplateExecutionError
-					if errors.As(err, &templateParseErrors) {
-					} else if errors.As(err, &templateExecutionError) {
+					var parseErr TemplateParseError
+					var executionErr *TemplateExecutionError
+					if errors.As(err, &parseErr) {
+					} else if errors.As(err, &executionErr) {
 					} else {
 						getLogger(r.Context()).Error(err.Error())
 						internalServerError(w, r, err)
