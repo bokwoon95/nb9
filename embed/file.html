@@ -91,6 +91,14 @@
   {{- end }}
 </div>
 <form method='post' enctype='multipart/form-data' class='mv2'>
+  <div class='b invalid-red'>template errors:</div>
+  {{- if $.TemplateErrors }}
+  <ul class='list-style-disc ph3 invalid-red'>
+    {{- range $error := $.TemplateErrors }}
+    <li>{{ $error }}</li>
+    {{- end }}
+  </ul>
+  {{- end }}
   <div class='flex mv2'>
     <label for='content' class='b'>{{ base $.FilePath }}</label>
     <div class='flex-grow-1'></div>

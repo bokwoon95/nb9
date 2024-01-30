@@ -464,7 +464,6 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			),
 			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
 		)
-
 		head, _, _ := strings.Cut(filePath, "/")
 		switch head {
 		case "pages":
@@ -473,19 +472,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				var templateErrors TemplateErrors
 				var templateExecutionError *TemplateExecutionError
 				if errors.As(err, &templateErrors) {
-					var n int
-					names := make([]string, 0, len(templateErrors))
-					for name, errmsgs := range templateErrors {
-						names = append(names, name)
-						n += len(errmsgs)
-					}
-					slices.Sort(names)
-					response.TemplateErrors = make([]string, 0, n)
-					for _, name := range names {
-						for _, errmsg := range templateErrors[name] {
-							response.TemplateErrors = append(response.TemplateErrors, name+": "+errmsg)
-						}
-					}
+					response.TemplateErrors = append(response.TemplateErrors, templateErrors.List()...)
 				} else if errors.As(err, &templateExecutionError) {
 					response.TemplateErrors = append(response.TemplateErrors, templateExecutionError.Error())
 				} else {
@@ -506,19 +493,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				var templateErrors TemplateErrors
 				var templateExecutionError *TemplateExecutionError
 				if errors.As(err, &templateErrors) {
-					var n int
-					names := make([]string, 0, len(templateErrors))
-					for name, errmsgs := range templateErrors {
-						names = append(names, name)
-						n += len(errmsgs)
-					}
-					slices.Sort(names)
-					response.TemplateErrors = make([]string, 0, n)
-					for _, name := range names {
-						for _, errmsg := range templateErrors[name] {
-							response.TemplateErrors = append(response.TemplateErrors, name+": "+errmsg)
-						}
-					}
+					response.TemplateErrors = append(response.TemplateErrors, templateErrors.List()...)
 				} else if errors.As(err, &templateExecutionError) {
 					response.TemplateErrors = append(response.TemplateErrors, templateExecutionError.Error())
 				} else {

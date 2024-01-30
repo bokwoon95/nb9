@@ -123,11 +123,7 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, c
 func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text string, callers []string) (*template.Template, error) {
 	currentTemplate, err := template.New(name).Funcs(funcMap).Parse(text)
 	if err != nil {
-		return nil, TemplateErrors{
-			name: {
-				err.Error(),
-			},
-		}
+		return nil, TemplateParseErrors{name: {err.Error()}}
 	}
 	var errmsgs []string
 	internalTemplates := currentTemplate.Templates()
@@ -138,9 +134,7 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 		}
 	}
 	if len(errmsgs) > 0 {
-		return nil, TemplateErrors{
-			name: errmsgs,
-		}
+		return nil, TemplateParseErrors{name: errmsgs}
 	}
 
 	// Get the list of external templates referenced by the current template.
@@ -176,9 +170,7 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 		}
 	}
 	if len(errmsgs) > 0 {
-		return nil, TemplateErrors{
-			name: errmsgs,
-		}
+		return nil, TemplateParseErrors{name: errmsgs}
 	}
 	// sort | uniq deduplication.
 	slices.Sort(externalNames)
@@ -303,19 +295,15 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 	}
 	err = g.Wait()
 	if err != nil {
-		return nil, TemplateErrors{
-			name: {
-				err.Error(),
-			},
-		}
+		return nil, TemplateParseErrors{name: {err.Error()}}
 	}
 
-	mergedErrs := make(TemplateErrors)
+	mergedErrs := make(TemplateParseErrors)
 	for i, err := range externalTemplateErrs {
 		switch err := err.(type) {
 		case nil:
 			continue
-		case TemplateErrors:
+		case TemplateParseErrors:
 			for externalName, errmsgs := range err {
 				mergedErrs[externalName] = append(mergedErrs[externalName], errmsgs...)
 			}
@@ -1576,11 +1564,28 @@ var funcMap = map[string]any{
 	},
 }
 
-type TemplateErrors map[string][]string
+type TemplateParseErrors map[string][]string
 
-func (e TemplateErrors) Error() string {
+func (e TemplateParseErrors) Error() string {
 	b, _ := json.MarshalIndent(e, "", "  ")
 	return fmt.Sprintf("the following templates have errors: %s", string(b))
+}
+
+func (e TemplateParseErrors) List() []string {
+	var n int
+	names := make([]string, 0, len(e))
+	for name, errmsgs := range e {
+		names = append(names, name)
+		n += len(errmsgs)
+	}
+	slices.Sort(names)
+	errmsgs := make([]string, 0, n)
+	for _, name := range names {
+		for _, errmsg := range e[name] {
+			errmsgs = append(errmsgs, name+": "+errmsg)
+		}
+	}
+	return errmsgs
 }
 
 type TemplateExecutionError struct{ Err error }

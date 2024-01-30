@@ -5,6 +5,7 @@
 <link rel='icon' href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>☕</text></svg>'>
 <style>{{ stylesCSS }}</style>
 <script type='module'>{{ baselineJS }}</script>
+<script type='module' src='/files/static/codemirror.js'></script>
 <title>Create file</title>
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
@@ -31,59 +32,80 @@
   {{- else }}
   <div><a href='/{{ join "files" $.SitePrefix $.Parent }}/'>&larr; back</a></div>
   {{- end }}
-  <h1 class='f3 mv3 b'>
-    {{- if eq (head $.Parent) "pages" }}
-    Create a new page in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
-    {{- else if eq (head $.Parent) "posts" }}
+  <div class='flex mv3'>
+    <h1 class='f3 b mv0'>
+      {{- if eq (head $.Parent) "pages" }}
+      Create a new page in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+      {{- else if eq (head $.Parent) "posts" }}
       {{- if eq $.Parent "posts" }}
       Create a new post
       {{- else }}
       Create a new post in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
       {{- end }}
-    {{- else }}
-    Create a new file in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
-    {{- end }}
-  </h1>
+      {{- else }}
+      Create a new file in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+      {{- end }}
+    </h1>
+    <div class='flex-grow-1'></div>
+    <div class='flex items-end'>
+      <button type='button' class='button ba br2 mh2 pointer'>
+        <label for='wordwrap:0' class='pointer flex items-center'>
+          <input id='wordwrap:0' type='checkbox' class='pointer'>
+          <span class='mh1'>word wrap</span>
+        </label>
+      </button>
+      <button type='submit' class='button ba ph2 br2'>
+        {{- if eq (head $.Parent) "pages" }}
+        create page
+        {{- else if eq (head $.Parent) "posts" }}
+        create post
+        {{- else }}
+        create file
+        {{- end }}
+      </button>
+    </div>
+  </div>
   <input type='hidden' name='parent' value='{{ $.Parent }}'>
   <div class='mv3'>
     <div><label for='name' class='b'>Name:</label></div>
-    <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}'{{ if ne (head $.Parent) "posts" }} required{{ end }} autocomplete='on' autofocus>
+    <div class='flex'>
+      <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba flex-grow-1{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}'{{ if ne (head $.Parent) "posts" }} required{{ end }} autocomplete='on' autofocus>
+      <select name='ext' class='br2 ml2{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}'>
+        {{- if eq (head $.Parent) "notes" }}
+        <option{{ if eq $.Ext ".html" }} selected{{ end }}>.html</option>
+        <option{{ if eq $.Ext ".css" }} selected{{ end }}>.css</option>
+        <option{{ if eq $.Ext ".js" }} selected{{ end }}>.js</option>
+        <option{{ if eq $.Ext ".md" }} selected{{ end }}>.md</option>
+        <option{{ if eq $.Ext ".txt" }} selected{{ end }}>.txt</option>
+        {{- else if eq (head $.Parent) "pages" }}
+        <option selected>.html</option>
+        {{- else if eq (head $.Parent) "posts" }}
+        <option selected>.md</option>
+        {{- else }}
+        <option{{ if eq $.Ext ".html" }} selected{{ end }}>.html</option>
+        <option{{ if eq $.Ext ".css" }} selected{{ end }}>.css</option>
+        <option{{ if eq $.Ext ".js" }} selected{{ end }}>.js</option>
+        <option{{ if eq $.Ext ".md" }} selected{{ end }}>.md</option>
+        <option{{ if eq $.Ext ".txt" }} selected{{ end }}>.txt</option>
+        {{- end }}
+      </select>
+    </div>
     <ul class='list-style-disc ph3 f6 invalid-red'>
       {{- range $error := index $.FormErrors "name" }}
       <li>{{ $error }}</li>
       {{- end }}
     </ul>
   </div>
-  <div class='f6'>Examples:</div>
-  {{- if eq (head $.Parent) "pages" }}
-  <ul class='list-style-disc ph3 f6'>
-    <li>this-is-my-page.html</li>
-    <li>about me</li>
-  </ul>
-  {{- else if eq (head $.Parent) "posts" }}
-  <ul class='list-style-disc ph3 f6'>
-    <li>hello-world-my-first-post.md</li>
-    <li>my day trip to kyoto</li>
-  </ul>
-  {{- else }}
-  <ul class='list-style-disc ph3 f6'>
-    <li>common-templates.html</li>
-    <li>my-styles.css</li>
-    <li>do-thing.js</li>
-    <li>text-markup.md</li>
-    <li>text-raw.txt</li>
-  </ul>
-  {{- end }}
   <div data-codemirror>
     <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code'>{{ $.Content }}</textarea>
   </div>
   <button type='submit' class='button ba br2 pa2 mv3 w-100'>
     {{- if eq (head $.Parent) "pages" }}
-    Create page
+    create page
     {{- else if eq (head $.Parent) "posts" }}
-    Create post
+    create post
     {{- else }}
-    Create file
+    create file
     {{- end }}
   </button>
 </form>

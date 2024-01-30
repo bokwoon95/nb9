@@ -2,7 +2,9 @@ package nb9
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"html/template"
 	"io/fs"
 	"mime"
@@ -21,10 +23,10 @@ import (
 
 func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
 	type Request struct {
-		Parent  string `json:"parent,omitempty"`
-		Name    string `json:"name,omitempty"`
-		Ext     string `json:"ext,omitempty"`
-		Content string `json:"content,omitempty"`
+		Parent  string
+		Name    string
+		Ext     string
+		Content string
 	}
 	type Response struct {
 		Error       string     `json:"error,omitempty"`
@@ -125,6 +127,17 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			writeResponse(w, r, response)
 			return
 		}
+		head, _, _ := strings.Cut(response.Parent, "/")
+		switch head {
+		case "notes":
+			response.Ext = ".txt"
+		case "pages":
+			response.Ext = ".html"
+		case "posts":
+			response.Ext = ".md"
+		default:
+			response.Ext = ".html"
+		}
 		writeResponse(w, r, response)
 	case "POST":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
@@ -187,50 +200,54 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			}
 			request.Parent = r.Form.Get("parent")
 			request.Name = r.Form.Get("name")
+			request.Ext = r.Form.Get("ext")
+			request.Content = r.Form.Get("content")
 		default:
 			unsupportedContentType(w, r)
 			return
 		}
 
 		response := Response{
-			FormErrors: make(url.Values),
-			Parent:     path.Clean(strings.Trim(request.Parent, "/")),
-			Name:       urlSafe(request.Name),
+			FormErrors:  make(url.Values),
+			Parent:      path.Clean(strings.Trim(request.Parent, "/")),
+			Name:        urlSafe(request.Name),
+			Ext:         request.Ext,
+			ContentSite: request.Content,
 		}
 		if !isValidParent(response.Parent) {
 			response.Error = "InvalidParent"
 			writeResponse(w, r, response)
 			return
 		}
+		newUUID := func() string {
+			var b [36]byte
+			id := NewID()
+			hex.Encode(b[:], id[:4])
+			b[8] = '-'
+			hex.Encode(b[9:13], id[4:6])
+			b[13] = '-'
+			hex.Encode(b[14:18], id[6:8])
+			b[18] = '-'
+			hex.Encode(b[19:23], id[8:10])
+			b[23] = '-'
+			hex.Encode(b[24:], id[10:])
+			return string(b[:])
+		}
 		head, _, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes":
 			if response.Name == "" {
-				response.FormErrors.Add("name", "required")
-			} else {
-				switch path.Ext(response.Name) {
-				case ".html", ".css", ".js", ".md", ".txt":
-					break
-				case "":
-					response.Name += ".txt"
-				default:
-					// TODO: set a default extension.
-					response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md, .txt or omitted)")
-				}
+				response.Name = newUUID()
+			}
+			if response.Ext != ".html" && response.Ext != ".css" && response.Ext != ".js" && response.Ext != ".md" && response.Ext != ".txt" {
+				response.Ext = ".txt"
 			}
 		case "pages":
 			if response.Name == "" {
-				response.FormErrors.Add("name", "required")
-			} else {
-				switch path.Ext(response.Name) {
-				case ".html":
-					break
-				case "":
-					response.Name += ".html"
-				default:
-					// TODO: set a default extension.
-					response.FormErrors.Add("name", "extension must be .html or omitted")
-				}
+				response.Name = newUUID()
+			}
+			if response.Ext != ".html" {
+				response.Ext = ".html"
 			}
 		case "posts":
 			var timestamp [8]byte
@@ -241,37 +258,38 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			} else {
 				response.Name = prefix + "-" + response.Name
 			}
-			switch path.Ext(response.Name) {
-			case ".md":
-				break
-			case "":
-				response.Name += ".md"
-			default:
-				// TODO: set a default extension.
-				response.FormErrors.Add("name", "extension must be .md or omitted")
+			if response.Ext != ".md" {
+				response.Ext = ".md"
 			}
 		default:
 			if response.Name == "" {
-				response.FormErrors.Add("name", "required")
-			} else {
-				switch path.Ext(response.Name) {
-				case ".html", ".css", ".js", ".md", ".txt":
-					break
-				case "":
-					// TODO: set a default extension.
-					response.FormErrors.Add("name", "missing extension (must be either .html, .css, .js, .md or .txt)")
-				default:
-					// TODO: set a default extension.
-					response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md or .txt)")
-				}
+				response.Name = newUUID()
+			}
+			if response.Ext != ".html" && response.Ext != ".css" && response.Ext != ".js" && response.Ext != ".md" && response.Ext != ".txt" {
+				response.Ext = ".html"
 			}
 		}
-		if len(response.FormErrors) > 0 {
+		_, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, response.Parent, response.Name))
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+		} else {
+			switch head {
+			case "pages":
+				response.FormErrors.Add("name", "page already exists")
+			case "posts":
+				response.FormErrors.Add("name", "post already exists")
+			default:
+				response.FormErrors.Add("name", "file already exists")
+			}
 			response.Error = "FormErrorsPresent"
 			writeResponse(w, r, response)
 			return
 		}
-		writer, err := nbrew.FS.OpenWriter(path.Join(sitePrefix, response.Parent, response.Name), 0644)
+		writer, err := nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(sitePrefix, response.Parent, response.Name), 0644)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -300,16 +318,24 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			)
 			switch head {
 			case "pages":
-				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name), "", markdown)
+				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name), response.Content, markdown)
 				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
+					var templateParseErrors TemplateParseErrors
+					var templateExecutionError *TemplateExecutionError
+					if errors.As(err, &templateParseErrors) {
+					} else if errors.As(err, &templateExecutionError) {
+					} else {
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
 				}
 			case "posts":
 				tmpl, err := siteGen.PostTemplate(r.Context())
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
 				} else {
-					err = siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name), "", markdown, tmpl)
+					err = siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name), response.Content, markdown, tmpl)
 					if err != nil {
 						getLogger(r.Context()).Error(err.Error())
 					}

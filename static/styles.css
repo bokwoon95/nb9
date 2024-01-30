@@ -47,6 +47,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 .ma2 { margin: 0.5rem; }
 
 /* margin vertical */
+.mv0 { margin-top: 0; margin-bottom: 0; }
 .mv1 { margin-top: 0.25rem; margin-bottom: 0.25rem; }
 .mv2 { margin-top: 0.5rem; margin-bottom: 0.5rem; }
 .mv3 { margin-top: 1rem; margin-bottom: 1rem; }
@@ -100,6 +101,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 .flex { display: flex; }
 .flex-grow-1 { flex-grow: 1; }
 .items-center { align-items: center; }
+.items-end { align-items: flex-end; }
 .justify-between { justify-content: space-between; }
 .justify-center { justify-content: center; }
 .flex-wrap { flex-wrap: wrap; }
