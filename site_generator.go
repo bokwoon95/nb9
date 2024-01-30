@@ -70,9 +70,6 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, c
 			return nil, err
 		}
 	}
-	if siteGen.Site.Title == "" {
-		siteGen.Site.Title = "home"
-	}
 	if siteGen.Site.Emoji == "" {
 		siteGen.Site.Emoji = "☕"
 	}

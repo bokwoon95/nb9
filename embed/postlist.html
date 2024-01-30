@@ -4,8 +4,8 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
 </style>
 <title>{{ if $.Category }}{{ $.Category }}{{ else }}posts{{ end }}</title>
 <div>
-  <a href='/'>{{ $.Site.Title }}</a>
-  &boxv; <a href='/posts/' class='{{ if eq $.Category "" }}b{{ end }}'>posts</a>
+  <a href='/'>{{ if $.Site.Title }}{{ $.Site.Title }}{{ else }}home{{ end }}</a>
+  &boxv; <a href='/posts/'>posts</a>
 </div>
 <hr>
 <h1>{{ if $.Category }}{{ $.Category }}{{ else }}posts{{ end }}</h1>

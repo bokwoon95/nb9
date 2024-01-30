@@ -2,9 +2,9 @@
 html { max-width: 70ch; padding: 3em 1em; margin: auto; line-height: 1.75; font-size: 1.25em; background-color: #fafafa; }
 p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
 </style>
-<title>{{ $.Title }}</title>
+<title>{{ if $.Title }}{{ $.Title }}{{ else }}Untitled{{ end }}</title>
 <div>
-  <a href='/'>{{ $.Site.Title }}</a>
+  <a href='/'>{{ if $.Site.Title }}{{ $.Site.Title }}{{ else }}home{{ end }}</a>
   &boxv; <a href='/posts/'>posts</a>
 </div>
 <hr>
