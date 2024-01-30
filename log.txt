@@ -27,6 +27,7 @@ anything in posts/*
 whenever a post is created or deleted, we regenerate the PostList. Only for create and delete, for update we don't do anything because the user will potentially update a post many times.
 
 TODO: createfile to allow users to specify the text body as well, and for notes and output/themes allow them to pick the file extension type. The editor should switch syntax highlighting dynamically, depending on the value in the select input.
+    TODO: I think we can remove FormErrors from createfile as well, almost everything has a default.
 TODO: when a category is created, also create the post list. when a category is deleted, also delete the post list.
 TODO: clipboard.go get paste to work
 TODO: rename.go

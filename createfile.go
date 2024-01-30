@@ -23,6 +23,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 	type Request struct {
 		Parent  string `json:"parent,omitempty"`
 		Name    string `json:"name,omitempty"`
+		Ext     string `json:"ext,omitempty"`
 		Content string `json:"content,omitempty"`
 	}
 	type Response struct {
@@ -33,6 +34,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		SitePrefix  string     `json:"sitePrefix"`
 		Parent      string     `json:"parent,omitempty"`
 		Name        string     `json:"name,omitempty"`
+		Ext         string     `json:"ext,omitempty"`
 		Content     string     `json:"content,omitempty"`
 	}
 
