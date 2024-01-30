@@ -71,7 +71,7 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, c
 		}
 	}
 	if siteGen.Site.Title == "" {
-		siteGen.Site.Title = "My Blog"
+		siteGen.Site.Title = "home"
 	}
 	if siteGen.Site.Emoji == "" {
 		siteGen.Site.Emoji = "☕"
