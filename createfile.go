@@ -21,8 +21,9 @@ import (
 
 func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
 	type Request struct {
-		Parent string `json:"parent,omitempty"`
-		Name   string `json:"name,omitempty"`
+		Parent  string `json:"parent,omitempty"`
+		Name    string `json:"name,omitempty"`
+		Content string `json:"content,omitempty"`
 	}
 	type Response struct {
 		Error       string     `json:"error,omitempty"`
@@ -32,6 +33,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		SitePrefix  string     `json:"sitePrefix"`
 		Parent      string     `json:"parent,omitempty"`
 		Name        string     `json:"name,omitempty"`
+		Content     string     `json:"content,omitempty"`
 	}
 
 	isValidParent := func(parent string) bool {
@@ -210,6 +212,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				case "":
 					response.Name += ".txt"
 				default:
+					// TODO: set a default extension.
 					response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md, .txt or omitted)")
 				}
 			}
@@ -223,6 +226,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				case "":
 					response.Name += ".html"
 				default:
+					// TODO: set a default extension.
 					response.FormErrors.Add("name", "extension must be .html or omitted")
 				}
 			}
@@ -241,6 +245,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			case "":
 				response.Name += ".md"
 			default:
+				// TODO: set a default extension.
 				response.FormErrors.Add("name", "extension must be .md or omitted")
 			}
 		default:
@@ -251,8 +256,10 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				case ".html", ".css", ".js", ".md", ".txt":
 					break
 				case "":
+					// TODO: set a default extension.
 					response.FormErrors.Add("name", "missing extension (must be either .html, .css, .js, .md or .txt)")
 				default:
+					// TODO: set a default extension.
 					response.FormErrors.Add("name", "invalid extension (must be either .html, .css, .js, .md or .txt)")
 				}
 			}
