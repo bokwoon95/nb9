@@ -404,14 +404,6 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 	})
 	g1.Go(func() error {
 		markdownMu := sync.Mutex{}
-		// markdown := goldmark.New(
-		// 	goldmark.WithParserOptions(parser.WithAttribute()),
-		// 	goldmark.WithExtensions(
-		// 		extension.Table,
-		// 		highlighting.NewHighlighting(highlighting.WithStyle(pageData.Site.CodeStyle)),
-		// 	),
-		// 	goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-		// )
 		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
 			cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,

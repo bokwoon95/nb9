@@ -6,6 +6,9 @@ init.go
 notebrew.go
 site_generator.go
 files.go
+regenerate.go
+    /files/@bokwoon/regenerate/
+    /files/@bokwoon/regeneratelist/?category=abcd
 createsite.go
 deletesite.go
 createfolder.go
