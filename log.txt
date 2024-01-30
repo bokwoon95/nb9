@@ -26,7 +26,7 @@ anything in posts/*
     output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
 whenever a post is created or deleted, we regenerate the PostList. Only for create and delete, for update we don't do anything because the user will potentially update a post many times.
 
-TODO: when a category is created, also create the post list. when a category is deleted, also delete the post list.
+TODO: "view posts" should link to the corresponding sitePrefix, right now it always just links to "/posts/"
 TODO: clipboard.go get paste to work
 TODO: rename.go
 TODO: download.go

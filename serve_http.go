@@ -298,6 +298,10 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fileType.ContentType = "text/html; charset=utf-8"
 		fileType.IsGzippable = true
 	} else {
+		if path.Base(urlPath) == "index.html" {
+			nbrew.site404(w, r, sitePrefix)
+			return
+		}
 		filePath = path.Join(sitePrefix, "output", urlPath)
 		fileType = fileTypes[ext]
 		if fileType == (FileType{}) {

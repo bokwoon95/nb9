@@ -218,7 +218,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			hasForbiddenCharacters := false
 			digitCount := 0
 			for _, char := range response.SiteName {
-				if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+				if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' && char != '.' {
 					hasForbiddenCharacters = true
 				}
 				if char >= '0' && char <= '9' {
@@ -226,7 +226,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				}
 			}
 			if hasForbiddenCharacters {
-				response.FormErrors.Add("siteName", "only lowercase letters, numbers and hyphen allowed")
+				response.FormErrors.Add("siteName", "only lowercase letters, numbers, hyphen and dot allowed")
 			}
 			if len(response.SiteName) > 30 {
 				response.FormErrors.Add("siteName", "cannot exceed 30 characters")
