@@ -928,10 +928,56 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		if err != nil {
 			return err
 		}
-		page := 1
 		lastPage := int(math.Ceil(float64(count) / float64(settings.PostsPerPage)))
-		batch := make([]Post, 0, settings.PostsPerPage)
-		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
+		g1, ctx1 := errgroup.WithContext(ctx)
+		g1.Go(func() error {
+			filePaths, err := sq.FetchAll(ctx1, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format: "SELECT {*}" +
+					" FROM files" +
+					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {parent})" +
+					" AND is_dir",
+				Values: []any{
+					sq.StringParam("parent", path.Join(siteGen.sitePrefix, "output/posts", category)),
+				},
+			}, func(row *sq.Row) string {
+				return row.String("file_path")
+			})
+			if err != nil {
+				return err
+			}
+			g2, ctx2 := errgroup.WithContext(ctx1)
+			for _, filePath := range filePaths {
+				filePath := filePath
+				n, err := strconv.Atoi(path.Base(filePath))
+				if err != nil {
+					continue
+				}
+				if n <= lastPage {
+					continue
+				}
+				g2.Go(func() error {
+					_, err := sq.Exec(ctx2, remoteFS.filesDB, sq.Query{
+						Dialect: remoteFS.filesDialect,
+						Format:  "DELETE FROM files WHERE file_path = {filePath} OR file_path LIKE {pattern} ESCAPE '\\'",
+						Values: []any{
+							sq.StringParam("filePath", filePath),
+							sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(filePath)+"/%"),
+						},
+					})
+					if err != nil {
+						return err
+					}
+					return nil
+				})
+			}
+			err = g2.Wait()
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
 			Dialect: remoteFS.filesDialect,
 			Format: "SELECT {*}" +
 				" FROM files" +
@@ -955,7 +1001,8 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			return err
 		}
 		defer cursor.Close()
-		g1, ctx1 := errgroup.WithContext(ctx)
+		page := 1
+		batch := make([]Post, 0, settings.PostsPerPage)
 		for cursor.Next() {
 			post, err := cursor.Result()
 			if err != nil {
@@ -963,10 +1010,10 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			}
 			batch = append(batch, post)
 			if len(batch) >= settings.PostsPerPage {
-				posts := slices.Clone(batch)
-				batch = batch[:0]
 				currentPage := page
 				page++
+				posts := slices.Clone(batch)
+				batch = batch[:0]
 				g1.Go(func() error {
 					return siteGen.generatePostList(ctx1, category, tmpl, markdown, lastPage, currentPage, posts)
 				})
@@ -991,50 +1038,6 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 				return err
 			}
 		}
-		filePaths, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
-			Format: "SELECT {*}" +
-				" FROM files" +
-				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {parent})" +
-				" AND is_dir",
-			Values: []any{
-				sq.StringParam("parent", path.Join(siteGen.sitePrefix, "output/posts", category)),
-			},
-		}, func(row *sq.Row) string {
-			return row.String("file_path")
-		})
-		if err != nil {
-			return err
-		}
-		g2, ctx2 := errgroup.WithContext(ctx)
-		for _, filePath := range filePaths {
-			filePath := filePath
-			n, err := strconv.Atoi(path.Base(filePath))
-			if err != nil {
-				continue
-			}
-			if n <= lastPage {
-				continue
-			}
-			g2.Go(func() error {
-				_, err := sq.Exec(ctx2, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
-					Format:  "DELETE FROM files WHERE file_path = {filePath} OR file_path LIKE {pattern} ESCAPE '\\'",
-					Values: []any{
-						sq.StringParam("filePath", filePath),
-						sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(filePath)+"/%"),
-					},
-				})
-				if err != nil {
-					return err
-				}
-				return nil
-			})
-		}
-		err = g2.Wait()
-		if err != nil {
-			return err
-		}
 		return nil
 	}
 	dirEntries, err := siteGen.fsys.WithContext(ctx).ReadDir(path.Join(siteGen.sitePrefix, "posts", category))
@@ -1054,10 +1057,38 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 	}
 	dirEntries = dirEntries[:n]
 	slices.Reverse(dirEntries)
-	page := 1
 	lastPage := int(math.Ceil(float64(len(dirEntries)) / float64(settings.PostsPerPage)))
-	batch := make([]Post, 0, settings.PostsPerPage)
 	g1, ctx1 := errgroup.WithContext(ctx)
+	g1.Go(func() error {
+		dirEntries, err := siteGen.fsys.WithContext(ctx1).ReadDir(path.Join(siteGen.sitePrefix, "output/posts", category))
+		if err != nil {
+			return err
+		}
+		g2, ctx2 := errgroup.WithContext(ctx1)
+		for _, dirEntry := range dirEntries {
+			dirEntry := dirEntry
+			if !dirEntry.IsDir() {
+				continue
+			}
+			n, err := strconv.Atoi(dirEntry.Name())
+			if err != nil {
+				continue
+			}
+			if n <= lastPage {
+				continue
+			}
+			g2.Go(func() error {
+				return siteGen.fsys.WithContext(ctx2).RemoveAll(path.Join(siteGen.sitePrefix, "output/posts", category, strconv.Itoa(n)))
+			})
+		}
+		err = g2.Wait()
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	page := 1
+	batch := make([]Post, 0, settings.PostsPerPage)
 	for _, dirEntry := range dirEntries {
 		fileInfo, err := dirEntry.Info()
 		if err != nil {
@@ -1069,10 +1100,10 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			ModificationTime: fileInfo.ModTime(),
 		})
 		if len(batch) >= settings.PostsPerPage {
-			posts := slices.Clone(batch)
-			batch = batch[:0]
 			currentPage := page
 			page++
+			posts := slices.Clone(batch)
+			batch = batch[:0]
 			g1.Go(func() error {
 				return siteGen.generatePostList(ctx1, category, tmpl, markdown, lastPage, currentPage, posts)
 			})
@@ -1092,31 +1123,6 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		if err != nil {
 			return err
 		}
-	}
-	dirEntries, err = siteGen.fsys.WithContext(ctx).ReadDir(path.Join(siteGen.sitePrefix, "output/posts", category))
-	if err != nil {
-		return err
-	}
-	g2, ctx2 := errgroup.WithContext(ctx)
-	for _, dirEntry := range dirEntries {
-		dirEntry := dirEntry
-		if !dirEntry.IsDir() {
-			continue
-		}
-		n, err := strconv.Atoi(dirEntry.Name())
-		if err != nil {
-			continue
-		}
-		if n <= lastPage {
-			continue
-		}
-		g2.Go(func() error {
-			return siteGen.fsys.WithContext(ctx2).RemoveAll(path.Join(siteGen.sitePrefix, "output/posts", category, strconv.Itoa(n)))
-		})
-	}
-	err = g2.Wait()
-	if err != nil {
-		return err
 	}
 	return nil
 }
@@ -1149,10 +1155,10 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 		n++
 	}
 	posts = posts[:n]
-	g1, ctx1 := errgroup.WithContext(ctx)
+	g1A, ctx1A := errgroup.WithContext(ctx)
 	for i := range posts {
 		i := i
-		g1.Go(func() error {
+		g1A.Go(func() error {
 			if posts[i].text != nil {
 				defer func() {
 					if len(posts[i].text) <= maxPoolableBufferCapacity {
@@ -1162,7 +1168,7 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 					}
 				}()
 			} else {
-				file, err := siteGen.fsys.WithContext(ctx1).Open(path.Join(siteGen.sitePrefix, "posts", category, posts[i].Name))
+				file, err := siteGen.fsys.WithContext(ctx1A).Open(path.Join(siteGen.sitePrefix, "posts", category, posts[i].Name))
 				if err != nil {
 					return err
 				}
@@ -1208,7 +1214,7 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 			return nil
 		})
 	}
-	err := g1.Wait()
+	err := g1A.Wait()
 	if err != nil {
 		return err
 	}
@@ -1220,16 +1226,16 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 	}
 	outputDir := path.Join(siteGen.sitePrefix, "output/posts", postListData.Category)
 	if currentPage != 1 {
-		writer, err := siteGen.fsys.WithContext(ctx1).OpenWriter(path.Join(outputDir, strconv.Itoa(currentPage), "index.html"), 0644)
+		writer, err := siteGen.fsys.WithContext(ctx).OpenWriter(path.Join(outputDir, strconv.Itoa(currentPage), "index.html"), 0644)
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
-			err := siteGen.fsys.WithContext(ctx1).MkdirAll(path.Join(outputDir, strconv.Itoa(currentPage)), 0755)
+			err := siteGen.fsys.WithContext(ctx).MkdirAll(path.Join(outputDir, strconv.Itoa(currentPage)), 0755)
 			if err != nil {
 				return err
 			}
-			writer, err = siteGen.fsys.WithContext(ctx1).OpenWriter(path.Join(outputDir, strconv.Itoa(currentPage), "index.html"), 0644)
+			writer, err = siteGen.fsys.WithContext(ctx).OpenWriter(path.Join(outputDir, strconv.Itoa(currentPage), "index.html"), 0644)
 			if err != nil {
 				return err
 			}
@@ -1262,18 +1268,18 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 		}
 		return nil
 	}
-	g2, ctx2 := errgroup.WithContext(ctx)
-	g2.Go(func() error {
-		writer, err := siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+	g1B, ctx1B := errgroup.WithContext(ctx)
+	g1B.Go(func() error {
+		writer, err := siteGen.fsys.WithContext(ctx1B).OpenWriter(path.Join(outputDir, "index.html"), 0644)
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
-			err := siteGen.fsys.WithContext(ctx2).MkdirAll(outputDir, 0755)
+			err := siteGen.fsys.WithContext(ctx1B).MkdirAll(outputDir, 0755)
 			if err != nil {
 				return err
 			}
-			writer, err = siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "index.html"), 0644)
+			writer, err = siteGen.fsys.WithContext(ctx1B).OpenWriter(path.Join(outputDir, "index.html"), 0644)
 			if err != nil {
 				return err
 			}
@@ -1305,21 +1311,21 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 			return err
 		}
 		if lastPage > 1 {
-			file, err := siteGen.fsys.WithContext(ctx2).Open(path.Join(outputDir, "index.html"))
+			file, err := siteGen.fsys.WithContext(ctx1B).Open(path.Join(outputDir, "index.html"))
 			if err != nil {
 				return err
 			}
 			defer file.Close()
-			writer, err := siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "1", "index.html"), 0644)
+			writer, err := siteGen.fsys.WithContext(ctx1B).OpenWriter(path.Join(outputDir, "1", "index.html"), 0644)
 			if err != nil {
 				if !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
-				err := siteGen.fsys.WithContext(ctx2).MkdirAll(path.Join(outputDir, "1"), 0755)
+				err := siteGen.fsys.WithContext(ctx1B).MkdirAll(path.Join(outputDir, "1"), 0755)
 				if err != nil {
 					return err
 				}
-				writer, err = siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "1", "index.html"), 0644)
+				writer, err = siteGen.fsys.WithContext(ctx1B).OpenWriter(path.Join(outputDir, "1", "index.html"), 0644)
 				if err != nil {
 					return err
 				}
@@ -1336,7 +1342,7 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 		}
 		return nil
 	})
-	g2.Go(func() error {
+	g1B.Go(func() error {
 		scheme := "https://"
 		contentDomain := siteGen.sitePrefix
 		if !strings.Contains(siteGen.sitePrefix, ".") {
@@ -1387,16 +1393,16 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 				},
 			}
 		}
-		writer, err := siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "index.atom"), 0644)
+		writer, err := siteGen.fsys.WithContext(ctx1B).OpenWriter(path.Join(outputDir, "index.atom"), 0644)
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
-			err := siteGen.fsys.WithContext(ctx2).MkdirAll(outputDir, 0755)
+			err := siteGen.fsys.WithContext(ctx1B).MkdirAll(outputDir, 0755)
 			if err != nil {
 				return err
 			}
-			writer, err = siteGen.fsys.WithContext(ctx2).OpenWriter(path.Join(outputDir, "index.atom"), 0644)
+			writer, err = siteGen.fsys.WithContext(ctx1B).OpenWriter(path.Join(outputDir, "index.atom"), 0644)
 			if err != nil {
 				return err
 			}
@@ -1418,7 +1424,7 @@ func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category str
 		}
 		return nil
 	})
-	err = g2.Wait()
+	err = g1B.Wait()
 	if err != nil {
 		return err
 	}
