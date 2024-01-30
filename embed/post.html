@@ -6,9 +6,6 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
 <div>
   <a href='/'>{{ $.Site.Title }}</a>
   &boxv; <a href='/posts/'>posts</a>
-  {{- range $category := $.Site.Categories }}
-  &boxv; <a href='/posts/{{ $category }}/'>{{ $category }}</a>
-  {{- end }}
 </div>
 <hr>
 <div style='font-size: 0.875rem; color: #555555;'>{{ $.CreationTime.Format "2006-01-02" }}</div>

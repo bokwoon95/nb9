@@ -731,7 +731,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, conten
 	if postData.Category == "." {
 		postData.Category = ""
 	}
-	prefix, _, _ := strings.Cut(strings.TrimPrefix(urlPath, "posts/"), "-")
+	prefix, _, _ := strings.Cut(path.Base(urlPath), "-")
 	if len(prefix) == 0 || len(prefix) > 8 {
 		return nil
 	}

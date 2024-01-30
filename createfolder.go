@@ -233,7 +233,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 			internalServerError(w, r, err)
 			return
 		}
-		if head == "posts" {
+		if head == "posts" && tail == "" {
 			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -246,7 +246,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 					),
 					goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
 				)
-				category := tail
+				category := response.Name
 				tmpl, err := siteGen.PostListTemplate(r.Context(), category)
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())

@@ -6,9 +6,6 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
 <div>
   <a href='/'>{{ $.Site.Title }}</a>
   &boxv; <a href='/posts/' class='{{ if eq $.Category "" }}b{{ end }}'>posts</a>
-  {{- range $category := $.Site.Categories }}
-  &boxv; <a href='/posts/{{ $category }}/' class='{{ if eq $.Category $category }}b{{ end }}'>{{ $category }}</a>
-  {{- end }}
 </div>
 <hr>
 <h1>{{ if $.Category }}{{ $.Category }}{{ else }}posts{{ end }}</h1>
