@@ -312,29 +312,31 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 						getLogger(ctx).Error(err.Error())
 						return nil
 					}
-					siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
-					if err != nil {
-						getLogger(ctx).Error(err.Error())
-						return nil
-					}
-					markdown := goldmark.New(
-						goldmark.WithParserOptions(parser.WithAttribute()),
-						goldmark.WithExtensions(
-							extension.Table,
-							highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
-						),
-						goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-					)
-					category := tail
-					tmpl, err := siteGen.PostListTemplate(r.Context(), category)
-					if err != nil {
-						getLogger(ctx).Error(err.Error())
-						return nil
-					}
-					err = siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
-					if err != nil {
-						getLogger(ctx).Error(err.Error())
-						return nil
+					if strings.HasSuffix(name, ".md") {
+						siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
+						markdown := goldmark.New(
+							goldmark.WithParserOptions(parser.WithAttribute()),
+							goldmark.WithExtensions(
+								extension.Table,
+								highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
+							),
+							goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+						)
+						category := tail
+						tmpl, err := siteGen.PostListTemplate(r.Context(), category)
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
+						err = siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
 					}
 				case "output":
 					if tail != "themes" {

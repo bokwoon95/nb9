@@ -241,6 +241,12 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			if response.Ext != ".html" {
 				response.Ext = ".html"
 			}
+			if response.Parent != "" && response.Name == "index" && response.Ext == ".html" {
+				response.FormErrors.Add("name", "this name is not allowed")
+				response.Error = "FormErrorsPresent"
+				writeResponse(w, r, response)
+				return
+			}
 		case "posts":
 			var timestamp [8]byte
 			binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
