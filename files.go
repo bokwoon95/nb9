@@ -469,7 +469,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		case "pages":
 			err := siteGen.GeneratePage(r.Context(), filePath, response.Content, markdown)
 			if err != nil {
-				var templateErrors TemplateErrors
+				var templateErrors TemplateParseErrors
 				var templateExecutionError *TemplateExecutionError
 				if errors.As(err, &templateErrors) {
 					response.TemplateErrors = append(response.TemplateErrors, templateErrors.List()...)
@@ -490,7 +490,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			}
 			err = siteGen.GeneratePost(r.Context(), filePath, response.Content, markdown, tmpl)
 			if err != nil {
-				var templateErrors TemplateErrors
+				var templateErrors TemplateParseErrors
 				var templateExecutionError *TemplateExecutionError
 				if errors.As(err, &templateErrors) {
 					response.TemplateErrors = append(response.TemplateErrors, templateErrors.List()...)
