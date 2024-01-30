@@ -731,8 +731,8 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, conten
 	if postData.Category == "." {
 		postData.Category = ""
 	}
-	prefix, _, ok := strings.Cut(strings.TrimPrefix(filePath, "posts/"), "-")
-	if !ok || len(prefix) == 0 || len(prefix) > 8 {
+	prefix, _, _ := strings.Cut(strings.TrimPrefix(urlPath, "posts/"), "-")
+	if len(prefix) == 0 || len(prefix) > 8 {
 		return nil
 	}
 	b, _ := base32Encoding.DecodeString(fmt.Sprintf("%08s", prefix))
@@ -895,21 +895,24 @@ type PostListData struct {
 }
 
 func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category string, markdown goldmark.Markdown, tmpl *template.Template) error {
-	var settings struct {
+	var config struct {
 		PostsPerPage int `json:"postsPerPage"`
+	}
+	if strings.Contains(category, "/") {
+		return nil
 	}
 	b, err := fs.ReadFile(siteGen.fsys.WithContext(ctx), path.Join(siteGen.sitePrefix, "postlist.json"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	if len(b) > 0 {
-		err := json.Unmarshal(b, &settings)
+		err := json.Unmarshal(b, &config)
 		if err != nil {
 			return err
 		}
 	}
-	if settings.PostsPerPage <= 0 {
-		settings.PostsPerPage = 100
+	if config.PostsPerPage <= 0 {
+		config.PostsPerPage = 100
 	}
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
 		count, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
@@ -928,7 +931,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		if err != nil {
 			return err
 		}
-		lastPage := int(math.Ceil(float64(count) / float64(settings.PostsPerPage)))
+		lastPage := int(math.Ceil(float64(count) / float64(config.PostsPerPage)))
 		g1, ctx1 := errgroup.WithContext(ctx)
 		g1.Go(func() error {
 			filePaths, err := sq.FetchAll(ctx1, remoteFS.filesDB, sq.Query{
@@ -991,7 +994,8 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		}, func(row *sq.Row) Post {
 			var post Post
 			post.Category = category
-			post.Name = path.Base(row.String("file_path"))
+			name := path.Base(row.String("file_path"))
+			post.Name = strings.TrimSuffix(name, path.Ext(name))
 			post.ModificationTime = row.Time("mod_time")
 			post.text = bufPool.Get().(*bytes.Buffer).Bytes()
 			row.Scan(&post.text, "text")
@@ -1002,14 +1006,14 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		}
 		defer cursor.Close()
 		page := 1
-		batch := make([]Post, 0, settings.PostsPerPage)
+		batch := make([]Post, 0, config.PostsPerPage)
 		for cursor.Next() {
 			post, err := cursor.Result()
 			if err != nil {
 				return err
 			}
 			batch = append(batch, post)
-			if len(batch) >= settings.PostsPerPage {
+			if len(batch) >= config.PostsPerPage {
 				currentPage := page
 				page++
 				posts := slices.Clone(batch)
@@ -1057,7 +1061,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 	}
 	dirEntries = dirEntries[:n]
 	slices.Reverse(dirEntries)
-	lastPage := int(math.Ceil(float64(len(dirEntries)) / float64(settings.PostsPerPage)))
+	lastPage := int(math.Ceil(float64(len(dirEntries)) / float64(config.PostsPerPage)))
 	g1, ctx1 := errgroup.WithContext(ctx)
 	g1.Go(func() error {
 		dirEntries, err := siteGen.fsys.WithContext(ctx1).ReadDir(path.Join(siteGen.sitePrefix, "output/posts", category))
@@ -1088,18 +1092,19 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		return nil
 	})
 	page := 1
-	batch := make([]Post, 0, settings.PostsPerPage)
+	batch := make([]Post, 0, config.PostsPerPage)
 	for _, dirEntry := range dirEntries {
 		fileInfo, err := dirEntry.Info()
 		if err != nil {
 			return err
 		}
+		name := fileInfo.Name()
 		batch = append(batch, Post{
 			Category:         category,
-			Name:             fileInfo.Name(),
+			Name:             strings.TrimSuffix(name, path.Ext(name)),
 			ModificationTime: fileInfo.ModTime(),
 		})
-		if len(batch) >= settings.PostsPerPage {
+		if len(batch) >= config.PostsPerPage {
 			currentPage := page
 			page++
 			posts := slices.Clone(batch)
@@ -1130,8 +1135,8 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category string, markdown goldmark.Markdown, tmpl *template.Template, lastPage, currentPage int, posts []Post) error {
 	n := 0
 	for _, post := range posts {
-		prefix, _, ok := strings.Cut(post.Name, "-")
-		if !ok || prefix == "" || len(prefix) > 8 {
+		prefix, _, _ := strings.Cut(post.Name, "-")
+		if prefix == "" || len(prefix) > 8 {
 			if post.text != nil && len(post.text) <= maxPoolableBufferCapacity {
 				post.text = post.text[:0]
 				bufPool.Put(bytes.NewBuffer(post.text))
@@ -1899,6 +1904,9 @@ func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Templ
 }
 
 func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category string) (*template.Template, error) {
+	if strings.Contains(category, "/") {
+		return nil, fmt.Errorf("invalid category %q", category)
+	}
 	var err error
 	var text sql.NullString
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {

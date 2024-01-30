@@ -1,7 +1,6 @@
 package nb9
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +16,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -157,7 +161,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 		}
 		n := 0
 		for _, file := range response.Files {
-			if file.Name==""{
+			if file.Name == "" {
 				continue
 			}
 			response.Files[n] = file
@@ -251,26 +255,6 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		seen := make(map[string]bool)
-		// TODO: if any of the files are pages/index.html,
-		// output/themes/post.html and output/themes/postlist.html then
-		// regenerate those files from RuntimeFS.
-		regenerateFile := func(ctx context.Context, sitePrefix, destName, srcName string) error {
-			file, err := RuntimeFS.Open(srcName)
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-			writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, destName), 0644)
-			if err != nil {
-				return err
-			}
-			defer writer.Close()
-			_, err = io.Copy(writer, file)
-			if err != nil {
-				return err
-			}
-			return writer.Close()
-		}
 		g, ctx := errgroup.WithContext(r.Context())
 		response.Errors = make([]string, len(request.Names))
 		response.Files = make([]File, len(request.Names))
@@ -293,34 +277,115 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				head, tail, _ := strings.Cut(response.Parent, "/")
 				switch head {
 				case "pages":
-					if tail == "" && name == "index.html" {
-						err := regenerateFile(ctx, sitePrefix, "pages/index.html", "embed/index.html")
-						if err != nil {
-							getLogger(ctx).Error(err.Error())
-						}
-					} else {
+					if tail != "" || name != "index.html" {
 						err := nbrew.FS.WithContext(ctx).RemoveAll(path.Join(sitePrefix, "output", tail, strings.TrimSuffix(name, path.Ext(name))))
 						if err != nil {
 							getLogger(ctx).Error(err.Error())
+							return nil
 						}
+					}
+					file, err := RuntimeFS.Open("embed/index.html")
+					if err != nil {
+						getLogger(ctx).Error(err.Error())
+						return nil
+					}
+					defer file.Close()
+					writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "pages/index.html"), 0644)
+					if err != nil {
+						getLogger(ctx).Error(err.Error())
+						return nil
+					}
+					defer writer.Close()
+					_, err = io.Copy(writer, file)
+					if err != nil {
+						getLogger(ctx).Error(err.Error())
+						return nil
+					}
+					err = writer.Close()
+					if err != nil {
+						getLogger(ctx).Error(err.Error())
+						return nil
 					}
 				case "posts":
 					err := nbrew.FS.WithContext(ctx).RemoveAll(path.Join(sitePrefix, "output", response.Parent, strings.TrimSuffix(name, path.Ext(name))))
 					if err != nil {
 						getLogger(ctx).Error(err.Error())
+						return nil
+					}
+					siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
+					if err != nil {
+						getLogger(ctx).Error(err.Error())
+						return nil
+					}
+					markdown := goldmark.New(
+						goldmark.WithParserOptions(parser.WithAttribute()),
+						goldmark.WithExtensions(
+							extension.Table,
+							highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
+						),
+						goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+					)
+					category := tail
+					tmpl, err := siteGen.PostListTemplate(r.Context(), category)
+					if err != nil {
+						getLogger(ctx).Error(err.Error())
+						return nil
+					}
+					err = siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
+					if err != nil {
+						getLogger(ctx).Error(err.Error())
+						return nil
 					}
 				case "output":
-					if tail == "themes" {
-						if name == "post.html" {
-							err := regenerateFile(ctx, sitePrefix, "output/themes/post.html", "embed/post.html")
-							if err != nil {
-								getLogger(ctx).Error(err.Error())
-							}
-						} else if name == "postlist.html" {
-							err := regenerateFile(ctx, sitePrefix, "output/themes/postlist.html", "embed/postlist.html")
-							if err != nil {
-								getLogger(ctx).Error(err.Error())
-							}
+					if tail != "themes" {
+						return nil
+					}
+					switch name {
+					case "post.html":
+						file, err := RuntimeFS.Open("embed/post.html")
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
+						defer file.Close()
+						writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "output/themes/post.html"), 0644)
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
+						defer writer.Close()
+						_, err = io.Copy(writer, file)
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
+						err = writer.Close()
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
+					case "postlist.html":
+						file, err := RuntimeFS.Open("embed/postlist.html")
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
+						defer file.Close()
+						writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "output/themes/postlist.html"), 0644)
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
+						defer writer.Close()
+						_, err = io.Copy(writer, file)
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
+						}
+						err = writer.Close()
+						if err != nil {
+							getLogger(ctx).Error(err.Error())
+							return nil
 						}
 					}
 				}

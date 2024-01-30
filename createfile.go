@@ -19,7 +19,6 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
-	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -333,71 +332,57 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 					}
 				}
 			case "posts":
-				var postTemplateErrors, postListTemplateErrors []string
-				g, ctx := errgroup.WithContext(r.Context())
-				g.Go(func() error {
-					tmpl, err := siteGen.PostTemplate(ctx)
-					if err != nil {
-						var parseErr TemplateParseError
-						var executionErr *TemplateExecutionError
-						if errors.As(err, &parseErr) {
-							postTemplateErrors = append(postTemplateErrors, parseErr.List()...)
-						} else if errors.As(err, &executionErr) {
-							postTemplateErrors = append(postTemplateErrors, executionErr.Err.Error())
-						} else {
-							getLogger(ctx).Error(err.Error())
-						}
-						return nil
-					}
-					err = siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content, markdown, tmpl)
-					if err != nil {
-						var parseErr TemplateParseError
-						var executionErr *TemplateExecutionError
-						if errors.As(err, &parseErr) {
-							postTemplateErrors = append(postTemplateErrors, parseErr.List()...)
-						} else if errors.As(err, &executionErr) {
-							postTemplateErrors = append(postTemplateErrors, executionErr.Err.Error())
-						} else {
-							getLogger(ctx).Error(err.Error())
-						}
-					}
-					return nil
-				})
-				g.Go(func() error {
-					if strings.Contains(tail, "/") {
-						return nil
-					}
-					category := tail
-					tmpl, err := siteGen.PostListTemplate(ctx, category)
-					if err != nil {
-						var parseErr TemplateParseError
-						var executionErr *TemplateExecutionError
-						if errors.As(err, &parseErr) {
-							postListTemplateErrors = append(postListTemplateErrors, parseErr.List()...)
-						} else if errors.As(err, &executionErr) {
-							postListTemplateErrors = append(postListTemplateErrors, executionErr.Err.Error())
-						} else {
-							getLogger(ctx).Error(err.Error())
-						}
-						return nil
-					}
-					err = siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
-					if err != nil {
-						var parseErr TemplateParseError
-						var executionErr *TemplateExecutionError
-						if errors.As(err, &parseErr) {
-							postListTemplateErrors = append(postListTemplateErrors, parseErr.List()...)
-						} else if errors.As(err, &executionErr) {
-							postListTemplateErrors = append(postListTemplateErrors, executionErr.Err.Error())
-						} else {
-							getLogger(ctx).Error(err.Error())
-						}
-					}
-					return nil
-				})
-				err := g.Wait()
+				tmpl, err := siteGen.PostTemplate(r.Context())
 				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
+					var parseErr TemplateParseError
+					var executionErr *TemplateExecutionError
+					if errors.As(err, &parseErr) {
+						response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
+					} else if errors.As(err, &executionErr) {
+						response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
+					} else {
+						getLogger(r.Context()).Error(err.Error())
+					}
+				} else {
+					err := siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content, markdown, tmpl)
+					if err != nil {
+						var parseErr TemplateParseError
+						var executionErr *TemplateExecutionError
+						if errors.As(err, &parseErr) {
+							response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
+						} else if errors.As(err, &executionErr) {
+							response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
+						} else {
+							getLogger(r.Context()).Error(err.Error())
+						}
+					} else {
+						category := tail
+						tmpl, err := siteGen.PostListTemplate(r.Context(), category)
+						if err != nil {
+							var parseErr TemplateParseError
+							var executionErr *TemplateExecutionError
+							if errors.As(err, &parseErr) {
+								response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
+							} else if errors.As(err, &executionErr) {
+								response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
+							} else {
+								getLogger(r.Context()).Error(err.Error())
+							}
+						} else {
+							err := siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
+							if err != nil {
+								var parseErr TemplateParseError
+								var executionErr *TemplateExecutionError
+								if errors.As(err, &parseErr) {
+									response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
+								} else if errors.As(err, &executionErr) {
+									response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
+								} else {
+									getLogger(r.Context()).Error(err.Error())
+								}
+							}
+						}
+					}
 				}
 			}
 		}
