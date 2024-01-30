@@ -29,15 +29,16 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		Content string
 	}
 	type Response struct {
-		Error       string     `json:"error,omitempty"`
-		FormErrors  url.Values `json:"formErrors,omitempty"`
-		ContentSite string     `json:"contentSite"`
-		Username    NullString `json:"username"`
-		SitePrefix  string     `json:"sitePrefix"`
-		Parent      string     `json:"parent,omitempty"`
-		Name        string     `json:"name,omitempty"`
-		Ext         string     `json:"ext,omitempty"`
-		Content     string     `json:"content,omitempty"`
+		Error          string     `json:"error,omitempty"`
+		FormErrors     url.Values `json:"formErrors,omitempty"`
+		ContentSite    string     `json:"contentSite"`
+		Username       NullString `json:"username"`
+		SitePrefix     string     `json:"sitePrefix"`
+		Parent         string     `json:"parent,omitempty"`
+		Name           string     `json:"name,omitempty"`
+		Ext            string     `json:"ext,omitempty"`
+		Content        string     `json:"content,omitempty"`
+		TemplateErrors []string   `json:"templateErrors,omitempty"`
 	}
 
 	isValidParent := func(parent string) bool {
@@ -165,6 +166,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				"postRedirectGet": map[string]string{
 					"from": "createfile",
 				},
+				"templateErrors": response.TemplateErrors,
 			})
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -323,17 +325,25 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 					var parseErr TemplateParseError
 					var executionErr *TemplateExecutionError
 					if errors.As(err, &parseErr) {
+						response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
 					} else if errors.As(err, &executionErr) {
+						response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
 					} else {
 						getLogger(r.Context()).Error(err.Error())
-						internalServerError(w, r, err)
-						return
 					}
 				}
 			case "posts":
 				tmpl, err := siteGen.PostTemplate(r.Context())
 				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
+					var parseErr TemplateParseError
+					var executionErr *TemplateExecutionError
+					if errors.As(err, &parseErr) {
+						response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
+					} else if errors.As(err, &executionErr) {
+						response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
+					} else {
+						getLogger(r.Context()).Error(err.Error())
+					}
 				} else {
 					err = siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name), response.Content, markdown, tmpl)
 					if err != nil {
