@@ -2,10 +2,10 @@ package nb9
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"html/template"
+	"io"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -19,6 +19,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
+	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -173,7 +174,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				internalServerError(w, r, err)
 				return
 			}
-			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent, response.Name), http.StatusFound)
+			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent, response.Name+response.Ext), http.StatusFound)
 		}
 
 		var request Request
@@ -210,43 +211,33 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		}
 
 		response := Response{
-			FormErrors:  make(url.Values),
-			Parent:      path.Clean(strings.Trim(request.Parent, "/")),
-			Name:        urlSafe(request.Name),
-			Ext:         request.Ext,
-			ContentSite: request.Content,
+			FormErrors: make(url.Values),
+			Parent:     path.Clean(strings.Trim(request.Parent, "/")),
+			Name:       urlSafe(request.Name),
+			Ext:        request.Ext,
+			Content:    request.Content,
 		}
 		if !isValidParent(response.Parent) {
 			response.Error = "InvalidParent"
 			writeResponse(w, r, response)
 			return
 		}
-		newUUID := func() string {
-			var b [36]byte
-			id := NewID()
-			hex.Encode(b[:], id[:4])
-			b[8] = '-'
-			hex.Encode(b[9:13], id[4:6])
-			b[13] = '-'
-			hex.Encode(b[14:18], id[6:8])
-			b[18] = '-'
-			hex.Encode(b[19:23], id[8:10])
-			b[23] = '-'
-			hex.Encode(b[24:], id[10:])
-			return string(b[:])
-		}
-		head, _, _ := strings.Cut(response.Parent, "/")
+		head, tail, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes":
 			if response.Name == "" {
-				response.Name = newUUID()
+				var timestamp [8]byte
+				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
+				response.Name = strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
 			}
 			if response.Ext != ".html" && response.Ext != ".css" && response.Ext != ".js" && response.Ext != ".md" && response.Ext != ".txt" {
 				response.Ext = ".txt"
 			}
 		case "pages":
 			if response.Name == "" {
-				response.Name = newUUID()
+				var timestamp [8]byte
+				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
+				response.Name = strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
 			}
 			if response.Ext != ".html" {
 				response.Ext = ".html"
@@ -265,7 +256,9 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			}
 		default:
 			if response.Name == "" {
-				response.Name = newUUID()
+				var timestamp [8]byte
+				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
+				response.Name = strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
 			}
 			if response.Ext != ".html" && response.Ext != ".css" && response.Ext != ".js" && response.Ext != ".md" && response.Ext != ".txt" {
 				response.Ext = ".html"
@@ -291,7 +284,14 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			writeResponse(w, r, response)
 			return
 		}
-		writer, err := nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(sitePrefix, response.Parent, response.Name), 0644)
+		writer, err := nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(sitePrefix, response.Parent, response.Name+response.Ext), 0644)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		defer writer.Close()
+		_, err = io.WriteString(writer, response.Content)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -320,7 +320,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			)
 			switch head {
 			case "pages":
-				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name), response.Content, markdown)
+				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content, markdown)
 				if err != nil {
 					var parseErr TemplateParseError
 					var executionErr *TemplateExecutionError
@@ -333,22 +333,71 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 					}
 				}
 			case "posts":
-				tmpl, err := siteGen.PostTemplate(r.Context())
-				if err != nil {
-					var parseErr TemplateParseError
-					var executionErr *TemplateExecutionError
-					if errors.As(err, &parseErr) {
-						response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
-					} else if errors.As(err, &executionErr) {
-						response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
-					} else {
-						getLogger(r.Context()).Error(err.Error())
-					}
-				} else {
-					err = siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name), response.Content, markdown, tmpl)
+				var postTemplateErrors, postListTemplateErrors []string
+				g, ctx := errgroup.WithContext(r.Context())
+				g.Go(func() error {
+					tmpl, err := siteGen.PostTemplate(ctx)
 					if err != nil {
-						getLogger(r.Context()).Error(err.Error())
+						var parseErr TemplateParseError
+						var executionErr *TemplateExecutionError
+						if errors.As(err, &parseErr) {
+							postTemplateErrors = append(postTemplateErrors, parseErr.List()...)
+						} else if errors.As(err, &executionErr) {
+							postTemplateErrors = append(postTemplateErrors, executionErr.Err.Error())
+						} else {
+							getLogger(ctx).Error(err.Error())
+						}
+						return nil
 					}
+					err = siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content, markdown, tmpl)
+					if err != nil {
+						var parseErr TemplateParseError
+						var executionErr *TemplateExecutionError
+						if errors.As(err, &parseErr) {
+							postTemplateErrors = append(postTemplateErrors, parseErr.List()...)
+						} else if errors.As(err, &executionErr) {
+							postTemplateErrors = append(postTemplateErrors, executionErr.Err.Error())
+						} else {
+							getLogger(ctx).Error(err.Error())
+						}
+					}
+					return nil
+				})
+				g.Go(func() error {
+					if strings.Contains(tail, "/") {
+						return nil
+					}
+					category := tail
+					tmpl, err := siteGen.PostListTemplate(ctx, category)
+					if err != nil {
+						var parseErr TemplateParseError
+						var executionErr *TemplateExecutionError
+						if errors.As(err, &parseErr) {
+							postListTemplateErrors = append(postListTemplateErrors, parseErr.List()...)
+						} else if errors.As(err, &executionErr) {
+							postListTemplateErrors = append(postListTemplateErrors, executionErr.Err.Error())
+						} else {
+							getLogger(ctx).Error(err.Error())
+						}
+						return nil
+					}
+					err = siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
+					if err != nil {
+						var parseErr TemplateParseError
+						var executionErr *TemplateExecutionError
+						if errors.As(err, &parseErr) {
+							postListTemplateErrors = append(postListTemplateErrors, parseErr.List()...)
+						} else if errors.As(err, &executionErr) {
+							postListTemplateErrors = append(postListTemplateErrors, executionErr.Err.Error())
+						} else {
+							getLogger(ctx).Error(err.Error())
+						}
+					}
+					return nil
+				})
+				err := g.Wait()
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
 				}
 			}
 		}

@@ -702,7 +702,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			err = siteGen.GeneratePostList(context.Background(), "", tmpl, markdown)
+			err = siteGen.GeneratePostList(context.Background(), "", markdown, tmpl)
 			if err != nil {
 				return err
 			}

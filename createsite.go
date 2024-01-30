@@ -401,7 +401,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		err = siteGen.GeneratePostList(context.Background(), "", tmpl, markdown)
+		err = siteGen.GeneratePostList(context.Background(), "", markdown, tmpl)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)

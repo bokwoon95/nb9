@@ -40,9 +40,14 @@
 </div>
 {{- end }}
 <div class='mv2'>
-  {{- if and referer (ne (index $.PostRedirectGet "from") "createfile") }}
-  <a href='{{ referer }}' data-go-back>&larr; back</a>
-  <span>&boxv;</span>
+  {{- if ne (index $.PostRedirectGet "from") "createfile" }}
+    {{- if referer }}
+    <a href='{{ referer }}' data-go-back>&larr; back</a>
+    <span>&boxv;</span>
+    {{- else }}
+    <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>&larr; back</a>
+    <span>&boxv;</span>
+    {{- end }}
   {{- end }}
   {{- if eq (head $.FilePath) "notes" }}
     {{- if ne (dir $.FilePath) "notes" }}

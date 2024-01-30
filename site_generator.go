@@ -894,7 +894,7 @@ type PostListData struct {
 	Posts      []Post
 }
 
-func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category string, tmpl *template.Template, markdown goldmark.Markdown) error {
+func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category string, markdown goldmark.Markdown, tmpl *template.Template) error {
 	var settings struct {
 		PostsPerPage int `json:"postsPerPage"`
 	}
@@ -1015,7 +1015,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 				posts := slices.Clone(batch)
 				batch = batch[:0]
 				g1.Go(func() error {
-					return siteGen.generatePostList(ctx1, category, tmpl, markdown, lastPage, currentPage, posts)
+					return siteGen.generatePostList(ctx1, category, markdown, tmpl, lastPage, currentPage, posts)
 				})
 			}
 		}
@@ -1025,7 +1025,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		}
 		if len(batch) > 0 {
 			g1.Go(func() error {
-				return siteGen.generatePostList(ctx1, category, tmpl, markdown, lastPage, page, batch)
+				return siteGen.generatePostList(ctx1, category, markdown, tmpl, lastPage, page, batch)
 			})
 		}
 		err = g1.Wait()
@@ -1033,7 +1033,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			return err
 		}
 		if page == 1 && len(batch) == 0 {
-			err := siteGen.generatePostList(ctx, category, tmpl, markdown, 1, 1, nil)
+			err := siteGen.generatePostList(ctx, category, markdown, tmpl, 1, 1, nil)
 			if err != nil {
 				return err
 			}
@@ -1105,13 +1105,13 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			posts := slices.Clone(batch)
 			batch = batch[:0]
 			g1.Go(func() error {
-				return siteGen.generatePostList(ctx1, category, tmpl, markdown, lastPage, currentPage, posts)
+				return siteGen.generatePostList(ctx1, category, markdown, tmpl, lastPage, currentPage, posts)
 			})
 		}
 	}
 	if len(batch) > 0 {
 		g1.Go(func() error {
-			return siteGen.generatePostList(ctx1, category, tmpl, markdown, lastPage, page, batch)
+			return siteGen.generatePostList(ctx1, category, markdown, tmpl, lastPage, page, batch)
 		})
 	}
 	err = g1.Wait()
@@ -1119,7 +1119,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		return err
 	}
 	if page == 1 && len(batch) == 0 {
-		err := siteGen.generatePostList(ctx, category, tmpl, markdown, 1, 1, nil)
+		err := siteGen.generatePostList(ctx, category, markdown, tmpl, 1, 1, nil)
 		if err != nil {
 			return err
 		}
@@ -1127,7 +1127,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 	return nil
 }
 
-func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category string, tmpl *template.Template, markdown goldmark.Markdown, lastPage, currentPage int, posts []Post) error {
+func (siteGen *SiteGenerator) generatePostList(ctx context.Context, category string, markdown goldmark.Markdown, tmpl *template.Template, lastPage, currentPage int, posts []Post) error {
 	n := 0
 	for _, post := range posts {
 		prefix, _, ok := strings.Cut(post.Name, "-")
