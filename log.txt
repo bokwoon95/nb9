@@ -31,12 +31,19 @@ anything in posts/*
 TODO: structured template error
     If we assume template errors follow this format: "template: {filePath}:{lineNr}: {errmsg}", we can parse template errors accordingly and send it out as structured JSON objects instead of plain strings, which would allow us to highlight the problematic lines in the codemirror editor.
     {
-        "abcd.html": {
-            "3": "unclosed action",
-            "5": "unterminated quoted string",
-            "10": "executing \"abcd.html\" at <throw>: wrong number of args for throw: want 1 got 0"
-        }
+        "abcd.html": [
+            {"line": 3, "msg": "unclosed action"},
+            {"line": 5, "msg": "unterminated quoted string"},
+            {"line": 10, "msg": "executing \"abcd.html\" at <throw>: wrong number of args for throw: want 1 got 0"},
+        ]
     }
+    - parse and execution errors always contain only one line number, because html/template stops at the first error
+    - internal templates ending in html can be multiple errors. these have no line number.
+    - external templates not starting with /themes/ can be multiple errors. these have no line number.
+    - external templates ending in a circular reference can be multiple errors. these have no line number.
+    - external templates that don't exist can only be one error. these have no line number.
+    - external templates being a dir instead of a file can only be one error. these have no line number.
+    Given the massive number of error types with no line number, maybe it is better to just not highlight line numbers?
 TODO: clipboard.go get paste to work
 TODO: rename.go
 TODO: listDirectory file sorting

@@ -1589,9 +1589,7 @@ func (parseErr TemplateParseError) List() []string {
 	slices.Sort(names)
 	errmsgs := make([]string, 0, n)
 	for _, name := range names {
-		for _, errmsg := range parseErr[name] {
-			errmsgs = append(errmsgs, name+": "+errmsg)
-		}
+		errmsgs = append(errmsgs, parseErr[name]...)
 	}
 	return errmsgs
 }
