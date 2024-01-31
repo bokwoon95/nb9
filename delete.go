@@ -36,13 +36,13 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 		ModTime time.Time `json:"modTime,omitempty"`
 	}
 	type Response struct {
-		Error       string     `json:"status"`
-		Errors      []string   `json:"errors,omitempty"`
-		ContentSite string     `json:"contentSite,omitempty"`
-		Username    NullString `json:"username"`
-		SitePrefix  string     `json:"sitePrefix"`
-		Parent      string     `json:"parent,omitempty"`
-		Files       []File     `json:"files,omitempty"`
+		Error        string     `json:"status"`
+		DeleteErrors []string   `json:"deleteErrors,omitempty"`
+		ContentSite  string     `json:"contentSite,omitempty"`
+		Username     NullString `json:"username"`
+		SitePrefix   string     `json:"sitePrefix"`
+		Parent       string     `json:"parent,omitempty"`
+		Files        []File     `json:"files,omitempty"`
 	}
 
 	isValidParent := func(parent string) bool {
@@ -197,10 +197,10 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			} else {
 				b.WriteString(strconv.Itoa(len(response.Files)) + " files deleted")
 			}
-			if len(response.Errors) == 1 {
+			if len(response.DeleteErrors) == 1 {
 				b.WriteString(" (1 error)")
-			} else if len(response.Errors) > 1 {
-				b.WriteString(" (" + strconv.Itoa(len(response.Errors)) + " errors)")
+			} else if len(response.DeleteErrors) > 1 {
+				b.WriteString(" (" + strconv.Itoa(len(response.DeleteErrors)) + " errors)")
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
@@ -256,7 +256,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 		}
 		seen := make(map[string]bool)
 		g, ctx := errgroup.WithContext(r.Context())
-		response.Errors = make([]string, len(request.Names))
+		response.DeleteErrors = make([]string, len(request.Names))
 		response.Files = make([]File, len(request.Names))
 		for i, name := range request.Names {
 			i, name := i, filepath.ToSlash(name)
@@ -270,7 +270,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			g.Go(func() error {
 				err := nbrew.FS.WithContext(ctx).RemoveAll(path.Join(sitePrefix, response.Parent, name))
 				if err != nil {
-					response.Errors[i] = fmt.Sprintf("%s: %v", name, err)
+					response.DeleteErrors[i] = fmt.Sprintf("%s: %v", name, err)
 				} else {
 					response.Files[i] = File{Name: name}
 				}
@@ -410,14 +410,14 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 		}
 		response.Files = response.Files[:n]
 		n = 0
-		for _, errmsg := range response.Errors {
+		for _, errmsg := range response.DeleteErrors {
 			if errmsg == "" {
 				continue
 			}
-			response.Errors[n] = errmsg
+			response.DeleteErrors[n] = errmsg
 			n++
 		}
-		response.Errors = response.Errors[:n]
+		response.DeleteErrors = response.DeleteErrors[:n]
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)

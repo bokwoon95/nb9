@@ -13,6 +13,10 @@ import (
 )
 
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
+	type Response struct {
+		Error string `json:"error,omitempty"`
+		Count string `json:"count"`
+	}
 	// TODO: consider making this writeResponse instead, together with a
 	// Response struct that makes sense when called for cut | copy | clear |
 	// paste. It also means we can set stuff like InvalidSrcParent |
