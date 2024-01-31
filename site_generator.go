@@ -749,7 +749,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 			if len(line) == 0 {
 				continue
 			}
-			postData.Title = stripMarkdownStyles(line)
+			postData.Title = stripMarkdownStyles(markdown, line)
 			break
 		}
 		// Content
@@ -1191,11 +1191,11 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 					continue
 				}
 				if posts[i].Title == "" {
-					posts[i].Title = stripMarkdownStyles(line)
+					posts[i].Title = stripMarkdownStyles(markdown, line)
 					continue
 				}
 				if posts[i].Preview == "" {
-					posts[i].Preview = stripMarkdownStyles(line)
+					posts[i].Preview = stripMarkdownStyles(markdown, line)
 					continue
 				}
 				break
