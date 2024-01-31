@@ -49,9 +49,9 @@
   {{- $parent := index $.PostRedirectGet "parent" }}
   {{- $name := index $.PostRedirectGet "name" }}
   {{- if eq $parent "posts" }}
-  <div>category created: <a href='/{{ join "files" $.SitePrefix $parent $name }}/'>{{ $name }}</a></div>
+  <div>category created (<a href='/{{ join "files" $.SitePrefix $parent $name }}/'>{{ $name }}</a>)</div>
   {{- else }}
-  <div>folder created: <a href='/{{ join "files" $.SitePrefix $parent $name }}/'>{{ $name }}</a></div>
+  <div>folder created (<a href='/{{ join "files" $.SitePrefix $parent $name }}/'>{{ $name }}</a>)</div>
   {{- end }}
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>

@@ -1567,6 +1567,9 @@ var funcMap = map[string]any{
 		// tag.
 		return ""
 	},
+	"throw": func(msg string) (string, error) {
+		return "", fmt.Errorf(msg)
+	},
 }
 
 type TemplateParseError map[string][]string

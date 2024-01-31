@@ -28,6 +28,15 @@ anything in posts/*
     source file is directly correlated to an index.html in its output/posts/* folder
     output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
 
+TODO: structured template error
+    If we assume template errors follow this format: "template: {filePath}:{lineNr}: {errmsg}", we can parse template errors accordingly and send it out as structured JSON objects instead of plain strings, which would allow us to highlight the problematic lines in the codemirror editor.
+    {
+        "abcd.html": {
+            "3": "unclosed action",
+            "5": "unterminated quoted string",
+            "10": "executing \"abcd.html\" at <throw>: wrong number of args for throw: want 1 got 0"
+        }
+    }
 TODO: clipboard.go get paste to work
 TODO: rename.go
 TODO: listDirectory file sorting
