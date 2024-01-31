@@ -28,6 +28,7 @@ anything in posts/*
     source file is directly correlated to an index.html in its output/posts/* folder
     output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
 
+TODO: clipboard.go get paste to work
 TODO: structured template error
     If we assume template errors follow this format: "template: {filePath}:{lineNr}: {errmsg}", we can parse template errors accordingly and send it out as structured JSON objects instead of plain strings, which would allow us to highlight the problematic lines in the codemirror editor.
     {
@@ -44,7 +45,6 @@ TODO: structured template error
     - external templates that don't exist can only be one error. these have no line number.
     - external templates being a dir instead of a file can only be one error. these have no line number.
     Given the massive number of error types with no line number, maybe it is better to just not highlight line numbers?
-TODO: clipboard.go get paste to work
 TODO: rename.go
 TODO: listDirectory file sorting
 TODO: download.go
