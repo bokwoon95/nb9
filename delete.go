@@ -202,6 +202,9 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			} else if len(response.DeleteErrors) > 1 {
 				b.WriteString(" (" + strconv.Itoa(len(response.DeleteErrors)) + " errors)")
 			}
+			// TODO: instead of sending an opaque msg string over, send over
+			// response.Files and response.DeleteErrors. Then use html
+			// templating to craft the response accordingly.
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
 					"from": "delete",
