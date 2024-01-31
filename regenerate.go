@@ -48,12 +48,6 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		methodNotAllowed(w, r)
 		return
 	}
-	err := nbrew.FS.WithContext(r.Context()).MkdirAll(path.Join(sitePrefix, "output/posts"), 0755)
-	if err != nil {
-		getLogger(r.Context()).Error(err.Error())
-		internalServerError(w, r, err)
-		return
-	}
 	siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
