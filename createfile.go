@@ -375,7 +375,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 								getLogger(r.Context()).Error(err.Error())
 							}
 						} else {
-							err := siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
+							_, err := siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
 							if err != nil {
 								var parseErr TemplateParseError
 								var executionErr *TemplateExecutionError

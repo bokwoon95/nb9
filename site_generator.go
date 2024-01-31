@@ -30,6 +30,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var ErrInvalidPostCategory = fmt.Errorf("invalid post category")
+
 type SiteGenerator struct {
 	Site               Site
 	fsys               FS
@@ -365,7 +367,7 @@ type Image struct {
 	Name   string
 }
 
-func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, content string, markdown goldmark.Markdown) error {
+func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text string, markdown goldmark.Markdown) error {
 	urlPath := strings.TrimPrefix(filePath, "pages/")
 	if urlPath == "index.html" {
 		urlPath = ""
@@ -387,7 +389,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, conten
 	g1, ctx1 := errgroup.WithContext(ctx)
 	g1.Go(func() error {
 		const doctype = "<!DOCTYPE html>"
-		text := strings.TrimSpace(content)
+		text := strings.TrimSpace(text)
 		if len(text) < len(doctype) || !strings.EqualFold(text[:len(doctype)], doctype) {
 			text = "<!DOCTYPE html>" +
 				"\n<html lang='{{ $.Site.Lang }}'>" +
@@ -705,7 +707,7 @@ type PostData struct {
 	ModificationTime time.Time
 }
 
-func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, content string, markdown goldmark.Markdown, tmpl *template.Template) error {
+func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text string, markdown goldmark.Markdown, tmpl *template.Template) error {
 	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
 	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	postData := PostData{
@@ -715,7 +717,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, conten
 		ModificationTime: time.Now().UTC(),
 	}
 	if strings.Contains(postData.Category, "/") {
-		return nil
+		return ErrInvalidPostCategory
 	}
 	if postData.Category == "." {
 		postData.Category = ""
@@ -738,7 +740,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, conten
 		if err != nil {
 			return err
 		}
-		contentBytes := []byte(content)
+		contentBytes := []byte(text)
 		// Title
 		var line []byte
 		remainder := contentBytes
@@ -883,21 +885,21 @@ type PostListData struct {
 	Posts      []Post
 }
 
-func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category string, markdown goldmark.Markdown, tmpl *template.Template) error {
+func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category string, markdown goldmark.Markdown, tmpl *template.Template) (int, error) {
 	var config struct {
 		PostsPerPage int `json:"postsPerPage"`
 	}
 	if strings.Contains(category, "/") {
-		return nil
+		return 0, ErrInvalidPostCategory
 	}
 	b, err := fs.ReadFile(siteGen.fsys.WithContext(ctx), path.Join(siteGen.sitePrefix, "postlist.json"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+		return 0, err
 	}
 	if len(b) > 0 {
 		err := json.Unmarshal(b, &config)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
 	if config.PostsPerPage <= 0 {
@@ -918,7 +920,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			return row.Int("COUNT(*)")
 		})
 		if err != nil {
-			return err
+			return 0, err
 		}
 		lastPage := int(math.Ceil(float64(count) / float64(config.PostsPerPage)))
 		g1, ctx1 := errgroup.WithContext(ctx)
@@ -991,7 +993,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			return post
 		})
 		if err != nil {
-			return err
+			return 0, err
 		}
 		defer cursor.Close()
 		page := 1
@@ -999,7 +1001,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		for cursor.Next() {
 			post, err := cursor.Result()
 			if err != nil {
-				return err
+				return page, err
 			}
 			batch = append(batch, post)
 			if len(batch) >= config.PostsPerPage {
@@ -1014,7 +1016,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		}
 		err = cursor.Close()
 		if err != nil {
-			return err
+			return page, err
 		}
 		if len(batch) > 0 {
 			g1.Go(func() error {
@@ -1023,19 +1025,19 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		}
 		err = g1.Wait()
 		if err != nil {
-			return err
+			return page, err
 		}
 		if page == 1 && len(batch) == 0 {
 			err := siteGen.GeneratePostListPage(ctx, category, markdown, tmpl, 1, 1, nil)
 			if err != nil {
-				return err
+				return page, err
 			}
 		}
-		return nil
+		return page, nil
 	}
 	dirEntries, err := siteGen.fsys.WithContext(ctx).ReadDir(path.Join(siteGen.sitePrefix, "posts", category))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	n := 0
 	for _, dirEntry := range dirEntries {
@@ -1085,7 +1087,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 	for _, dirEntry := range dirEntries {
 		fileInfo, err := dirEntry.Info()
 		if err != nil {
-			return err
+			return page, err
 		}
 		name := fileInfo.Name()
 		batch = append(batch, Post{
@@ -1110,15 +1112,15 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 	}
 	err = g1.Wait()
 	if err != nil {
-		return err
+		return page, err
 	}
 	if page == 1 && len(batch) == 0 {
 		err := siteGen.GeneratePostListPage(ctx, category, markdown, tmpl, 1, 1, nil)
 		if err != nil {
-			return err
+			return page, err
 		}
 	}
-	return nil
+	return page, nil
 }
 
 func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category string, markdown goldmark.Markdown, tmpl *template.Template, lastPage, currentPage int, posts []Post) error {
@@ -1894,7 +1896,7 @@ func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Templ
 
 func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category string) (*template.Template, error) {
 	if strings.Contains(category, "/") {
-		return nil, fmt.Errorf("invalid category %q", category)
+		return nil, ErrInvalidPostCategory
 	}
 	var err error
 	var text sql.NullString

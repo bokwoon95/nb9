@@ -393,7 +393,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				getLogger(ctx).Error(err.Error())
 				return nil
 			}
-			err = siteGen.GeneratePostList(context.Background(), "", markdown, tmpl)
+			_, err = siteGen.GeneratePostList(context.Background(), "", markdown, tmpl)
 			if err != nil {
 				getLogger(ctx).Error(err.Error())
 				return nil

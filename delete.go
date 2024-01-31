@@ -332,7 +332,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 							getLogger(ctx).Error(err.Error())
 							return nil
 						}
-						err = siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
+						_, err = siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
 						if err != nil {
 							getLogger(ctx).Error(err.Error())
 							return nil
