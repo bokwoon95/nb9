@@ -28,6 +28,7 @@ anything in posts/*
     source file is directly correlated to an index.html in its output/posts/* folder
     output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
 
+TODO: add a creation_time column to the remoteFS files table and start tracking every file's CreationTime as well. Optionally allow a user to sort by creation time on top of modification time if remoteFS is detected.
 TODO: delete: instead of sending an opaque msg string over, send over response.Files and response.DeleteErrors. Then use html templating to craft the response accordingly.
 TODO: clipboard.go get paste to work
 TODO: structured template error
