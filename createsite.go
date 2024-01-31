@@ -81,6 +81,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				}
 				return
 			}
+			referer := getReferer(r)
 			funcMap := map[string]any{
 				"join":       path.Join,
 				"hasPrefix":  strings.HasPrefix,
@@ -88,7 +89,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				"contains":   strings.Contains,
 				"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
 				"baselineJS": func() template.JS { return template.JS(baselineJS) },
-				"referer":    func() string { return r.Referer() },
+				"referer":    func() string { return referer },
 				"maxSites":   func() int { return maxSites },
 			}
 			tmpl, err := template.New("createsite.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/createsite.html")

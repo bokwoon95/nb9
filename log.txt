@@ -27,10 +27,7 @@ anything in pages/*
 anything in posts/*
     source file is directly correlated to an index.html in its output/posts/* folder
     output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
-whenever a post is created or deleted, we regenerate the PostList. Only for create and delete, for update we don't do anything because the user will potentially update a post many times.
 
-TODO: why is generating index.html broken for subsites
-    TODO: why are pages and posts being stored as data instead of text for subsites?
 TODO: clipboard.go get paste to work
 TODO: rename.go
 TODO: download.go

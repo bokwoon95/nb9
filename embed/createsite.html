@@ -19,6 +19,8 @@
 <div class='mv5 w-80 w-70-m w-60-l center'>
   {{- if referer }}
   <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- else }}
+  <div><a href='/files/'>&larr; back</a></div>
   {{- end }}
   <div class='mv3 b'>You have reached the maximum of {{ maxSites }} sites, cannot create any more.</div>
   <ul class='ph3'>
