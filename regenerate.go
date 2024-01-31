@@ -270,9 +270,6 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 			if err != nil {
 				return err
 			}
-			if filePath == root {
-				return nil
-			}
 			g2.Go(func() error {
 				if !dirEntry.IsDir() {
 					if !strings.HasSuffix(filePath, ".md") {
