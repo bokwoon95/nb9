@@ -614,6 +614,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 	response.SitePrefix = sitePrefix
 	response.IsDir = true
+	response.Sites = []Site{}
 	_, response.SearchSupported = nbrew.FS.(*RemoteFS)
 	if sitePrefix == "" && nbrew.UsersDB != nil {
 		sites, err := sq.FetchAll(r.Context(), nbrew.UsersDB, sq.Query{

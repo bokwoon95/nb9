@@ -179,7 +179,7 @@
   <div>{{ generateBreadcrumbLinks $.SitePrefix $.FilePath }}</div>
   <div class='flex-grow-1'></div>
   {{- if eq (head $.FilePath) "posts" }}
-  <div><a href='/{{ $.FilePath }}/'>view posts</a></div>
+  <div><a href='{{ $.ContentSite }}/{{ $.FilePath }}/'>view posts</a></div>
   {{- end }}
 </div>
 {{- if $.Files }}
