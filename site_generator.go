@@ -677,7 +677,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 		pipeReader, pipeWriter := io.Pipe()
 		result := make(chan error, 1)
 		go func() {
-			result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, urlPath)
+			result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, siteGen.sitePrefix, urlPath)
 		}()
 		err = tmpl.Execute(pipeWriter, &pageData)
 		if err != nil {
@@ -848,7 +848,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		pipeReader, pipeWriter := io.Pipe()
 		result := make(chan error, 1)
 		go func() {
-			result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, urlPath)
+			result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, siteGen.sitePrefix, urlPath)
 		}()
 		err = tmpl.Execute(pipeWriter, &postData)
 		if err != nil {
@@ -1246,7 +1246,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			pipeReader, pipeWriter := io.Pipe()
 			result := make(chan error, 1)
 			go func() {
-				result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, "")
+				result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, siteGen.sitePrefix, "")
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
@@ -1290,7 +1290,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			pipeReader, pipeWriter := io.Pipe()
 			result := make(chan error, 1)
 			go func() {
-				result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, "")
+				result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, siteGen.sitePrefix, "")
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
@@ -1427,7 +1427,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 	return nil
 }
 
-func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, urlPath string) error {
+func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, sitePrefix, urlPath string) error {
 	tokenizer := html.NewTokenizer(reader)
 	for {
 		tokenType := tokenizer.Next()
@@ -1491,10 +1491,13 @@ func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, urlPath string) 
 							uri.Scheme = "https"
 							uri.Host = cdnDomain
 							if strings.HasPrefix(uri.Path, "/") {
+								if sitePrefix != "" {
+									uri.Path = "/" + path.Join(sitePrefix, uri.Path)
+								}
 								val = []byte(uri.String())
 							} else {
 								if urlPath != "" {
-									uri.Path = "/" + path.Join(urlPath, uri.Path)
+									uri.Path = "/" + path.Join(sitePrefix, urlPath, uri.Path)
 									val = []byte(uri.String())
 								}
 							}
