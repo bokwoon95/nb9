@@ -20,7 +20,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"text/template/parse"
 	"time"
 
@@ -241,7 +240,7 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 				// current template) instead of adding it to the
 				// externalTemplateErrs list.
 				if errors.Is(err, fs.ErrNotExist) {
-					return &fs.PathError{Op: "parsetemplate", Path: externalName, Err: fs.ErrNotExist}
+					return fmt.Errorf("%s: template %q does not exist", name, externalName)
 				}
 				externalTemplateErrs[i] = err
 				return nil
@@ -258,7 +257,7 @@ func (siteGen *SiteGenerator) ParseTemplate(ctx context.Context, name, text stri
 				// instead of a file. Therefore we return the error
 				// (associating it with the current template) instead of adding
 				// it to the externalTemplateErrs list.
-				return &fs.PathError{Op: "parsetemplate", Path: externalName, Err: syscall.EISDIR}
+				return fmt.Errorf("%s: %q is a folder", name, externalName)
 			}
 			var b strings.Builder
 			b.Grow(int(fileInfo.Size()))
@@ -398,7 +397,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 				"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
 				"\n" + text
 		}
-		tmpl, err = siteGen.ParseTemplate(ctx1, strings.TrimPrefix(filePath, "pages/"), text, nil)
+		tmpl, err = siteGen.ParseTemplate(ctx1, filePath, text, nil)
 		if err != nil {
 			return err
 		}
