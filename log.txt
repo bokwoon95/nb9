@@ -30,6 +30,7 @@ anything in posts/*
 whenever a post is created or deleted, we regenerate the PostList. Only for create and delete, for update we don't do anything because the user will potentially update a post many times.
 
 TODO: why is generating index.html broken for subsites
+    TODO: why are pages and posts being stored as data instead of text for subsites?
 TODO: clipboard.go get paste to work
 TODO: rename.go
 TODO: download.go

@@ -84,6 +84,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		g1, ctx1 := errgroup.WithContext(r.Context())
 		g1.Go(func() error {
 			cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
+				Debug:   true,
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +

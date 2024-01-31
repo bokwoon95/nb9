@@ -1300,6 +1300,9 @@ func IsForeignKeyViolation(dialect string, errcode string) bool {
 func isFulltextIndexed(filePath string) bool {
 	ext := path.Ext(filePath)
 	head, tail, _ := strings.Cut(filePath, "/")
+	if strings.HasPrefix(head, "@") || strings.Contains(head, ".") {
+		head, tail, _ = strings.Cut(tail, "/")
+	}
 	switch head {
 	case "notes":
 		return ext == ".html" || ext == ".css" || ext == ".js" || ext == ".md" || ext == ".txt"
