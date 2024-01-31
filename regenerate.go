@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -325,6 +326,8 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		return nil
 	})
 	err = g1.Wait()
+	response.Count = int(count.Load())
+	response.TimeTaken = time.Since(startedAt).String()
 	if err != nil {
 		var parseErr TemplateParseError
 		var executionErr *TemplateExecutionError
@@ -338,7 +341,127 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 			return
 		}
 	}
-	response.Count = int(count.Load())
+	writeResponse(w, r, response)
+}
+
+func (nbrew *Notebrew) regeneratelist(w http.ResponseWriter, r *http.Request, sitePrefix string) {
+	type Request struct {
+		Category string
+	}
+	type Response struct {
+		Category       string   `json:"category,omitempty"`
+		Count          int      `json:"count"`
+		TimeTaken      string   `json:"timeTaken"`
+		TemplateErrors []string `json:"templateErrors,omitempty"`
+	}
+	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
+		if r.Form.Has("api") {
+			w.Header().Set("Content-Type", "application/json")
+			encoder := json.NewEncoder(w)
+			encoder.SetEscapeHTML(false)
+			err := encoder.Encode(&response)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+			}
+			return
+		}
+		if strings.Contains(response.Category, "/") {
+			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "posts")+"/", http.StatusFound)
+			return
+		}
+		err := nbrew.setSession(w, r, "flash", map[string]any{
+			"postRedirectGet": map[string]any{
+				"from":           "regeneratelist",
+				"category":       response.Category,
+				"count":          response.Count,
+				"timeTaken":      response.TimeTaken,
+				"templateErrors": response.TemplateErrors,
+			},
+		})
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "posts", response.Category)+"/", http.StatusFound)
+	}
+	if r.Method != "POST" {
+		methodNotAllowed(w, r)
+		return
+	}
+
+	var request Request
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
+	contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	switch contentType {
+	case "application/json":
+		err := json.NewDecoder(r.Body).Decode(&request)
+		if err != nil {
+			badRequest(w, r, err)
+			return
+		}
+	case "application/x-www-form-urlencoded", "multipart/form-data":
+		if contentType == "multipart/form-data" {
+			err := r.ParseMultipartForm(1 << 20 /* 1 MB */)
+			if err != nil {
+				badRequest(w, r, err)
+				return
+			}
+		} else {
+			err := r.ParseForm()
+			if err != nil {
+				badRequest(w, r, err)
+				return
+			}
+		}
+		request.Category = r.Form.Get("category")
+	default:
+		unsupportedContentType(w, r)
+		return
+	}
+
+	response := Response{
+		Category: request.Category,
+	}
+	if strings.Contains(response.Category, "/") {
+		writeResponse(w, r, response)
+		return
+	}
+	siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	markdown := goldmark.New(
+		goldmark.WithParserOptions(parser.WithAttribute()),
+		goldmark.WithExtensions(
+			extension.Table,
+			highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
+		),
+		goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+	)
+	tmpl, err := siteGen.PostListTemplate(r.Context(), response.Category)
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	startedAt := time.Now()
+	response.Count, err = siteGen.GeneratePostList(r.Context(), response.Category, markdown, tmpl)
 	response.TimeTaken = time.Since(startedAt).String()
+	if err != nil {
+		var parseErr TemplateParseError
+		var executionErr *TemplateExecutionError
+		if errors.As(err, &parseErr) {
+			response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
+		} else if errors.As(err, &executionErr) {
+			response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
+		} else {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+	}
 	writeResponse(w, r, response)
 }

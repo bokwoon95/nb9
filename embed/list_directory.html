@@ -25,6 +25,25 @@
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
+{{- if eq (index $.PostRedirectGet "from") "regeneratelist" }}
+  {{ $count := index $.PostRedirectGet "count" }}
+  {{ $timeTaken := index $.PostRedirectGet "timeTaken" }}
+  {{ $templateErrors := index $.PostRedirectGet "templateErrors" }}
+  {{- if $templateErrors }}
+  <div class='b invalid-red'>template errors:</div>
+  <ul class='list-style-disc ph3 invalid-red'>
+    {{- range $error := $templateErrors }}
+    <li>{{ $error }}</li>
+    {{- end }}
+  </ul>
+  {{- else }}
+  <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
+    <div>List regenerated ({{ $count }} file{{ if ne $count 1.0 }}s{{ end }} in {{ $timeTaken }})</div>
+    <div class='flex-grow-1'></div>
+    <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
+  </div>
+  {{- end }}
+{{- end }}
 {{- if eq (index $.PostRedirectGet "from") "createfolder" }}
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
   {{- $parent := index $.PostRedirectGet "parent" }}
@@ -94,8 +113,8 @@
         {{ template "octicons-sync" }}
         {{ template "octicons-triangle-down" }}
       </summary>
-      <form class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
-        <div class='ma2 tr'><button type='button' class='button ba br2 pa2 nowrap'>regenerate list</button></div>
+      <form method='post' action='/{{ join "files" $.SitePrefix "regeneratelist" }}/{{ if tail $.FilePath }}?category={{ tail $.FilePath }}{{ end }}' class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+        <div class='ma2 tr'><button type='submit' class='button ba br2 pa2 nowrap'>regenerate list</button></div>
       </form>
     </details>
   </div>

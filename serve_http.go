@@ -227,6 +227,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case "regenerate":
 			nbrew.regenerate(w, r, sitePrefix)
 		case "regeneratelist":
+			nbrew.regeneratelist(w, r, sitePrefix)
 		case "createsite":
 			nbrew.createsite(w, r, username)
 		case "deletesite":
