@@ -8,9 +8,9 @@
 <script type='module'>{{ directoryJS }}</script>
 <title>
   {{- if $.FilePath }}
-  {{ base $.FilePath }}{{ if $.SitePrefix }} | {{ $.SitePrefix }}{{ end }}
+  {{ base $.FilePath }}{{ if $.SitePrefix }} - {{ $.SitePrefix }}{{ end }}
   {{- else }}
-  files{{ if $.SitePrefix }} | {{ $.SitePrefix }}{{ end }}
+  files{{ if $.SitePrefix }} - {{ $.SitePrefix }}{{ end }}
   {{- end }}
 </title>
 <body class='centered-body'>

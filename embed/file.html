@@ -8,7 +8,7 @@
 {{- if le (len $.Content) 50000 }}
 <script type='module' src='/files/static/codemirror.js'></script>
 {{- end }}
-<title>{{ base $.FilePath }}{{ if $.SitePrefix }} | {{ $.SitePrefix }}{{ end }}</title>
+<title>{{ base $.FilePath }}{{ if $.SitePrefix }} - {{ $.SitePrefix }}{{ end }}</title>
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
   <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
