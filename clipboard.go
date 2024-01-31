@@ -1,7 +1,7 @@
 package nb9
 
 import (
-	"errors"
+	"context"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -13,6 +13,10 @@ import (
 )
 
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
+	// TODO: consider making this writeResponse instead, together with a
+	// Response struct that makes sense when called for cut | copy | clear |
+	// paste. It also means we can set stuff like InvalidSrcParent |
+	// InvalidDestParent for the Error field.
 	redirect := func(w http.ResponseWriter, r *http.Request) {
 		referer := r.Referer()
 		if referer == "" {
@@ -130,101 +134,10 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				continue
 			}
 			g.Go(func() error {
-				// move(ctx, destParent, srcParent, name string)
-				// copy(ctx, destParent, srcParent, name string)
-				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(srcSitePrefix, srcParent, name))
-				if err != nil {
-					if errors.Is(err, fs.ErrNotExist) {
-						return nil
-					}
-					return err
+				if isCut {
+					return moveFile(ctx, nbrew.FS, destParent, srcParent, name)
 				}
-				var destNotExist bool
-				destFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(sitePrefix, destParent, name))
-				if err != nil {
-					if !errors.Is(err, fs.ErrNotExist) {
-						return err
-					}
-					destNotExist = true
-				}
-				if srcFileInfo.IsDir() {
-					if destNotExist {
-						if isCut {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						} else {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						}
-					} else if destFileInfo.IsDir() {
-						if isCut {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						} else {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						}
-					} else {
-						if isCut {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						} else {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						}
-					}
-				} else {
-					if destNotExist {
-						if isCut {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						} else {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						}
-					} else if destFileInfo.IsDir() {
-						if isCut {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						} else {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						}
-					} else {
-						if isCut {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						} else {
-							if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-								_ = remoteFS
-							} else {
-							}
-						}
-					}
-				}
-				return nil
+				return copyFile(ctx, nbrew.FS, destParent, srcParent, name)
 			})
 		}
 		err = g.Wait()
@@ -238,6 +151,10 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	}
 }
 
-// srcfilename destfilename (make sure to sanitize the destfilename's sitePrefix)
-func paste() {
+func moveFile(ctx context.Context, fsys FS, destParent, srcParent, name string) error {
+	return nil
+}
+
+func copyFile(ctx context.Context, fsys FS, destParent, srcParent, name string) error {
+	return nil
 }
