@@ -32,19 +32,19 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		Size    int64     `json:"size"`
 	}
 	type Response struct {
-		PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
-		ContentSite     string            `json:"contentSite"`
-		Username        NullString        `json:"username"`
-		SitePrefix      string            `json:"sitePrefix"`
-		FilePath        string            `json:"filePath"`
-		IsDir           bool              `json:"isDir"`
-		ModTime         time.Time         `json:"modTime"`
-		Content         string            `json:"content"`
-		URL             string            `json:"url,omitempty"`
-		BelongsTo       string            `json:"belongsTo,omitempty"`
-		AssetDir        string            `json:"assetDir,omitempty"`
-		Assets          []Asset           `json:"assets,omitempty"`
-		TemplateErrors  []string          `json:"templateErrors,omitempty"`
+		PostRedirectGet map[string]any `json:"postRedirectGet,omitempty"`
+		TemplateErrors  []string       `json:"templateErrors,omitempty"`
+		ContentSite     string         `json:"contentSite"`
+		Username        NullString     `json:"username"`
+		SitePrefix      string         `json:"sitePrefix"`
+		FilePath        string         `json:"filePath"`
+		IsDir           bool           `json:"isDir"`
+		ModTime         time.Time      `json:"modTime"`
+		Content         string         `json:"content"`
+		URL             string         `json:"url,omitempty"`
+		BelongsTo       string         `json:"belongsTo,omitempty"`
+		AssetDir        string         `json:"assetDir,omitempty"`
+		Assets          []Asset        `json:"assets,omitempty"`
 	}
 
 	file, err := nbrew.FS.Open(path.Join(".", sitePrefix, filePath))
@@ -363,7 +363,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				}
 				return
 			}
-			response.PostRedirectGet = map[string]string{
+			response.PostRedirectGet = map[string]any{
 				"from": "files",
 			}
 			err := nbrew.setSession(w, r, "flash", &response)
@@ -521,14 +521,14 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		Owner string `json:"owner,omitempty"`
 	}
 	type Response struct {
-		PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
-		ContentSite     string            `json:"contentSite"`
-		Username        NullString        `json:"username"`
-		SitePrefix      string            `json:"sitePrefix"`
-		FilePath        string            `json:"filePath"`
-		IsDir           bool              `json:"isDir"`
-		ModTime         time.Time         `json:"modTime"`
-		SearchSupported bool              `json:"searchSupported"`
+		PostRedirectGet map[string]any `json:"postRedirectGet,omitempty"`
+		ContentSite     string         `json:"contentSite"`
+		Username        NullString     `json:"username"`
+		SitePrefix      string         `json:"sitePrefix"`
+		FilePath        string         `json:"filePath"`
+		IsDir           bool           `json:"isDir"`
+		ModTime         time.Time      `json:"modTime"`
+		SearchSupported bool           `json:"searchSupported"`
 
 		Files []File `json:"files,omitempty"`
 
@@ -933,14 +933,14 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		Size    int64     `json:"size,omitempty"`
 	}
 	type Response struct {
-		PostRedirectGet map[string]string `json:"postRedirectGet,omitempty"`
-		ContentSite     string            `json:"contentSite"`
-		Username        NullString        `json:"username"`
-		SitePrefix      string            `json:"sitePrefix"`
-		FilePath        string            `json:"filePath"`
-		IsDir           bool              `json:"isDir"`
-		ModTime         time.Time         `json:"modTime"`
-		SearchSupported bool              `json:"searchSupported"`
+		PostRedirectGet map[string]any `json:"postRedirectGet,omitempty"`
+		ContentSite     string         `json:"contentSite"`
+		Username        NullString     `json:"username"`
+		SitePrefix      string         `json:"sitePrefix"`
+		FilePath        string         `json:"filePath"`
+		IsDir           bool           `json:"isDir"`
+		ModTime         time.Time      `json:"modTime"`
+		SearchSupported bool           `json:"searchSupported"`
 
 		Sort               string `json:"sort,omitempty"`
 		Order              string `json:"order,omitempty"`

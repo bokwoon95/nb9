@@ -31,6 +31,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 	type Response struct {
 		Error          string     `json:"error,omitempty"`
 		FormErrors     url.Values `json:"formErrors,omitempty"`
+		TemplateErrors []string   `json:"templateErrors,omitempty"`
 		ContentSite    string     `json:"contentSite"`
 		Username       NullString `json:"username"`
 		SitePrefix     string     `json:"sitePrefix"`
@@ -38,7 +39,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		Name           string     `json:"name,omitempty"`
 		Ext            string     `json:"ext,omitempty"`
 		Content        string     `json:"content,omitempty"`
-		TemplateErrors []string   `json:"templateErrors,omitempty"`
 	}
 
 	isValidParent := func(parent string) bool {
@@ -163,7 +163,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
-				"postRedirectGet": map[string]string{
+				"postRedirectGet": map[string]any{
 					"from": "createfile",
 				},
 				"templateErrors": response.TemplateErrors,

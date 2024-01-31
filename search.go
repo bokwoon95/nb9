@@ -154,6 +154,8 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 			internalServerError(w, r, err)
 			return
 		}
+	case "postgres":
+	case "mysql":
 	}
 	writeResponse(w, r, response)
 }

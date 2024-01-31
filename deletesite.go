@@ -188,7 +188,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
-				"postRedirectGet": map[string]string{
+				"postRedirectGet": map[string]any{
 					"from":     "deletesite",
 					"siteName": response.SiteName,
 				},

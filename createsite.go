@@ -18,6 +18,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
+	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, username string) {
@@ -151,7 +152,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				sitePrefix = "@" + response.SiteName
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
-				"postRedirectGet": map[string]string{
+				"postRedirectGet": map[string]any{
 					"from":       "createsite",
 					"sitePrefix": sitePrefix,
 				},
@@ -311,102 +312,94 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			),
 			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
 		)
-		// index.html
-		b, err := fs.ReadFile(RuntimeFS, "embed/index.html")
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		writer, err := nbrew.FS.OpenWriter(path.Join(sitePrefix, "pages/index.html"), 0644)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		defer writer.Close()
-		_, err = writer.Write(b)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		err = writer.Close()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		err = siteGen.GeneratePage(context.Background(), "pages/index.html", string(b), markdown)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		// post.html
-		b, err = fs.ReadFile(RuntimeFS, "embed/post.html")
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		writer, err = nbrew.FS.OpenWriter(path.Join(sitePrefix, "output/themes/post.html"), 0644)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		defer writer.Close()
-		_, err = writer.Write(b)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		err = writer.Close()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		// postlist.html
-		b, err = fs.ReadFile(RuntimeFS, "embed/postlist.html")
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		writer, err = nbrew.FS.OpenWriter(path.Join(sitePrefix, "output/themes/postlist.html"), 0644)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		defer writer.Close()
-		_, err = writer.Write(b)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		err = writer.Close()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		tmpl, err := siteGen.PostListTemplate(context.Background(), "")
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		err = siteGen.GeneratePostList(context.Background(), "", markdown, tmpl)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
+		g, ctx := errgroup.WithContext(r.Context())
+		g.Go(func() error {
+			b, err := fs.ReadFile(RuntimeFS, "embed/index.html")
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "pages/index.html"), 0644)
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			defer writer.Close()
+			_, err = writer.Write(b)
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			err = writer.Close()
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			err = siteGen.GeneratePage(ctx, "pages/index.html", string(b), markdown)
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			return nil
+		})
+		g.Go(func() error {
+			b, err := fs.ReadFile(RuntimeFS, "embed/post.html")
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "output/themes/post.html"), 0644)
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			defer writer.Close()
+			_, err = writer.Write(b)
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			err = writer.Close()
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			return nil
+		})
+		g.Go(func() error {
+			b, err := fs.ReadFile(RuntimeFS, "embed/postlist.html")
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			writer, err := nbrew.FS.OpenWriter(path.Join(sitePrefix, "output/themes/postlist.html"), 0644)
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			defer writer.Close()
+			_, err = writer.Write(b)
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			err = writer.Close()
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			tmpl, err := siteGen.PostListTemplate(context.Background(), "")
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			err = siteGen.GeneratePostList(context.Background(), "", markdown, tmpl)
+			if err != nil {
+				getLogger(ctx).Error(err.Error())
+				return nil
+			}
+			return nil
+		})
 		if nbrew.UsersDB != nil {
 			tx, err := nbrew.UsersDB.Begin()
 			if err != nil {

@@ -707,18 +707,18 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 	if name == "." {
 		return nil
 	}
-	tx, err := fsys.filesDB.BeginTx(fsys.ctx, nil)
+	conn, err := fsys.filesDB.Conn(fsys.ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer conn.Close()
 
 	// Insert the top level directory (no parent), ignoring duplicates.
 	modTime := time.Now().UTC().Truncate(time.Second)
 	segments := strings.Split(name, "/")
 	switch fsys.filesDialect {
 	case "sqlite", "postgres":
-		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
+		_, err := sq.Exec(fsys.ctx, conn, sq.Query{
 			Dialect: fsys.filesDialect,
 			Format: "INSERT INTO files (file_id, file_path, mod_time, is_dir)" +
 				" VALUES ({fileID}, {filePath}, {modTime}, TRUE)" +
@@ -733,7 +733,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 			return err
 		}
 	case "mysql":
-		_, err := sq.Exec(fsys.ctx, tx, sq.Query{
+		_, err := sq.Exec(fsys.ctx, conn, sq.Query{
 			Dialect: fsys.filesDialect,
 			Format: "INSERT INTO files (file_id, file_path, mod_time, is_dir)" +
 				" VALUES ({fileID}, {filePath}, {modTime}, TRUE)" +
@@ -756,7 +756,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 		var preparedExec *sq.PreparedExec
 		switch fsys.filesDialect {
 		case "sqlite", "postgres":
-			preparedExec, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
+			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
 				Dialect: fsys.filesDialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, is_dir)" +
 					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, TRUE)" +
@@ -772,7 +772,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 				return err
 			}
 		case "mysql":
-			preparedExec, err = sq.PrepareExec(fsys.ctx, tx, sq.Query{
+			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
 				Dialect: fsys.filesDialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, is_dir)" +
 					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, TRUE)" +
@@ -808,11 +808,6 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
 	}
 	return nil
 }

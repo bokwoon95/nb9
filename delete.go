@@ -203,7 +203,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				b.WriteString(" (" + strconv.Itoa(len(response.Errors)) + " errors)")
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
-				"postRedirectGet": map[string]string{
+				"postRedirectGet": map[string]any{
 					"from": "delete",
 					"msg":  b.String(),
 				},

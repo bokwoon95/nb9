@@ -1642,8 +1642,8 @@ func NewPagination(currentPage, lastPage, visiblePages int) Pagination {
 	// the page numbers as integers. They will be converted to strings later.
 	slots := make([]int, visiblePages)
 	// A unit is a tenth of the maximum number of pages. The rationale is that
-	// users have to paginate at most 10 such units to get from start to end,
-	// no matter how many pages there are.
+	// users should have to paginate at most 10 such units to get from start to
+	// end, no matter how many pages there are.
 	unit := lastPage / 10
 	if currentPage-1 < len(slots)>>1 {
 		// If there are fewer pages on the left than half of the slots, the

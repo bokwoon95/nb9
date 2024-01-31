@@ -139,7 +139,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 				return
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
-				"postRedirectGet": map[string]string{
+				"postRedirectGet": map[string]any{
 					"from":   "createfolder",
 					"parent": response.Parent,
 					"name":   response.Name,
