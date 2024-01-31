@@ -21,11 +21,6 @@ import (
 	"time"
 
 	"github.com/bokwoon95/nb9/sq"
-	"github.com/yuin/goldmark"
-	highlighting "github.com/yuin/goldmark-highlighting"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/sync/errgroup"
 )
@@ -461,18 +456,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			internalServerError(w, r, err)
 			return
 		}
-		markdown := goldmark.New(
-			goldmark.WithParserOptions(parser.WithAttribute()),
-			goldmark.WithExtensions(
-				extension.Table,
-				highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
-			),
-			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-		)
 		head, _, _ := strings.Cut(filePath, "/")
 		switch head {
 		case "pages":
-			err := siteGen.GeneratePage(r.Context(), filePath, response.Content, markdown)
+			err := siteGen.GeneratePage(r.Context(), filePath, response.Content)
 			if err != nil {
 				var parseErr TemplateParseError
 				var executionErr *TemplateExecutionError
@@ -493,7 +480,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				internalServerError(w, r, err)
 				return
 			}
-			err = siteGen.GeneratePost(r.Context(), filePath, response.Content, markdown, tmpl)
+			err = siteGen.GeneratePost(r.Context(), filePath, response.Content, tmpl)
 			if err != nil {
 				var parseErr TemplateParseError
 				var executionErr *TemplateExecutionError

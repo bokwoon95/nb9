@@ -13,11 +13,6 @@ import (
 	"time"
 
 	"github.com/bokwoon95/nb9/sq"
-	"github.com/yuin/goldmark"
-	highlighting "github.com/yuin/goldmark-highlighting"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -64,14 +59,6 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		internalServerError(w, r, err)
 		return
 	}
-	markdown := goldmark.New(
-		goldmark.WithParserOptions(parser.WithAttribute()),
-		goldmark.WithExtensions(
-			extension.Table,
-			highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
-		),
-		goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-	)
 	if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
 		type File struct {
 			FilePath string
@@ -113,7 +100,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 						file.FilePath = strings.TrimPrefix(file.FilePath, sitePrefix+"/")
 					}
 					count.Add(1)
-					return siteGen.GeneratePage(ctx2, file.FilePath, file.Text, markdown)
+					return siteGen.GeneratePage(ctx2, file.FilePath, file.Text)
 				})
 			}
 			err = cursor.Close()
@@ -164,7 +151,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 					}
 					if !file.IsDir {
 						count.Add(1)
-						return siteGen.GeneratePost(ctx2, file.FilePath, file.Text, markdown, postTemplate)
+						return siteGen.GeneratePost(ctx2, file.FilePath, file.Text, postTemplate)
 					}
 					_, category, _ := strings.Cut(file.FilePath, "/")
 					if strings.Contains(category, "/") {
@@ -174,7 +161,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 					if err != nil {
 						return err
 					}
-					n, err := siteGen.GeneratePostList(ctx2, category, markdown, postListTemplate)
+					n, err := siteGen.GeneratePostList(ctx2, category, postListTemplate)
 					count.Add(int64(n))
 					if err != nil {
 						return err
@@ -247,7 +234,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 					filePath = strings.TrimPrefix(filePath, sitePrefix+"/")
 				}
 				count.Add(1)
-				return siteGen.GeneratePage(ctx2, filePath, b.String(), markdown)
+				return siteGen.GeneratePage(ctx2, filePath, b.String())
 			})
 			return nil
 		})
@@ -294,7 +281,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 						filePath = strings.TrimPrefix(filePath, sitePrefix+"/")
 					}
 					count.Add(1)
-					return siteGen.GeneratePost(ctx2, filePath, b.String(), markdown, postTemplate)
+					return siteGen.GeneratePost(ctx2, filePath, b.String(), postTemplate)
 				}
 				if sitePrefix != "" {
 					filePath = strings.TrimPrefix(filePath, sitePrefix+"/")
@@ -307,7 +294,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 				if err != nil {
 					return err
 				}
-				n, err := siteGen.GeneratePostList(ctx2, category, markdown, postListTemplate)
+				n, err := siteGen.GeneratePostList(ctx2, category, postListTemplate)
 				count.Add(int64(n))
 				if err != nil {
 					return err
@@ -433,14 +420,6 @@ func (nbrew *Notebrew) regeneratelist(w http.ResponseWriter, r *http.Request, si
 		internalServerError(w, r, err)
 		return
 	}
-	markdown := goldmark.New(
-		goldmark.WithParserOptions(parser.WithAttribute()),
-		goldmark.WithExtensions(
-			extension.Table,
-			highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
-		),
-		goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-	)
 	tmpl, err := siteGen.PostListTemplate(r.Context(), response.Category)
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
@@ -448,7 +427,7 @@ func (nbrew *Notebrew) regeneratelist(w http.ResponseWriter, r *http.Request, si
 		return
 	}
 	startedAt := time.Now()
-	response.Count, err = siteGen.GeneratePostList(r.Context(), response.Category, markdown, tmpl)
+	response.Count, err = siteGen.GeneratePostList(r.Context(), response.Category, tmpl)
 	response.TimeTaken = time.Since(startedAt).String()
 	if err != nil {
 		var parseErr TemplateParseError

@@ -16,11 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yuin/goldmark"
-	highlighting "github.com/yuin/goldmark-highlighting"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -321,21 +316,13 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 							getLogger(ctx).Error(err.Error())
 							return nil
 						}
-						markdown := goldmark.New(
-							goldmark.WithParserOptions(parser.WithAttribute()),
-							goldmark.WithExtensions(
-								extension.Table,
-								highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
-							),
-							goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-						)
 						category := tail
 						tmpl, err := siteGen.PostListTemplate(r.Context(), category)
 						if err != nil {
 							getLogger(ctx).Error(err.Error())
 							return nil
 						}
-						_, err = siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
+						_, err = siteGen.GeneratePostList(r.Context(), category, tmpl)
 						if err != nil {
 							getLogger(ctx).Error(err.Error())
 							return nil

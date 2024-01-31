@@ -25,6 +25,10 @@ import (
 
 	"github.com/bokwoon95/nb9/sq"
 	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/net/html"
 	"golang.org/x/sync/errgroup"
 )
@@ -37,18 +41,17 @@ type SiteGenerator struct {
 	sitePrefix         string
 	contentDomain      string
 	cdnDomain          string
+	markdown           goldmark.Markdown
 	mu                 sync.Mutex
 	templateCache      map[string]*template.Template
 	templateInProgress map[string]chan struct{}
 }
 
 type Site struct {
-	Title      string
-	Favicon    template.URL
-	Emoji      string
-	Lang       string
-	Categories []string
-	CodeStyle  string
+	Lang        string
+	Title       string
+	Description template.HTML
+	Favicon     template.URL
 }
 
 func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, cdnDomain string) (*SiteGenerator, error) {
@@ -61,59 +64,56 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, c
 		templateCache:      make(map[string]*template.Template),
 		templateInProgress: make(map[string]chan struct{}),
 	}
+	var config struct {
+		Lang        string
+		Title       string
+		Description string
+		Emoji       string
+		Favicon     string
+		CodeStyle   string
+	}
 	b, err := fs.ReadFile(fsys, path.Join(sitePrefix, "site.json"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
 	if len(b) > 0 {
-		err := json.Unmarshal(b, &siteGen.Site)
+		err := json.Unmarshal(b, &config)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if siteGen.Site.Emoji == "" {
-		siteGen.Site.Emoji = "☕"
+	if config.Lang == "" {
+		config.Lang = "en"
 	}
-	if siteGen.Site.Favicon == "" {
-		siteGen.Site.Favicon = template.URL("data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>" + siteGen.Site.Emoji + "</text></svg>")
+	if config.Emoji == "" {
+		config.Emoji = "☕"
 	}
-	if siteGen.Site.Lang == "" {
-		siteGen.Site.Lang = "en"
+	if config.Favicon == "" {
+		config.Favicon = "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>" + config.Emoji + "</text></svg>"
 	}
-	if siteGen.Site.CodeStyle == "" {
-		siteGen.Site.CodeStyle = "onedark"
+	if config.CodeStyle == "" {
+		config.CodeStyle = "onedark"
 	}
-	if siteGen.Site.Categories == nil {
-		if remoteFS, ok := fsys.(*RemoteFS); ok {
-			categories, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
-				Format: "SELECT {*}" +
-					" FROM files" +
-					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
-					" AND is_dir" +
-					" ORDER BY file_path",
-				Values: []any{
-					sq.StringParam("filePath", path.Join(sitePrefix, "posts")),
-				},
-			}, func(row *sq.Row) string {
-				return path.Base(row.String("file_path"))
-			})
-			if err != nil {
-				return nil, err
-			}
-			siteGen.Site.Categories = categories
-		} else {
-			dirEntries, err := fsys.ReadDir(path.Join(sitePrefix, "posts"))
-			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return nil, err
-			}
-			for _, dirEntry := range dirEntries {
-				if !dirEntry.IsDir() {
-					continue
-				}
-				siteGen.Site.Categories = append(siteGen.Site.Categories, dirEntry.Name())
-			}
+	siteGen.markdown = goldmark.New(
+		goldmark.WithParserOptions(parser.WithAttribute()),
+		goldmark.WithExtensions(
+			extension.Table,
+			highlighting.NewHighlighting(highlighting.WithStyle(config.CodeStyle)),
+		),
+		goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+	)
+	siteGen.Site = Site{
+		Lang:    config.Lang,
+		Title:   config.Title,
+		Favicon: template.URL(config.Favicon),
+	}
+	if config.Description != "" {
+		var b strings.Builder
+		err := siteGen.markdown.Convert([]byte(config.Description), &b)
+		if err != nil {
+			return nil, err
 		}
+		siteGen.Site.Description = template.HTML(b.String())
 	}
 	return siteGen, nil
 }
@@ -366,7 +366,7 @@ type Image struct {
 	Name   string
 }
 
-func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text string, markdown goldmark.Markdown) error {
+func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text string) error {
 	urlPath := strings.TrimPrefix(filePath, "pages/")
 	if urlPath == "index.html" {
 		urlPath = ""
@@ -459,7 +459,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 						}
 						defer file.Close()
 						var b strings.Builder
-						err = markdown.Convert(file.buf.Bytes(), &b)
+						err = siteGen.markdown.Convert(file.buf.Bytes(), &b)
 						if err != nil {
 							return err
 						}
@@ -509,7 +509,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 							return err
 						}
 						var b strings.Builder
-						err = markdown.Convert(buf.Bytes(), &b)
+						err = siteGen.markdown.Convert(buf.Bytes(), &b)
 						if err != nil {
 							return err
 						}
@@ -706,7 +706,7 @@ type PostData struct {
 	ModificationTime time.Time
 }
 
-func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text string, markdown goldmark.Markdown, tmpl *template.Template) error {
+func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text string, tmpl *template.Template) error {
 	urlPath := strings.TrimSuffix(filePath, path.Ext(filePath))
 	outputDir := path.Join(siteGen.sitePrefix, "output", urlPath)
 	postData := PostData{
@@ -749,12 +749,12 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 			if len(line) == 0 {
 				continue
 			}
-			postData.Title = stripMarkdownStyles(markdown, line)
+			postData.Title = stripMarkdownStyles(siteGen.markdown, line)
 			break
 		}
 		// Content
 		var b strings.Builder
-		err = markdown.Convert(contentBytes, &b)
+		err = siteGen.markdown.Convert(contentBytes, &b)
 		if err != nil {
 			return err
 		}
@@ -884,7 +884,7 @@ type PostListData struct {
 	Posts      []Post
 }
 
-func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category string, markdown goldmark.Markdown, tmpl *template.Template) (int, error) {
+func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category string, tmpl *template.Template) (int, error) {
 	var config struct {
 		PostsPerPage int `json:"postsPerPage"`
 	}
@@ -1009,7 +1009,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 				posts := slices.Clone(batch)
 				batch = batch[:0]
 				g1.Go(func() error {
-					return siteGen.GeneratePostListPage(ctx1, category, markdown, tmpl, lastPage, currentPage, posts)
+					return siteGen.GeneratePostListPage(ctx1, category, tmpl, lastPage, currentPage, posts)
 				})
 			}
 		}
@@ -1019,7 +1019,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		}
 		if len(batch) > 0 {
 			g1.Go(func() error {
-				return siteGen.GeneratePostListPage(ctx1, category, markdown, tmpl, lastPage, page, batch)
+				return siteGen.GeneratePostListPage(ctx1, category, tmpl, lastPage, page, batch)
 			})
 		}
 		err = g1.Wait()
@@ -1027,7 +1027,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			return page, err
 		}
 		if page == 1 && len(batch) == 0 {
-			err := siteGen.GeneratePostListPage(ctx, category, markdown, tmpl, 1, 1, nil)
+			err := siteGen.GeneratePostListPage(ctx, category, tmpl, 1, 1, nil)
 			if err != nil {
 				return page, err
 			}
@@ -1100,13 +1100,13 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			posts := slices.Clone(batch)
 			batch = batch[:0]
 			g1.Go(func() error {
-				return siteGen.GeneratePostListPage(ctx1, category, markdown, tmpl, lastPage, currentPage, posts)
+				return siteGen.GeneratePostListPage(ctx1, category, tmpl, lastPage, currentPage, posts)
 			})
 		}
 	}
 	if len(batch) > 0 {
 		g1.Go(func() error {
-			return siteGen.GeneratePostListPage(ctx1, category, markdown, tmpl, lastPage, page, batch)
+			return siteGen.GeneratePostListPage(ctx1, category, tmpl, lastPage, page, batch)
 		})
 	}
 	err = g1.Wait()
@@ -1114,7 +1114,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		return page, err
 	}
 	if page == 1 && len(batch) == 0 {
-		err := siteGen.GeneratePostListPage(ctx, category, markdown, tmpl, 1, 1, nil)
+		err := siteGen.GeneratePostListPage(ctx, category, tmpl, 1, 1, nil)
 		if err != nil {
 			return page, err
 		}
@@ -1122,7 +1122,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 	return page, nil
 }
 
-func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category string, markdown goldmark.Markdown, tmpl *template.Template, lastPage, currentPage int, posts []Post) error {
+func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category string, tmpl *template.Template, lastPage, currentPage int, posts []Post) error {
 	n := 0
 	for _, post := range posts {
 		prefix, _, _ := strings.Cut(post.Name, "-")
@@ -1191,17 +1191,17 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 					continue
 				}
 				if posts[i].Title == "" {
-					posts[i].Title = stripMarkdownStyles(markdown, line)
+					posts[i].Title = stripMarkdownStyles(siteGen.markdown, line)
 					continue
 				}
 				if posts[i].Preview == "" {
-					posts[i].Preview = stripMarkdownStyles(markdown, line)
+					posts[i].Preview = stripMarkdownStyles(siteGen.markdown, line)
 					continue
 				}
 				break
 			}
 			var b strings.Builder
-			err := markdown.Convert(posts[i].text, &b)
+			err := siteGen.markdown.Convert(posts[i].text, &b)
 			if err != nil {
 				return err
 			}

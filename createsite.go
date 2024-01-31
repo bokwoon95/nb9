@@ -13,11 +13,6 @@ import (
 	"strings"
 
 	"github.com/bokwoon95/nb9/sq"
-	"github.com/yuin/goldmark"
-	highlighting "github.com/yuin/goldmark-highlighting"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -304,14 +299,6 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		markdown := goldmark.New(
-			goldmark.WithParserOptions(parser.WithAttribute()),
-			goldmark.WithExtensions(
-				extension.Table,
-				highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
-			),
-			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-		)
 		g, ctx := errgroup.WithContext(r.Context())
 		g.Go(func() error {
 			b, err := fs.ReadFile(RuntimeFS, "embed/index.html")
@@ -335,7 +322,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				getLogger(ctx).Error(err.Error())
 				return nil
 			}
-			err = siteGen.GeneratePage(ctx, "pages/index.html", string(b), markdown)
+			err = siteGen.GeneratePage(ctx, "pages/index.html", string(b))
 			if err != nil {
 				getLogger(ctx).Error(err.Error())
 				return nil
@@ -393,7 +380,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				getLogger(ctx).Error(err.Error())
 				return nil
 			}
-			_, err = siteGen.GeneratePostList(context.Background(), "", markdown, tmpl)
+			_, err = siteGen.GeneratePostList(context.Background(), "", tmpl)
 			if err != nil {
 				getLogger(ctx).Error(err.Error())
 				return nil

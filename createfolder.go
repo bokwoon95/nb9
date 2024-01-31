@@ -10,12 +10,6 @@ import (
 	"net/url"
 	"path"
 	"strings"
-
-	"github.com/yuin/goldmark"
-	highlighting "github.com/yuin/goldmark-highlighting"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
 func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -238,20 +232,12 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 			} else {
-				markdown := goldmark.New(
-					goldmark.WithParserOptions(parser.WithAttribute()),
-					goldmark.WithExtensions(
-						extension.Table,
-						highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
-					),
-					goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-				)
 				category := response.Name
 				tmpl, err := siteGen.PostListTemplate(r.Context(), category)
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
 				} else {
-					err = siteGen.GeneratePostListPage(r.Context(), category, markdown, tmpl, 1, 1, nil)
+					err = siteGen.GeneratePostListPage(r.Context(), category, tmpl, 1, 1, nil)
 					if err != nil {
 						getLogger(r.Context()).Error(err.Error())
 					}

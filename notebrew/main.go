@@ -32,11 +32,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/yuin/goldmark"
-	highlighting "github.com/yuin/goldmark-highlighting"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
 type SMTPConfig struct {
@@ -618,14 +613,6 @@ func main() {
 		if err != nil {
 			return err
 		}
-		markdown := goldmark.New(
-			goldmark.WithParserOptions(parser.WithAttribute()),
-			goldmark.WithExtensions(
-				extension.Table,
-				highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
-			),
-			goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-		)
 		_, err = fs.Stat(nbrew.FS, "pages/index.html")
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
@@ -648,7 +635,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			err = siteGen.GeneratePage(context.Background(), "pages/index.html", string(b), markdown)
+			err = siteGen.GeneratePage(context.Background(), "pages/index.html", string(b))
 			if err != nil {
 				return err
 			}
@@ -702,7 +689,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			_, err = siteGen.GeneratePostList(context.Background(), "", markdown, tmpl)
+			_, err = siteGen.GeneratePostList(context.Background(), "", tmpl)
 			if err != nil {
 				return err
 			}

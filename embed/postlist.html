@@ -9,9 +9,9 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
 </div>
 <hr>
 <h1>{{ if $.Category }}{{ $.Category }}{{ else }}posts{{ end }}</h1>
-{{- if $.Posts }}
+{{ if $.Posts }}
   <ul style='padding-left: 1rem; padding-right: 1rem;'>
-    {{- range $post := $.Posts }}
+    {{ range $post := $.Posts }}
     <li>
       <div>
         <a href='{{ $post.Name }}/' style='font-weight: bold;'>{{ $post.Title }}</a>
@@ -21,27 +21,27 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
         {{ $post.Preview }}
       </div>
     </li>
-    {{- end }}
+    {{ end }}
   </ul>
-  {{- if ne $.Pagination.First $.Pagination.Last }}
+  {{ if ne $.Pagination.First $.Pagination.Last }}
   <div>
-    {{- if ne $.Pagination.Current $.Pagination.First }}
+    {{ if ne $.Pagination.Current $.Pagination.First }}
     <a href='{{ $.Pagination.First }}/' class='mr1'>first</a>
-    {{- end }}
-    {{- if $.Pagination.Previous }}
+    {{ end }}
+    {{ if $.Pagination.Previous }}
     <a href='{{ $.Pagination.Previous }}/' class='mr1'>previous</a>
-    {{- end }}
-    {{- range $number := $.Pagination.Numbers }}
+    {{ end }}
+    {{ range $number := $.Pagination.Numbers }}
     <a href='{{ $number }}/' class='mr1{{ if eq $number $.Pagination.Current }} b{{ end }}'>{{ $number }}</a>
-    {{- end }}
-    {{- if $.Pagination.Next }}
+    {{ end }}
+    {{ if $.Pagination.Next }}
     <a href='{{ $.Pagination.Next }}/' class='mr1'>next</a>
-    {{- end }}
-    {{- if ne $.Pagination.Current $.Pagination.Last }}
+    {{ end }}
+    {{ if ne $.Pagination.Current $.Pagination.Last }}
     <a href='{{ $.Pagination.Last }}/' class='mr1'>last</a>
-    {{- end }}
+    {{ end }}
   </div>
-  {{- end }}
-{{- else }}
+  {{ end }}
+{{ else }}
   <p>- No posts -</p>
-{{- end }}
+{{ end }}

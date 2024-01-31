@@ -13,12 +13,6 @@ import (
 	"path"
 	"strings"
 	"time"
-
-	"github.com/yuin/goldmark"
-	highlighting "github.com/yuin/goldmark-highlighting"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
 func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -315,17 +309,9 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				internalServerError(w, r, err)
 				return
 			}
-			markdown := goldmark.New(
-				goldmark.WithParserOptions(parser.WithAttribute()),
-				goldmark.WithExtensions(
-					extension.Table,
-					highlighting.NewHighlighting(highlighting.WithStyle(siteGen.Site.CodeStyle)),
-				),
-				goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
-			)
 			switch head {
 			case "pages":
-				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content, markdown)
+				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content)
 				if err != nil {
 					var parseErr TemplateParseError
 					var executionErr *TemplateExecutionError
@@ -350,7 +336,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 						getLogger(r.Context()).Error(err.Error())
 					}
 				} else {
-					err := siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content, markdown, tmpl)
+					err := siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content, tmpl)
 					if err != nil {
 						var parseErr TemplateParseError
 						var executionErr *TemplateExecutionError
@@ -375,7 +361,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 								getLogger(r.Context()).Error(err.Error())
 							}
 						} else {
-							_, err := siteGen.GeneratePostList(r.Context(), category, markdown, tmpl)
+							_, err := siteGen.GeneratePostList(r.Context(), category, tmpl)
 							if err != nil {
 								var parseErr TemplateParseError
 								var executionErr *TemplateExecutionError
