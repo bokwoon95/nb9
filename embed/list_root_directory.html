@@ -56,7 +56,7 @@
 {{- end }}
 {{- if eq (index $.PostRedirectGet "from") "createsite" }}
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
-  <div>Site created: <a href='/files/{{ index $.PostRedirectGet "sitePrefix" }}/'>{{ trimPrefix (index $.PostRedirectGet "sitePrefix") "@" }}</a></div>
+  <div>site created: <a href='/files/{{ index $.PostRedirectGet "sitePrefix" }}/'>{{ trimPrefix (index $.PostRedirectGet "sitePrefix") "@" }}</a></div>
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
@@ -65,7 +65,7 @@
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
   <div class='flex items-center'>
     {{ template "heroicons-trash" }}
-    <span class='ml2'>Site deleted: {{ index $.PostRedirectGet "siteName" }}</span>
+    <span class='ml2'>site deleted: {{ index $.PostRedirectGet "siteName" }}</span>
   </div>
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>

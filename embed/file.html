@@ -23,11 +23,11 @@
 {{- if eq (index $.PostRedirectGet "from") "createfile" }}
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
   {{- if eq (head $.FilePath) "pages" }}
-  <div>Page created</div>
+  <div>page created</div>
   {{- else if eq (head $.FilePath) "posts" }}
-  <div>Post created</div>
+  <div>post created</div>
   {{- else }}
-  <div>File created</div>
+  <div>file created</div>
   {{- end }}
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
@@ -35,7 +35,7 @@
 {{- end }}
 {{- if eq (index $.PostRedirectGet "from") "files" }}
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
-  <div>Saved</div>
+  <div>saved</div>
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
