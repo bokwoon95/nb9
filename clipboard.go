@@ -130,6 +130,8 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				continue
 			}
 			g.Go(func() error {
+				// move(ctx, destParent, srcParent, name string)
+				// copy(ctx, destParent, srcParent, name string)
 				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(srcSitePrefix, srcParent, name))
 				if err != nil {
 					if errors.Is(err, fs.ErrNotExist) {

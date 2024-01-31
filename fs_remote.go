@@ -993,9 +993,9 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	if oldnameIsDir {
 		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format:  "UPDATE files SET file_path = {newFilePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
+			Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 			Values: []any{
-				sq.Param("newFilePath", sq.DialectExpression{
+				sq.Param("filePath", sq.DialectExpression{
 					Default: sq.Expr("{} || SUBSTR(file_path, {})", newname, len(oldname)+1),
 					Cases: []sq.DialectCase{{
 						Dialect: "mysql",
