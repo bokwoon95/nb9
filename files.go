@@ -142,6 +142,15 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		response.FilePath = filePath
 		response.IsDir = fileInfo.IsDir()
 		response.ModTime = fileInfo.ModTime()
+		switch fsys := nbrew.FS.(type) {
+		case *LocalFS:
+			_ = fsys
+			// filePath := path.Join(fsys.rootDir, sitePrefix, response.FilePath)
+			// response.CreationTime, err = getCreationTime(filePath, fileInfo)
+			// if err != nil {
+			// }
+		case *RemoteFS:
+		}
 
 		if isEditable {
 			var b strings.Builder

@@ -8,10 +8,7 @@ import (
 	"time"
 )
 
-func getCreationTime(filePath string, fileInfo fs.FileInfo) (time.Time, error) {
-	if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
-		return fileInfo.creationTime, nil
-	}
+func getCreationTime(filePath string, fileInfo fs.FileInfo) time.Time {
 	stat := fileInfo.Sys().(*syscall.Stat_t)
-	return time.Unix(stat.Birthtimespec.Sec, stat.Birthtimespec.Nsec), nil
+	return time.Unix(stat.Birthtimespec.Sec, stat.Birthtimespec.Nsec)
 }

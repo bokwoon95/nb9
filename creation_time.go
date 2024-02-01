@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-func getCreationTime(filePath string, fileInfo fs.FileInfo) (time.Time, error) {
-	if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
-		return fileInfo.creationTime, nil
-	}
-	return time.Time{}, nil
+func getCreationTime(filePath string, fileInfo fs.FileInfo) time.Time {
+	return time.Time{}
 }
