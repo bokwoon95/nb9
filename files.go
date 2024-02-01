@@ -977,8 +977,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		SitePrefix      string         `json:"sitePrefix"`
 		FilePath        string         `json:"filePath"`
 		IsDir           bool           `json:"isDir"`
-		ModTime         time.Time      `json:"modTime"`
-		CreationTime    time.Time      `json:"creationTime"`
 		SearchSupported bool           `json:"searchSupported"`
 
 		Sort               string `json:"sort,omitempty"`
@@ -986,11 +984,14 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		From               string `json:"from,omitempty"`
 		Before             string `json:"before,omitempty"`
 		Limit              int    `json:"limit,omitempty"`
-		Files              []File `json:"files,omitempty"`
+		Files              []File `json:"files"`
 		PreviousFileExists bool   `json:"previousFileExists,omitempty"`
 		NextFile           string `json:"nextFile,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
+		if response.Files == nil {
+			response.Files = []File{}
+		}
 		if r.Form.Has("api") {
 			w.Header().Set("Content-Type", "application/json")
 			encoder := json.NewEncoder(w)
