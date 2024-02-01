@@ -1284,10 +1284,11 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				},
 			}, func(row *sq.Row) File {
 				return File{
-					Name:    path.Base(row.String("files.file_path")),
-					Size:    row.Int64("size"),
-					ModTime: row.Time("mod_time"),
-					IsDir:   row.Bool("is_dir"),
+					Name:         path.Base(row.String("file_path")),
+					Size:         row.Int64("size"),
+					ModTime:      row.Time("mod_time"),
+					CreationTime: row.Time("creation_time"),
+					IsDir:        row.Bool("is_dir"),
 				}
 			})
 			if err != nil {
@@ -1297,9 +1298,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			if len(response.Files) > response.Limit {
 				nextFile := response.Files[response.Limit]
 				response.Files = response.Files[:response.Limit]
-				if response.Sort == "name" || response.Sort == "created" {
+				if response.Sort == "name" {
 					response.NextFile = nextFile.Name
-				} else if response.Sort == "edited" {
+				} else if response.Sort == "edited" || response.Sort == "created" {
 					response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
 				}
 			}
@@ -1307,7 +1308,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		})
 		g.Go(func() error {
 			var filter sq.Expression
-			if response.Sort == "name" || response.Sort == "created" {
+			if response.Sort == "name" {
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path < {}", path.Join(sitePrefix, filePath, response.From))
 				} else {
@@ -1318,6 +1319,12 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					filter = sq.Expr("mod_time < {}", fromTime)
 				} else {
 					filter = sq.Expr("mod_time > {}", fromTime)
+				}
+			} else if response.Sort == "created" {
+				if response.Order == "asc" {
+					filter = sq.Expr("creation_time < {}", fromTime)
+				} else {
+					filter = sq.Expr("creation_time > {}", fromTime)
 				}
 			}
 			hasPreviousFile, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
@@ -1350,9 +1357,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	var sortBefore bool
 	var beforeTime time.Time
 	response.Before = r.FormValue("before")
-	if response.Sort == "name" || response.Sort == "created" {
+	if response.Sort == "name" {
 		sortBefore = response.Before != ""
-	} else if response.Sort == "edited" {
+	} else if response.Sort == "edited" || response.Sort == "created" {
 		response.Before = strings.TrimSuffix(response.Before, "Z")
 		for _, format := range timestampFormats {
 			timeVal, err := time.ParseInLocation(format, response.Before, time.UTC)
@@ -1367,7 +1374,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		g, ctx := errgroup.WithContext(r.Context())
 		g.Go(func() error {
 			var filter, order sq.Expression
-			if response.Sort == "name" || response.Sort == "created" {
+			if response.Sort == "name" {
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path < {}", path.Join(sitePrefix, filePath, response.Before))
 					order = sq.Expr("file_path ASC")
@@ -1382,6 +1389,14 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				} else {
 					filter = sq.Expr("mod_time > {}", beforeTime)
 					order = sq.Expr("mod_time DESC, file_path")
+				}
+			} else if response.Sort == "created" {
+				if response.Order == "asc" {
+					filter = sq.Expr("creation_time < {}", beforeTime)
+					order = sq.Expr("creation_time ASC, file_path")
+				} else {
+					filter = sq.Expr("creation_time > {}", beforeTime)
+					order = sq.Expr("creation_time DESC, file_path")
 				}
 			}
 			files, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
@@ -1400,10 +1415,11 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				},
 			}, func(row *sq.Row) File {
 				return File{
-					Name:    path.Base(row.String("file_path")),
-					Size:    row.Int64("size"),
-					ModTime: row.Time("mod_time"),
-					IsDir:   row.Bool("is_dir"),
+					Name:         path.Base(row.String("file_path")),
+					Size:         row.Int64("size"),
+					ModTime:      row.Time("mod_time"),
+					CreationTime: row.Time("creation_time"),
+					IsDir:        row.Bool("is_dir"),
 				}
 			})
 			if err != nil {
@@ -1418,7 +1434,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		})
 		g.Go(func() error {
 			var filter, order sq.Expression
-			if response.Sort == "name" || response.Sort == "created" {
+			if response.Sort == "name" {
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path >= {}", path.Join(sitePrefix, filePath, response.Before))
 					order = sq.Expr("file_path ASC")
@@ -1433,6 +1449,14 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				} else {
 					filter = sq.Expr("mod_time <= {}", beforeTime)
 					order = sq.Expr("mod_time DESC, file_path")
+				}
+			} else if response.Sort == "created" {
+				if response.Order == "asc" {
+					filter = sq.Expr("creation_time >= {}", beforeTime)
+					order = sq.Expr("creation_time ASC, file_path")
+				} else {
+					filter = sq.Expr("creation_time <= {}", beforeTime)
+					order = sq.Expr("creation_time DESC, file_path")
 				}
 			}
 			nextFile, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
@@ -1450,8 +1474,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				},
 			}, func(row *sq.Row) File {
 				return File{
-					Name:    path.Base(row.String("file_path")),
-					ModTime: row.Time("mod_time"),
+					Name:         path.Base(row.String("file_path")),
+					ModTime:      row.Time("mod_time"),
+					CreationTime: row.Time("creation_time"),
 				}
 			})
 			if err != nil {
@@ -1460,9 +1485,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 				return err
 			}
-			if response.Sort == "name" || response.Sort == "created" {
+			if response.Sort == "name" {
 				response.NextFile = nextFile.Name
-			} else if response.Sort == "edited" {
+			} else if response.Sort == "edited" || response.Sort == "created" {
 				response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
 			}
 			return nil
@@ -1478,7 +1503,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	}
 
 	var order sq.Expression
-	if response.Sort == "name" || response.Sort == "created" {
+	if response.Sort == "name" {
 		if response.Order == "asc" {
 			order = sq.Expr("file_path ASC")
 		} else {
@@ -1489,6 +1514,12 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			order = sq.Expr("mod_time ASC, file_path")
 		} else {
 			order = sq.Expr("mod_time DESC, file_path")
+		}
+	} else if response.Sort == "created" {
+		if response.Order == "asc" {
+			order = sq.Expr("creation_time ASC, file_path")
+		} else {
+			order = sq.Expr("creation_time DESC, file_path")
 		}
 	}
 	files, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
@@ -1505,10 +1536,11 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		},
 	}, func(row *sq.Row) File {
 		return File{
-			Name:    path.Base(row.String("file_path")),
-			Size:    row.Int64("size"),
-			ModTime: row.Time("mod_time"),
-			IsDir:   row.Bool("is_dir"),
+			Name:         path.Base(row.String("file_path")),
+			Size:         row.Int64("size"),
+			ModTime:      row.Time("mod_time"),
+			CreationTime: row.Time("creation_time"),
+			IsDir:        row.Bool("is_dir"),
 		}
 	})
 	if err != nil {
@@ -1520,9 +1552,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	if len(response.Files) > response.Limit {
 		nextFile := response.Files[response.Limit]
 		response.Files = response.Files[:response.Limit]
-		if response.Sort == "name" || response.Sort == "created" {
+		if response.Sort == "name" {
 			response.NextFile = nextFile.Name
-		} else if response.Sort == "edited" {
+		} else if response.Sort == "edited" || response.Sort == "created" {
 			response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
 		}
 	}
