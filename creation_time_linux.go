@@ -8,9 +8,12 @@ import (
 	"time"
 )
 
-func getCreationTime(filePath string, fileInfo fs.FileInfo) time.Time {
+func CreationTime(absolutePath string, fileInfo fs.FileInfo) time.Time {
+	if absolutePath == "" {
+		return time.Time{}
+	}
 	var statx unix.Statx_t
-	err := unix.Statx(unix.AT_FDCWD, filePath, unix.AT_SYMLINK_NOFOLLOW, unix.STATX_BTIME, &statx)
+	err := unix.Statx(unix.AT_FDCWD, absolutePath, unix.AT_SYMLINK_NOFOLLOW, unix.STATX_BTIME, &statx)
 	if err != nil {
 		return time.Time{}
 	}

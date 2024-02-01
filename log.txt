@@ -34,6 +34,7 @@ GetCreationTime(filePath string, fileInfo fs.FileInfo)
 
 TODO: add creation_time and CreationTime to file metadata. Once this is complete, we can remove the concept of post prefixes entirely and let users use whatever file name they want with their text editor (wow!).
     - Actually we need to keep the timestamp prefixes because it's preserved over cloud storage services like Dropbox and knowing the creation time of a post is far more important than the modification time because creation time directly affected generated artifacts i.e. the post list page order as well as atom feed post IDs.
+    - knowing the underlying creation time is still useful because the `notebrew regenerate` command can use it to write over the site prefixes
 TODO: delete: instead of sending an opaque msg string over, send over response.Files and response.DeleteErrors. Then use html templating to craft the response accordingly.
 TODO: clipboard.go get paste to work
 TODO: structured template error

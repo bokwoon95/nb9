@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -145,12 +144,12 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		response.ModTime = fileInfo.ModTime()
 		if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
 			response.CreationTime = fileInfo.creationTime
-		} else if runtime.GOOS == "linux" {
-			if localFS, ok := nbrew.FS.(*LocalFS); ok {
-				response.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, response.FilePath), nil)
-			}
 		} else {
-			response.CreationTime = getCreationTime("", fileInfo)
+			var absolutePath string
+			if localFS, ok := nbrew.FS.(*LocalFS); ok {
+				absolutePath = path.Join(localFS.rootDir, sitePrefix, response.FilePath)
+			}
+			response.CreationTime = CreationTime(absolutePath, fileInfo)
 		}
 
 		if isEditable {
@@ -228,19 +227,17 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 							internalServerError(w, r, err)
 							return
 						}
-						asset := Asset{
-							Name:    name,
-							Size:    fileInfo.Size(),
-							ModTime: fileInfo.ModTime(),
+						var absolutePath string
+						if localFS, ok := nbrew.FS.(*LocalFS); ok {
+							absolutePath = path.Join(localFS.rootDir, sitePrefix, response.AssetDir, name)
 						}
-						if runtime.GOOS == "linux" {
-							if localFS, ok := nbrew.FS.(*LocalFS); ok {
-								asset.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, response.AssetDir, asset.Name), nil)
-							}
-						} else {
-							asset.CreationTime = getCreationTime("", fileInfo)
-						}
-						response.Assets = append(response.Assets, asset)
+						creationTime := CreationTime(absolutePath, fileInfo)
+						response.Assets = append(response.Assets, Asset{
+							Name:         name,
+							Size:         fileInfo.Size(),
+							ModTime:      fileInfo.ModTime(),
+							CreationTime: creationTime,
+						})
 					}
 				}
 			}
@@ -298,19 +295,17 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 							internalServerError(w, r, err)
 							return
 						}
-						asset := Asset{
-							Name:    name,
-							Size:    fileInfo.Size(),
-							ModTime: fileInfo.ModTime(),
+						var absolutePath string
+						if localFS, ok := nbrew.FS.(*LocalFS); ok {
+							absolutePath = path.Join(localFS.rootDir, sitePrefix, response.AssetDir, name)
 						}
-						if runtime.GOOS == "linux" {
-							if localFS, ok := nbrew.FS.(*LocalFS); ok {
-								asset.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, response.AssetDir, asset.Name), nil)
-							}
-						} else {
-							asset.CreationTime = getCreationTime("", fileInfo)
-						}
-						response.Assets = append(response.Assets, asset)
+						creationTime := CreationTime(absolutePath, fileInfo)
+						response.Assets = append(response.Assets, Asset{
+							Name:         name,
+							Size:         fileInfo.Size(),
+							ModTime:      fileInfo.ModTime(),
+							CreationTime: creationTime,
+						})
 					}
 				}
 			}
@@ -455,12 +450,12 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		}
 		if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
 			response.CreationTime = fileInfo.creationTime
-		} else if runtime.GOOS == "linux" {
-			if localFS, ok := nbrew.FS.(*LocalFS); ok {
-				response.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, response.FilePath), nil)
-			}
 		} else {
-			response.CreationTime = getCreationTime("", fileInfo)
+			var absolutePath string
+			if localFS, ok := nbrew.FS.(*LocalFS); ok {
+				absolutePath = path.Join(localFS.rootDir, sitePrefix, response.FilePath)
+			}
+			response.CreationTime = CreationTime(absolutePath, fileInfo)
 		}
 
 		if nbrew.UsersDB != nil {
@@ -696,8 +691,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 
 	remoteFS, ok := nbrew.FS.(*RemoteFS)
 	if !ok {
-		for _, name := range []string{"notes", "pages", "posts", "output/themes", "output"} {
-			fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, name))
+		for _, dir := range []string{"notes", "pages", "posts", "output/themes", "output"} {
+			fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, dir))
 			if err != nil {
 				if errors.Is(err, fs.ErrNotExist) {
 					continue
@@ -709,19 +704,18 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			if !fileInfo.IsDir() {
 				continue
 			}
-			file := File{
-				Name:    name,
-				ModTime: fileInfo.ModTime(),
-				IsDir:   true,
+			name := fileInfo.Name()
+			var absolutePath string
+			if localFS, ok := nbrew.FS.(*LocalFS); ok {
+				absolutePath = path.Join(localFS.rootDir, sitePrefix, dir, name)
 			}
-			if runtime.GOOS == "linux" {
-				if localFS, ok := nbrew.FS.(*LocalFS); ok {
-					file.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, name, file.Name), nil)
-				}
-			} else {
-				file.CreationTime = getCreationTime("", fileInfo)
-			}
-			response.Files = append(response.Files, file)
+			creationTime := CreationTime(absolutePath, fileInfo)
+			response.Files = append(response.Files, File{
+				Name:         name,
+				IsDir:        true,
+				ModTime:      fileInfo.ModTime(),
+				CreationTime: creationTime,
+			})
 		}
 
 		if sitePrefix != "" || nbrew.UsersDB != nil {
@@ -1153,18 +1147,18 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				internalServerError(w, r, err)
 				return
 			}
-			file := File{
-				Name:    fileInfo.Name(),
-				Size:    fileInfo.Size(),
-				ModTime: fileInfo.ModTime(),
-				IsDir:   fileInfo.IsDir(),
+			name := fileInfo.Name()
+			var absolutePath string
+			if localFS, ok := nbrew.FS.(*LocalFS); ok {
+				absolutePath = path.Join(localFS.rootDir, sitePrefix, filePath, name)
 			}
-			if runtime.GOOS == "linux" {
-				if localFS, ok := nbrew.FS.(*LocalFS); ok {
-					file.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, filePath, file.Name), nil)
-				}
-			} else {
-				file.CreationTime = getCreationTime("", fileInfo)
+			creationTime := CreationTime(absolutePath, fileInfo)
+			file := File{
+				Name:         name,
+				IsDir:        fileInfo.IsDir(),
+				Size:         fileInfo.Size(),
+				ModTime:      fileInfo.ModTime(),
+				CreationTime: creationTime,
 			}
 			if file.IsDir {
 				response.Files = append(response.Files, file)

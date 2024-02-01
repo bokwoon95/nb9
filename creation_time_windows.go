@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func getCreationTime(filePath string, fileInfo fs.FileInfo) time.Time {
+func CreationTime(absolutePath string, fileInfo fs.FileInfo) time.Time {
 	fileAttributeData, ok := fileInfo.Sys().(*syscall.Win32FileAttributeData)
 	if !ok {
 		return time.Time{}

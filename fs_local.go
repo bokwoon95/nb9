@@ -23,7 +23,8 @@ type LocalFS struct {
 	// ctx provides the context of all operations called on the LocalFS.
 	ctx context.Context
 
-	// rootDir is the root directory of the LocalFS.
+	// rootDir is the root directory of the LocalFS. Has to be an absolute
+	// path!!
 	rootDir string
 
 	// tempDir is the temp directory of the LocalFS. Files are first written to
@@ -34,12 +35,21 @@ type LocalFS struct {
 	tempDir string
 }
 
-func NewLocalFS(config LocalFSConfig) *LocalFS {
-	return &LocalFS{
-		ctx:     context.Background(),
-		rootDir: filepath.FromSlash(config.RootDir),
-		tempDir: filepath.FromSlash(config.TempDir),
+func NewLocalFS(config LocalFSConfig) (*LocalFS, error) {
+	rootDir, err := filepath.Abs(filepath.FromSlash(config.RootDir))
+	if err != nil {
+		return nil, err
 	}
+	tempDir, err := filepath.Abs(filepath.FromSlash(config.TempDir))
+	if err != nil {
+		return nil, err
+	}
+	localFS := &LocalFS{
+		ctx:     context.Background(),
+		rootDir: rootDir,
+		tempDir: tempDir,
+	}
+	return localFS, nil
 }
 
 func (fsys *LocalFS) WithContext(ctx context.Context) FS {

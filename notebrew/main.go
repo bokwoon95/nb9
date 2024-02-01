@@ -339,10 +339,13 @@ func main() {
 					return err
 				}
 			}
-			nbrew.FS = nb9.NewLocalFS(nb9.LocalFSConfig{
+			nbrew.FS, err = nb9.NewLocalFS(nb9.LocalFSConfig{
 				RootDir: filesConfig.Filepath,
 				TempDir: os.TempDir(),
 			})
+			if err != nil {
+				return err
+			}
 		} else {
 			var dataSourceName string
 			var filesDialect string

@@ -7,6 +7,6 @@ import (
 	"time"
 )
 
-func getCreationTime(filePath string, fileInfo fs.FileInfo) time.Time {
+func CreationTime(absolutePath string, fileInfo fs.FileInfo) time.Time {
 	return time.Time{}
 }
