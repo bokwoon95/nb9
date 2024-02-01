@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -142,14 +143,14 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		response.FilePath = filePath
 		response.IsDir = fileInfo.IsDir()
 		response.ModTime = fileInfo.ModTime()
-		switch fsys := nbrew.FS.(type) {
-		case *LocalFS:
-			_ = fsys
-			// filePath := path.Join(fsys.rootDir, sitePrefix, response.FilePath)
-			// response.CreationTime, err = getCreationTime(filePath, fileInfo)
-			// if err != nil {
-			// }
-		case *RemoteFS:
+		if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
+			response.CreationTime = fileInfo.creationTime
+		} else if runtime.GOOS == "linux" {
+			if localFS, ok := nbrew.FS.(*LocalFS); ok {
+				response.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, response.FilePath), nil)
+			}
+		} else {
+			response.CreationTime = getCreationTime("", fileInfo)
 		}
 
 		if isEditable {
@@ -196,9 +197,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 					},
 				}, func(row *sq.Row) Asset {
 					return Asset{
-						Name:    path.Base(row.String("file_path")),
-						Size:    row.Int64("size"),
-						ModTime: row.Time("mod_time"),
+						Name:         path.Base(row.String("file_path")),
+						Size:         row.Int64("size"),
+						ModTime:      row.Time("mod_time"),
+						CreationTime: row.Time("creation_time"),
 					}
 				})
 				if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -226,11 +228,19 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 							internalServerError(w, r, err)
 							return
 						}
-						response.Assets = append(response.Assets, Asset{
+						asset := Asset{
 							Name:    name,
 							Size:    fileInfo.Size(),
 							ModTime: fileInfo.ModTime(),
-						})
+						}
+						if runtime.GOOS == "linux" {
+							if localFS, ok := nbrew.FS.(*LocalFS); ok {
+								asset.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, response.AssetDir, asset.Name), nil)
+							}
+						} else {
+							asset.CreationTime = getCreationTime("", fileInfo)
+						}
+						response.Assets = append(response.Assets, asset)
 					}
 				}
 			}
@@ -257,9 +267,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 					},
 				}, func(row *sq.Row) Asset {
 					return Asset{
-						Name:    path.Base(row.String("file_path")),
-						Size:    row.Int64("size"),
-						ModTime: row.Time("mod_time"),
+						Name:         path.Base(row.String("file_path")),
+						Size:         row.Int64("size"),
+						ModTime:      row.Time("mod_time"),
+						CreationTime: row.Time("creation_time"),
 					}
 				})
 				if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -287,11 +298,19 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 							internalServerError(w, r, err)
 							return
 						}
-						response.Assets = append(response.Assets, Asset{
+						asset := Asset{
 							Name:    name,
 							Size:    fileInfo.Size(),
 							ModTime: fileInfo.ModTime(),
-						})
+						}
+						if runtime.GOOS == "linux" {
+							if localFS, ok := nbrew.FS.(*LocalFS); ok {
+								asset.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, response.AssetDir, asset.Name), nil)
+							}
+						} else {
+							asset.CreationTime = getCreationTime("", fileInfo)
+						}
+						response.Assets = append(response.Assets, asset)
 					}
 				}
 			}
@@ -434,6 +453,15 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			ModTime:     fileInfo.ModTime(),
 			Content:     request.Content,
 		}
+		if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
+			response.CreationTime = fileInfo.creationTime
+		} else if runtime.GOOS == "linux" {
+			if localFS, ok := nbrew.FS.(*LocalFS); ok {
+				response.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, response.FilePath), nil)
+			}
+		} else {
+			response.CreationTime = getCreationTime("", fileInfo)
+		}
 
 		if nbrew.UsersDB != nil {
 			// TODO: check if the owner has exceeded his storage limit, then
@@ -514,10 +542,11 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 
 func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix string, modTime time.Time) {
 	type File struct {
-		Name    string    `json:"name"`
-		IsDir   bool      `json:"isDir"`
-		ModTime time.Time `json:"modTime"`
-		Size    int64     `json:"size,omitempty"`
+		Name         string    `json:"name"`
+		IsDir        bool      `json:"isDir"`
+		ModTime      time.Time `json:"modTime"`
+		CreationTime time.Time `json:"creationTime"`
+		Size         int64     `json:"size,omitempty"`
 	}
 	type Site struct {
 		Name  string `json:"name"`
@@ -530,7 +559,6 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		SitePrefix      string         `json:"sitePrefix"`
 		FilePath        string         `json:"filePath"`
 		IsDir           bool           `json:"isDir"`
-		ModTime         time.Time      `json:"modTime"`
 		SearchSupported bool           `json:"searchSupported"`
 
 		Files []File `json:"files,omitempty"`
@@ -681,11 +709,19 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			if !fileInfo.IsDir() {
 				continue
 			}
-			response.Files = append(response.Files, File{
+			file := File{
 				Name:    name,
 				ModTime: fileInfo.ModTime(),
 				IsDir:   true,
-			})
+			}
+			if runtime.GOOS == "linux" {
+				if localFS, ok := nbrew.FS.(*LocalFS); ok {
+					file.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, name, file.Name), nil)
+				}
+			} else {
+				file.CreationTime = getCreationTime("", fileInfo)
+			}
+			response.Files = append(response.Files, file)
 		}
 
 		if sitePrefix != "" || nbrew.UsersDB != nil {
@@ -734,9 +770,10 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		},
 	}, func(row *sq.Row) File {
 		return File{
-			Name:    strings.Trim(strings.TrimPrefix(row.String("file_path"), sitePrefix), "/"),
-			ModTime: row.Time("mod_time"),
-			IsDir:   true,
+			Name:         strings.Trim(strings.TrimPrefix(row.String("file_path"), sitePrefix), "/"),
+			ModTime:      row.Time("mod_time"),
+			CreationTime: row.Time("creation_time"),
+			IsDir:        true,
 		}
 	})
 	if err != nil {
@@ -931,10 +968,11 @@ var timestampFormats = []string{
 
 func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
 	type File struct {
-		Name    string    `json:"name"`
-		IsDir   bool      `json:"isDir"`
-		ModTime time.Time `json:"modTime"`
-		Size    int64     `json:"size,omitempty"`
+		Name         string    `json:"name"`
+		IsDir        bool      `json:"isDir"`
+		ModTime      time.Time `json:"modTime"`
+		CreationTime time.Time `json:"creationTime"`
+		Size         int64     `json:"size,omitempty"`
 	}
 	type Response struct {
 		PostRedirectGet map[string]any `json:"postRedirectGet,omitempty"`
@@ -944,6 +982,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		FilePath        string         `json:"filePath"`
 		IsDir           bool           `json:"isDir"`
 		ModTime         time.Time      `json:"modTime"`
+		CreationTime    time.Time      `json:"creationTime"`
 		SearchSupported bool           `json:"searchSupported"`
 
 		Sort               string `json:"sort,omitempty"`
@@ -1072,12 +1111,8 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		}
 	}
 	switch response.Sort {
-	case "name", "edited":
+	case "name", "edited", "created":
 		break
-	case "created":
-		if head != "posts" {
-			response.Sort = "name"
-		}
 	default:
 		if head == "posts" {
 			response.Sort = "created"
@@ -1124,6 +1159,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				ModTime: fileInfo.ModTime(),
 				IsDir:   fileInfo.IsDir(),
 			}
+			if runtime.GOOS == "linux" {
+				if localFS, ok := nbrew.FS.(*LocalFS); ok {
+					file.CreationTime = getCreationTime(path.Join(localFS.rootDir, sitePrefix, filePath, file.Name), nil)
+				}
+			} else {
+				file.CreationTime = getCreationTime("", fileInfo)
+			}
 			if file.IsDir {
 				response.Files = append(response.Files, file)
 				continue
@@ -1135,7 +1177,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			response.Files = append(response.Files, file)
 		}
 		switch response.Sort {
-		case "name", "created":
+		case "name":
 			if response.Order == "desc" {
 				slices.Reverse(response.Files)
 			}
@@ -1145,6 +1187,25 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					return strings.Compare(a.Name, b.Name)
 				}
 				if a.ModTime.Before(b.ModTime) {
+					if response.Order == "asc" {
+						return -1
+					} else {
+						return 1
+					}
+				} else {
+					if response.Order == "asc" {
+						return 1
+					} else {
+						return -1
+					}
+				}
+			})
+		case "created":
+			slices.SortFunc(response.Files, func(a, b File) int {
+				if a.CreationTime.Equal(b.CreationTime) {
+					return strings.Compare(a.Name, b.Name)
+				}
+				if a.CreationTime.Before(b.CreationTime) {
 					if response.Order == "asc" {
 						return -1
 					} else {

@@ -319,7 +319,7 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 		dialect:           fsys.filesDialect,
 		storage:           fsys.storage,
 		filePath:          name,
-		modTime:           time.Now().UTC().Truncate(time.Second),
+		modTime:           time.Now().UTC(),
 	}
 	// If parentDir is the root directory, just fetch the file information.
 	// Otherwise fetch both the parent and file information.
@@ -651,13 +651,13 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 	if name == "." {
 		return nil
 	}
-	modTime := time.Now().UTC().Truncate(time.Second)
+	modTime := time.Now().UTC()
 	parentDir := path.Dir(name)
 	if parentDir == "." {
 		_, err := sq.Exec(fsys.ctx, fsys.filesDB, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format: "INSERT INTO files (file_id, file_path, mod_time, is_dir)" +
-				" VALUES ({fileID}, {filePath}, {modTime}, TRUE)",
+			Format: "INSERT INTO files (file_id, file_path, mod_time, creation_time, is_dir)" +
+				" VALUES ({fileID}, {filePath}, {modTime}, {modTime}, TRUE)",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("filePath", name),
@@ -677,8 +677,8 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 	} else {
 		_, err = sq.Exec(fsys.ctx, fsys.filesDB, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, is_dir)" +
-				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, TRUE)",
+			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir)" +
+				" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, {modTime}, TRUE)",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("parentDir", parentDir),
@@ -718,14 +718,14 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 	defer conn.Close()
 
 	// Insert the top level directory (no parent), ignoring duplicates.
-	modTime := time.Now().UTC().Truncate(time.Second)
+	modTime := time.Now().UTC()
 	segments := strings.Split(name, "/")
 	switch fsys.filesDialect {
 	case "sqlite", "postgres":
 		_, err := sq.Exec(fsys.ctx, conn, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format: "INSERT INTO files (file_id, file_path, mod_time, is_dir)" +
-				" VALUES ({fileID}, {filePath}, {modTime}, TRUE)" +
+			Format: "INSERT INTO files (file_id, file_path, mod_time, creation_time, is_dir)" +
+				" VALUES ({fileID}, {filePath}, {modTime}, {modTime}, TRUE)" +
 				" ON CONFLICT DO NOTHING",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
@@ -739,8 +739,8 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 	case "mysql":
 		_, err := sq.Exec(fsys.ctx, conn, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format: "INSERT INTO files (file_id, file_path, mod_time, is_dir)" +
-				" VALUES ({fileID}, {filePath}, {modTime}, TRUE)" +
+			Format: "INSERT INTO files (file_id, file_path, mod_time, creation_time is_dir)" +
+				" VALUES ({fileID}, {filePath}, {modTime}, {modTime}, TRUE)" +
 				" ON DUPLICATE KEY UPDATE file_id = file_id",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
@@ -762,8 +762,8 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 		case "sqlite", "postgres":
 			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
 				Dialect: fsys.filesDialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, is_dir)" +
-					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, TRUE)" +
+				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir)" +
+					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, {modTime}, TRUE)" +
 					" ON CONFLICT DO NOTHING",
 				Values: []any{
 					sq.Param("fileID", nil),
@@ -778,8 +778,8 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 		case "mysql":
 			preparedExec, err = sq.PrepareExec(fsys.ctx, conn, sq.Query{
 				Dialect: fsys.filesDialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, is_dir)" +
-					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, TRUE)" +
+				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir)" +
+					" VALUES ({fileID}, (select file_id FROM files WHERE file_path = {parentDir}), {filePath}, {modTime}, {modTime}, TRUE)" +
 					" ON DUPLICATE KEY UPDATE file_id = file_id",
 				Values: []any{
 					sq.Param("fileID", nil),

@@ -9,6 +9,9 @@ import (
 )
 
 func getCreationTime(filePath string, fileInfo fs.FileInfo) time.Time {
-	stat := fileInfo.Sys().(*syscall.Stat_t)
+	stat, ok := fileInfo.Sys().(*syscall.Stat_t)
+	if !ok {
+		return time.Time{}
+	}
 	return time.Unix(stat.Birthtimespec.Sec, stat.Birthtimespec.Nsec)
 }
