@@ -1,3 +1,5 @@
+//go:build !windows && !linux && !darwin && !freebsd && !netbsd
+
 package nb9
 
 import (
@@ -5,7 +7,7 @@ import (
 	"time"
 )
 
-func CreationTime(filePath string, fileInfo fs.FileInfo) (time.Time, error) {
+func getCreationTime(filePath string, fileInfo fs.FileInfo) (time.Time, error) {
 	if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
 		return fileInfo.creationTime, nil
 	}

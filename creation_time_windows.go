@@ -9,5 +9,9 @@ import (
 )
 
 func getCreationTime(filePath string, fileInfo fs.FileInfo) (time.Time, error) {
-	return time.Unix(0, fileInfo.Sys().(*syscall.Win32FileAttributeData).CreationTime.Nanoseconds()), nil
+	if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
+		return fileInfo.creationTime, nil
+	}
+	fileAttributeData := fileInfo.Sys().(*syscall.Win32FileAttributeData)
+	return time.Unix(0, fileAttributeData.CreationTime.Nanoseconds()), nil
 }
