@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -186,24 +185,11 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "createfile")+"/?parent="+url.QueryEscape(response.Parent), http.StatusFound)
 				return
 			}
-			var b strings.Builder
-			if len(response.Files) == 1 {
-				b.WriteString("1 file deleted")
-			} else {
-				b.WriteString(strconv.Itoa(len(response.Files)) + " files deleted")
-			}
-			if len(response.DeleteErrors) == 1 {
-				b.WriteString(" (1 error)")
-			} else if len(response.DeleteErrors) > 1 {
-				b.WriteString(" (" + strconv.Itoa(len(response.DeleteErrors)) + " errors)")
-			}
-			// TODO: instead of sending an opaque msg string over, send over
-			// response.Files and response.DeleteErrors. Then use html
-			// templating to craft the response accordingly.
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
-					"from": "delete",
-					"msg":  b.String(),
+					"from":       "delete",
+					"numDeleted": len(response.Files),
+					"numErrors":  len(response.DeleteErrors),
 				},
 			})
 			if err != nil {

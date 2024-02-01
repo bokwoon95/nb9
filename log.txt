@@ -32,7 +32,6 @@ anything in posts/*
 
 GetCreationTime(filePath string, fileInfo fs.FileInfo)
 
-TODO: delete: instead of sending an opaque msg string over, send over response.Files and response.DeleteErrors. Then use html templating to craft the response accordingly.
 TODO: clipboard.go get paste to work
 TODO: structured template error
     If we assume template errors follow this format: "template: {filePath}:{lineNr}: {errmsg}", we can parse template errors accordingly and send it out as structured JSON objects instead of plain strings, which would allow us to highlight the problematic lines in the codemirror editor.
