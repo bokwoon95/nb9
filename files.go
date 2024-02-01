@@ -566,6 +566,9 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 		NextSite           string `json:"nextSite,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
+		if response.Sites == nil {
+			response.Sites = []Site{}
+		}
 		if r.Form.Has("api") {
 			w.Header().Set("Content-Type", "application/json")
 			encoder := json.NewEncoder(w)
@@ -640,7 +643,6 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
 	response.SitePrefix = sitePrefix
 	response.IsDir = true
-	response.Sites = []Site{}
 	_, response.SearchSupported = nbrew.FS.(*RemoteFS)
 	if sitePrefix == "" && nbrew.UsersDB != nil {
 		sites, err := sq.FetchAll(r.Context(), nbrew.UsersDB, sq.Query{
