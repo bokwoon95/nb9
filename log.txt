@@ -35,6 +35,7 @@ GetCreationTime(filePath string, fileInfo fs.FileInfo)
 TODO: clipboard.go get paste to work
 TODO: structured template error
     We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
+    ParseTemplate() error => parseTemplate() (numPrefixLines int, err error)
     If we assume template errors follow this format: "template: {filePath}:{lineNr}: {errmsg}", we can parse template errors accordingly and send it out as structured JSON objects instead of plain strings, which would allow us to highlight the problematic lines in the codemirror editor.
     {
         "abcd.html": [
