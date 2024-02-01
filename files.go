@@ -27,9 +27,10 @@ import (
 
 func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
 	type Asset struct {
-		Name    string    `json:"name"`
-		ModTime time.Time `json:"modTime"`
-		Size    int64     `json:"size"`
+		Name         string    `json:"name"`
+		ModTime      time.Time `json:"modTime"`
+		CreationTime time.Time `json:"creationTime"`
+		Size         int64     `json:"size"`
 	}
 	type Response struct {
 		PostRedirectGet map[string]any `json:"postRedirectGet,omitempty"`
@@ -40,6 +41,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		FilePath        string         `json:"filePath"`
 		IsDir           bool           `json:"isDir"`
 		ModTime         time.Time      `json:"modTime"`
+		CreationTime    time.Time      `json:"creationTime"`
 		Content         string         `json:"content"`
 		URL             string         `json:"url,omitempty"`
 		BelongsTo       string         `json:"belongsTo,omitempty"`

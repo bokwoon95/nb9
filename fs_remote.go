@@ -551,8 +551,8 @@ func (file *RemoteFileWriter) Close() error {
 		if file.isFulltextIndexed {
 			_, err := sq.Exec(file.ctx, file.db, sq.Query{
 				Dialect: file.dialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, size, text, mod_time, is_dir)" +
-					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {text}, {modTime}, FALSE)",
+				Format: "INSERT INTO files (file_id, parent_id, file_path, size, text, mod_time, creation_time, is_dir)" +
+					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {text}, {modTime}, {modTime}, FALSE)",
 				Values: []any{
 					sq.UUIDParam("fileID", NewID()),
 					sq.UUIDParam("parentID", file.parentID),
@@ -568,8 +568,8 @@ func (file *RemoteFileWriter) Close() error {
 		} else {
 			_, err := sq.Exec(file.ctx, file.db, sq.Query{
 				Dialect: file.dialect,
-				Format: "INSERT INTO files (file_id, parent_id, file_path, size, data, mod_time, is_dir)" +
-					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {data}, {modTime}, FALSE)",
+				Format: "INSERT INTO files (file_id, parent_id, file_path, size, data, mod_time, creation_time, is_dir)" +
+					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {data}, {modTime}, {modTime}, FALSE)",
 				Values: []any{
 					sq.UUIDParam("fileID", NewID()),
 					sq.UUIDParam("parentID", file.parentID),
@@ -586,8 +586,8 @@ func (file *RemoteFileWriter) Close() error {
 	} else {
 		_, err := sq.Exec(file.ctx, file.db, sq.Query{
 			Dialect: file.dialect,
-			Format: "INSERT INTO files (file_id, parent_id, file_path, size, mod_time, is_dir)" +
-				" VALUES ({fileID}, {parentID}, {filePath}, {size}, {modTime}, FALSE)",
+			Format: "INSERT INTO files (file_id, parent_id, file_path, size, mod_time, creation_time, is_dir)" +
+				" VALUES ({fileID}, {parentID}, {filePath}, {size}, {modTime}, {modTime}, FALSE)",
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.UUIDParam("parentID", file.parentID),
