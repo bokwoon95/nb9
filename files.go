@@ -1232,9 +1232,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	var sortFrom bool
 	var fromTime time.Time
 	response.From = r.FormValue("from")
-	if response.Sort == "name" || response.Sort == "created" {
+	if response.Sort == "name" {
 		sortFrom = response.From != ""
-	} else if response.Sort == "edited" {
+	} else if response.Sort == "edited" || response.Sort == "created" {
 		response.From = strings.TrimSuffix(response.From, "Z")
 		for _, format := range timestampFormats {
 			timeVal, err := time.ParseInLocation(format, response.From, time.UTC)
@@ -1249,7 +1249,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		g, ctx := errgroup.WithContext(r.Context())
 		g.Go(func() error {
 			var filter, order sq.Expression
-			if response.Sort == "name" || response.Sort == "created" {
+			if response.Sort == "name" {
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path >= {}", path.Join(sitePrefix, filePath, response.From))
 					order = sq.Expr("file_path ASC")
@@ -1264,6 +1264,14 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				} else {
 					filter = sq.Expr("mod_time <= {}", fromTime)
 					order = sq.Expr("mod_time DESC, file_path")
+				}
+			} else if response.Sort == "created" {
+				if response.Order == "asc" {
+					filter = sq.Expr("creation_time >= {}", fromTime)
+					order = sq.Expr("creation_time ASC, file_path")
+				} else {
+					filter = sq.Expr("creation_time <= {}", fromTime)
+					order = sq.Expr("creation_time DESC, file_path")
 				}
 			}
 			files, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{

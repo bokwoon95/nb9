@@ -32,6 +32,7 @@ anything in posts/*
 
 GetCreationTime(filePath string, fileInfo fs.FileInfo)
 
+TODO: add creation_time and CreationTime to file metadata. Once this is complete, we can remove the concept of post prefixes entirely and let users use whatever file name they want with their text editor (wow!).
 TODO: delete: instead of sending an opaque msg string over, send over response.Files and response.DeleteErrors. Then use html templating to craft the response accordingly.
 TODO: clipboard.go get paste to work
 TODO: structured template error
