@@ -109,6 +109,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		file.info.isDir = row.Bool("is_dir")
 		file.info.size = row.Int64("size")
 		file.info.modTime = row.Time("mod_time")
+		file.info.creationTime = row.Time("creation_time")
 		if fileType.IsGzippable {
 			b := bufPool.Get().(*bytes.Buffer).Bytes()
 			row.Scan(&b, "COALESCE(text, data)")
@@ -167,6 +168,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		fileInfo.isDir = row.Bool("is_dir")
 		fileInfo.size = row.Int64("size")
 		fileInfo.modTime = row.Time("mod_time")
+		fileInfo.creationTime = row.Time("creation_time")
 		return fileInfo
 	})
 	if err != nil {
@@ -179,11 +181,12 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 }
 
 type remoteFileInfo struct {
-	fileID   [16]byte
-	filePath string
-	isDir    bool
-	size     int64
-	modTime  time.Time
+	fileID       [16]byte
+	filePath     string
+	isDir        bool
+	size         int64
+	modTime      time.Time
+	creationTime time.Time
 }
 
 func (fileInfo *remoteFileInfo) Name() string { return path.Base(fileInfo.filePath) }
@@ -628,6 +631,7 @@ func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		file.isDir = row.Bool("is_dir")
 		file.size = row.Int64("size")
 		file.modTime = row.Time("mod_time")
+		file.creationTime = row.Time("creation_time")
 		return file
 	})
 	if err != nil {

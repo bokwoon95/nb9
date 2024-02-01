@@ -2,6 +2,8 @@ catalog.go
 fs.go
 fs_local.go
 fs_remote.go
+creation_time.go
+creation_time_linux.go
 init.go
 notebrew.go
 site_generator.go
