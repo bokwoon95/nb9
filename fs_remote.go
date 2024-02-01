@@ -83,7 +83,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		file := &RemoteFile{
 			ctx:     fsys.ctx,
 			storage: fsys.storage,
-			info:    &RemoteFileInfo{filePath: ".", isDir: true},
+			info:    &remoteFileInfo{filePath: ".", isDir: true},
 		}
 		return file, nil
 	}
@@ -102,7 +102,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 			ctx:      fsys.ctx,
 			fileType: fileType,
 			storage:  fsys.storage,
-			info:     &RemoteFileInfo{},
+			info:     &remoteFileInfo{},
 		}
 		row.UUID(&file.info.fileID, "file_id")
 		file.info.filePath = row.String("file_path")
@@ -153,7 +153,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
 	}
 	if name == "." {
-		return &RemoteFileInfo{filePath: ".", isDir: true}, nil
+		return &remoteFileInfo{filePath: ".", isDir: true}, nil
 	}
 	fileInfo, err := sq.FetchOne(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
@@ -161,8 +161,8 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		Values: []any{
 			sq.StringParam("name", name),
 		},
-	}, func(row *sq.Row) *RemoteFileInfo {
-		fileInfo := &RemoteFileInfo{}
+	}, func(row *sq.Row) *remoteFileInfo {
+		fileInfo := &remoteFileInfo{}
 		fileInfo.filePath = row.String("file_path")
 		fileInfo.isDir = row.Bool("is_dir")
 		fileInfo.size = row.Int64("size")
@@ -178,7 +178,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 	return fileInfo, nil
 }
 
-type RemoteFileInfo struct {
+type remoteFileInfo struct {
 	fileID   [16]byte
 	filePath string
 	isDir    bool
@@ -186,21 +186,21 @@ type RemoteFileInfo struct {
 	modTime  time.Time
 }
 
-func (fileInfo *RemoteFileInfo) Name() string { return path.Base(fileInfo.filePath) }
+func (fileInfo *remoteFileInfo) Name() string { return path.Base(fileInfo.filePath) }
 
-func (fileInfo *RemoteFileInfo) Size() int64 { return fileInfo.size }
+func (fileInfo *remoteFileInfo) Size() int64 { return fileInfo.size }
 
-func (fileInfo *RemoteFileInfo) ModTime() time.Time { return fileInfo.modTime }
+func (fileInfo *remoteFileInfo) ModTime() time.Time { return fileInfo.modTime }
 
-func (fileInfo *RemoteFileInfo) IsDir() bool { return fileInfo.isDir }
+func (fileInfo *remoteFileInfo) IsDir() bool { return fileInfo.isDir }
 
-func (fileInfo *RemoteFileInfo) Sys() any { return nil }
+func (fileInfo *remoteFileInfo) Sys() any { return nil }
 
-func (fileInfo *RemoteFileInfo) Type() fs.FileMode { return fileInfo.Mode().Type() }
+func (fileInfo *remoteFileInfo) Type() fs.FileMode { return fileInfo.Mode().Type() }
 
-func (fileInfo *RemoteFileInfo) Info() (fs.FileInfo, error) { return fileInfo, nil }
+func (fileInfo *remoteFileInfo) Info() (fs.FileInfo, error) { return fileInfo, nil }
 
-func (fileInfo *RemoteFileInfo) Mode() fs.FileMode {
+func (fileInfo *remoteFileInfo) Mode() fs.FileMode {
 	if fileInfo.isDir {
 		return fs.ModeDir
 	}
@@ -212,7 +212,7 @@ type RemoteFile struct {
 	fileType          FileType
 	isFulltextIndexed bool
 	storage           Storage
-	info              *RemoteFileInfo
+	info              *remoteFileInfo
 	buf               *bytes.Buffer
 	gzipReader        *gzip.Reader
 	readCloser        io.ReadCloser
@@ -622,7 +622,7 @@ func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
 			sq.Param("condition", condition),
 		},
 	}, func(row *sq.Row) fs.DirEntry {
-		file := &RemoteFileInfo{}
+		file := &remoteFileInfo{}
 		row.UUID(&file.fileID, "file_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")

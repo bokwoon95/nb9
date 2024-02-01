@@ -427,7 +427,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 			}, func(row *sq.Row) *RemoteFile {
 				file := &RemoteFile{
 					ctx:  ctx1,
-					info: &RemoteFileInfo{},
+					info: &remoteFileInfo{},
 				}
 				file.info.filePath = row.String("file_path")
 				b := bufPool.Get().(*bytes.Buffer).Bytes()

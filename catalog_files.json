@@ -67,6 +67,14 @@
         "index": true
       },
       {
+        "column": "creation_time",
+        "type": {
+          "default": "DATETIME",
+          "postgres": "TIMESTAMPTZ"
+        },
+        "index": true
+      },
+      {
         "dialect": "postgres",
         "column": "text_tsv",
         "type": {
