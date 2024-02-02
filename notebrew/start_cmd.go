@@ -183,9 +183,9 @@ func NewServer(nbrew *nb9.Notebrew, configDir, addr string) (*http.Server, error
 	}
 	var domains []string
 	if nbrew.CMSDomain == nbrew.ContentDomain {
-		domains = append(domains, nbrew.CMSDomain, "www."+nbrew.CMSDomain, "cdn."+nbrew.CMSDomain)
+		domains = append(domains, nbrew.CMSDomain, "www."+nbrew.CMSDomain, "img."+nbrew.CMSDomain)
 	} else {
-		domains = append(domains, nbrew.CMSDomain, "www."+nbrew.CMSDomain, "cdn."+nbrew.ContentDomain, nbrew.ContentDomain, "www."+nbrew.ContentDomain)
+		domains = append(domains, nbrew.CMSDomain, "www."+nbrew.CMSDomain, "img."+nbrew.ContentDomain, nbrew.ContentDomain, "www."+nbrew.ContentDomain)
 	}
 	if dns01Solver != nil {
 		domains = append(domains, "*."+nbrew.ContentDomain)

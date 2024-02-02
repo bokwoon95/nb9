@@ -1593,38 +1593,6 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 			http.ServeContent(w, r, "", fileInfo.ModTime(), fileSeeker)
 			return
 		}
-
-		if fileInfo.Size() <= 1<<20 /* 1 MB */ {
-			hasher := hashPool.Get().(hash.Hash)
-			defer func() {
-				hasher.Reset()
-				hashPool.Put(hasher)
-			}()
-			var buf *bytes.Buffer
-			if fileInfo.Size() > maxPoolableBufferCapacity {
-				buf = bytes.NewBuffer(make([]byte, 0, fileInfo.Size()))
-			} else {
-				buf = bufPool.Get().(*bytes.Buffer)
-				defer func() {
-					buf.Reset()
-					bufPool.Put(buf)
-				}()
-			}
-			multiWriter := io.MultiWriter(hasher, buf)
-			_, err := io.Copy(multiWriter, file)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-			var b [blake2b.Size256]byte
-			w.Header().Set("Content-Type", fileType.ContentType)
-			w.Header().Set("Cache-Control", cacheControl)
-			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
-			return
-		}
-
 		w.Header().Set("Content-Type", fileType.ContentType)
 		w.Header().Set("Cache-Control", cacheControl)
 		_, err := io.Copy(w, file)

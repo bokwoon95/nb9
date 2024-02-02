@@ -259,11 +259,11 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var subdomain string
 	if MatchWildcard(r.Host, "*."+nbrew.ContentDomain) {
 		subdomain = strings.TrimSuffix(r.Host, "."+nbrew.ContentDomain)
-		if subdomain == "cdn" || subdomain == "www" {
+		if subdomain == "img" || subdomain == "www" {
 			// examples:
-			// cdn.nbrew.io/foo/bar.jpg             => sitePrefix: <none>,      urlPath: foo/bar.jpg
-			// cdn.nbrew.io/@username/foo/bar.jpg   => sitePrefix: @username,   urlPath: foo/bar.jpg
-			// cdn.nbrew.io/example.com/foo/bar.jpg => sitePrefix: example.com, urlPath: foo/bar.jpg
+			// img.nbrew.io/foo/bar.jpg             => sitePrefix: <none>,      urlPath: foo/bar.jpg
+			// img.nbrew.io/@username/foo/bar.jpg   => sitePrefix: @username,   urlPath: foo/bar.jpg
+			// img.nbrew.io/example.com/foo/bar.jpg => sitePrefix: example.com, urlPath: foo/bar.jpg
 			if strings.HasPrefix(head, "@") {
 				sitePrefix, urlPath = head, tail
 			} else if strings.Contains(head, ".") {

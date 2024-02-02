@@ -235,7 +235,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 		} else if response.SiteName != "" {
 			sitePrefix = "@" + response.SiteName
 		}
-		if response.SiteName == "www" || response.SiteName == "media" {
+		if response.SiteName == "www" || response.SiteName == "img" {
 			// TODO: enforce a list of common forbidden subdomains.
 			response.FormErrors.Add("siteName", "unavailable")
 		} else if !response.FormErrors.Has("siteName") {
