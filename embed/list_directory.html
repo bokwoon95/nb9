@@ -196,18 +196,19 @@
           <input type='checkbox' id='{{ $file.Name }}' name='name' value='{{ $file.Name }}' class='pointer'>
         </div>
         {{- end }}
-        <div class='br2 truncate{{ if isInClipboard $file.Name }} dashed-border{{ end }}'>
+        <div class='br2{{ if isInClipboard $file.Name }} dashed-border{{ end }}'>
           <div class='flex items-center'>
             {{- if $file.IsDir }}
             <span class="mr2 flex items-center">{{ template "heroicons-folder-open" }}</span>
             {{- end }}
-            <a href='/{{ join "files" $.SitePrefix $.FilePath $file.Name }}{{ if $file.IsDir }}/{{ end }}' class='mv1 truncate'>{{ $file.Name }}{{ if $file.IsDir }}/{{ end }}</a>
+            <a href='/{{ join "files" $.SitePrefix $.FilePath $file.Name }}{{ if $file.IsDir }}/{{ end }}' class='flex-wrap'>{{ $file.Name }}{{ if $file.IsDir }}/{{ end }}</a>
             {{- if not $file.IsDir }}
-            <span class='ma1 f6 mid-gray'>{{ fileSizeToString $file.Size }}</span>
+            <span class='mh1 f6 mid-gray'>{{ fileSizeToString $file.Size }}</span>
             {{- end }}
           </div>
         </div>
         <div class='flex-grow-1'></div>
+        <span class='mr1 f6 mid-gray'>{{ $file.CreationTime.Format "2006-01-02" }}</span>
         {{- if not $readOnly }}
         <details class='relative' data-autoclose-details>
           <summary role='button' title='more actions' class='flex items-center button ba br2 b--black h2 hide-marker ph2' data-disable-click-selection>
