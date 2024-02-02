@@ -100,6 +100,8 @@ TODO: /users/language/?redirect=foo/bar/baz which lets people set the language c
     BEFORE YOU DO THIS: look at how big the language files are. If it's an acceptable cost to keep them all in memory then just keep it in memory and reads will be much faster since you don't have to guard reads behind a mutex.
 TODO: a little "view data" link on file.html that simply the href "?data". When clicked, it generates live data of the page in real time if we're on a page.html, or the latest post/last page data if we're on post.html/postlist.html.
 
+NOTE: `notebrew regenerate` will regenerate all sites. `notebrew regenerate -site ''` will only regenerate the base site.
+
 https://www.cs.umd.edu/~ben/goldenrules.html
 - Every user action should have feedback. Common user actions can have modest feedback, major user actions should have big feedback.
 - Permit easy reversal of actions.
