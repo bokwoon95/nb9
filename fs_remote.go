@@ -126,9 +126,10 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	file.isFulltextIndexed = isFulltextIndexed(file.info.filePath)
 	if fileType.IsGzippable {
 		if !file.isFulltextIndexed {
-			// Do NOT pass file.buf directly to gzip.Reader or it will read from
-			// the buffer! We want to keep file.buf unread in case someone wants to
-			// reach directly into it and pulled out the raw gzipped bytes.
+			// Do NOT pass file.buf directly to gzip.Reader or it will do an
+			// unwanted read from the buffer! We want to keep file.buf unread
+			// in case someone wants to reach directly into it and pulled out
+			// the raw gzipped bytes.
 			r := bytes.NewReader(file.buf.Bytes())
 			file.gzipReader, _ = gzipReaderPool.Get().(*gzip.Reader)
 			if file.gzipReader != nil {
