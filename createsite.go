@@ -235,7 +235,8 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 		} else if response.SiteName != "" {
 			sitePrefix = "@" + response.SiteName
 		}
-		if response.SiteName == "www" || response.SiteName == "cdn" {
+		if response.SiteName == "www" || response.SiteName == "media" {
+			// TODO: enforce a list of common forbidden subdomains.
 			response.FormErrors.Add("siteName", "unavailable")
 		} else if !response.FormErrors.Has("siteName") {
 			_, err := fs.Stat(nbrew.FS, sitePrefix)
@@ -293,7 +294,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 		}
-		siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
+		siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)

@@ -2,11 +2,13 @@ package nb9
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -156,6 +158,26 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 }
 
 func moveFile(ctx context.Context, fsys FS, destPath, srcPath, name string) error {
+	if remoteFS, ok := fsys.(*RemoteFS); ok {
+		_ = remoteFS
+	}
+	// 
+	err := fsys.WithContext(ctx).Rename(path.Join(srcPath, name), path.Join(destPath, name))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if errors.Is(err, syscall.EISDIR) {
+			err := fsys.WithContext(ctx).RemoveAll(path.Join(destPath, name))
+			if err != nil {
+				return err
+			}
+			err = fsys.WithContext(ctx).Rename(path.Join(srcPath, name), path.Join(destPath, name))
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 

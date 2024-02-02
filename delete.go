@@ -297,7 +297,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 						return nil
 					}
 					if strings.HasSuffix(name, ".md") {
-						siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
+						siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 						if err != nil {
 							getLogger(ctx).Error(err.Error())
 							return nil

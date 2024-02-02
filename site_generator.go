@@ -40,7 +40,7 @@ type SiteGenerator struct {
 	fsys               FS
 	sitePrefix         string
 	contentDomain      string
-	cdnDomain          string
+	imgDomain          string
 	markdown           goldmark.Markdown
 	mu                 sync.Mutex
 	templateCache      map[string]*template.Template
@@ -54,12 +54,12 @@ type Site struct {
 	Favicon     template.URL
 }
 
-func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, cdnDomain string) (*SiteGenerator, error) {
+func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, imgDomain string) (*SiteGenerator, error) {
 	siteGen := &SiteGenerator{
 		fsys:               fsys,
 		sitePrefix:         sitePrefix,
 		contentDomain:      contentDomain,
-		cdnDomain:          cdnDomain,
+		imgDomain:          imgDomain,
 		mu:                 sync.Mutex{},
 		templateCache:      make(map[string]*template.Template),
 		templateInProgress: make(map[string]chan struct{}),
@@ -667,7 +667,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 		}
 	}
 	defer writer.Close()
-	if siteGen.cdnDomain == "" {
+	if siteGen.imgDomain == "" {
 		err = tmpl.Execute(writer, &pageData)
 		if err != nil {
 			return &TemplateExecutionError{Err: err}
@@ -676,7 +676,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 		pipeReader, pipeWriter := io.Pipe()
 		result := make(chan error, 1)
 		go func() {
-			result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, siteGen.sitePrefix, urlPath)
+			result <- rewriteURLs(writer, pipeReader, siteGen.imgDomain, siteGen.sitePrefix, urlPath)
 		}()
 		err = tmpl.Execute(pipeWriter, &pageData)
 		if err != nil {
@@ -838,7 +838,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		}
 	}
 	defer writer.Close()
-	if siteGen.cdnDomain == "" {
+	if siteGen.imgDomain == "" {
 		err = tmpl.Execute(writer, &postData)
 		if err != nil {
 			return &TemplateExecutionError{Err: err}
@@ -847,7 +847,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		pipeReader, pipeWriter := io.Pipe()
 		result := make(chan error, 1)
 		go func() {
-			result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, siteGen.sitePrefix, urlPath)
+			result <- rewriteURLs(writer, pipeReader, siteGen.imgDomain, siteGen.sitePrefix, urlPath)
 		}()
 		err = tmpl.Execute(pipeWriter, &postData)
 		if err != nil {
@@ -1236,7 +1236,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			}
 		}
 		defer writer.Close()
-		if siteGen.cdnDomain == "" {
+		if siteGen.imgDomain == "" {
 			err = tmpl.Execute(writer, &postListData)
 			if err != nil {
 				return &TemplateExecutionError{Err: err}
@@ -1245,7 +1245,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			pipeReader, pipeWriter := io.Pipe()
 			result := make(chan error, 1)
 			go func() {
-				result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, siteGen.sitePrefix, "")
+				result <- rewriteURLs(writer, pipeReader, siteGen.imgDomain, siteGen.sitePrefix, "")
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
@@ -1280,7 +1280,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			}
 		}
 		defer writer.Close()
-		if siteGen.cdnDomain == "" {
+		if siteGen.imgDomain == "" {
 			err = tmpl.Execute(writer, &postListData)
 			if err != nil {
 				return &TemplateExecutionError{Err: err}
@@ -1289,7 +1289,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			pipeReader, pipeWriter := io.Pipe()
 			result := make(chan error, 1)
 			go func() {
-				result <- rewriteURLs(writer, pipeReader, siteGen.cdnDomain, siteGen.sitePrefix, "")
+				result <- rewriteURLs(writer, pipeReader, siteGen.imgDomain, siteGen.sitePrefix, "")
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
@@ -1426,7 +1426,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 	return nil
 }
 
-func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, sitePrefix, urlPath string) error {
+func rewriteURLs(writer io.Writer, reader io.Reader, imgDomain, sitePrefix, urlPath string) error {
 	tokenizer := html.NewTokenizer(reader)
 	for {
 		tokenType := tokenizer.Next()
@@ -1488,7 +1488,7 @@ func rewriteURLs(writer io.Writer, reader io.Reader, cdnDomain, sitePrefix, urlP
 						switch path.Ext(uri.Path) {
 						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
 							uri.Scheme = "https"
-							uri.Host = cdnDomain
+							uri.Host = imgDomain
 							if strings.HasPrefix(uri.Path, "/") {
 								if sitePrefix != "" {
 									uri.Path = "/" + path.Join(sitePrefix, uri.Path)

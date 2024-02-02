@@ -228,7 +228,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 			return
 		}
 		if head == "posts" && tail == "" {
-			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
+			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 			} else {

@@ -588,7 +588,7 @@ func main() {
 						return err
 					}
 				}
-				storage = nb9.NewFileStorage(objectsDir, os.TempDir())
+				storage = nb9.NewLocalStorage(objectsDir, os.TempDir())
 			}
 			nbrew.FS = nb9.NewRemoteFS(nb9.RemoteFSConfig{
 				FilesDB:        filesDB,
@@ -612,7 +612,7 @@ func main() {
 				return err
 			}
 		}
-		siteGen, err := nb9.NewSiteGenerator(context.Background(), nbrew.FS, "", nbrew.ContentDomain, nbrew.CDNDomain)
+		siteGen, err := nb9.NewSiteGenerator(context.Background(), nbrew.FS, "", nbrew.ContentDomain, nbrew.ImgDomain)
 		if err != nil {
 			return err
 		}

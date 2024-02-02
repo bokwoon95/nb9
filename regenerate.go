@@ -53,7 +53,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		methodNotAllowed(w, r)
 		return
 	}
-	siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
+	siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
 		internalServerError(w, r, err)
@@ -414,7 +414,7 @@ func (nbrew *Notebrew) regeneratelist(w http.ResponseWriter, r *http.Request, si
 		writeResponse(w, r, response)
 		return
 	}
-	siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
+	siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
 		internalServerError(w, r, err)

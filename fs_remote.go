@@ -124,22 +124,32 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		return nil, err
 	}
 	file.isFulltextIndexed = isFulltextIndexed(file.info.filePath)
-	if fileType.IsGzippable && !file.isFulltextIndexed {
-		// Do NOT pass file.buf directly to gzip.Reader or it will read from
-		// the buffer! We want to keep file.buf unread in case someone wants to
-		// reach directly into it and pulled out the raw gzipped bytes.
-		r := bytes.NewReader(file.buf.Bytes())
-		file.gzipReader, _ = gzipReaderPool.Get().(*gzip.Reader)
-		if file.gzipReader != nil {
-			err = file.gzipReader.Reset(r)
-			if err != nil {
-				return nil, err
+	if fileType.IsGzippable {
+		if !file.isFulltextIndexed {
+			// Do NOT pass file.buf directly to gzip.Reader or it will read from
+			// the buffer! We want to keep file.buf unread in case someone wants to
+			// reach directly into it and pulled out the raw gzipped bytes.
+			r := bytes.NewReader(file.buf.Bytes())
+			file.gzipReader, _ = gzipReaderPool.Get().(*gzip.Reader)
+			if file.gzipReader != nil {
+				err = file.gzipReader.Reset(r)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				file.gzipReader, err = gzip.NewReader(r)
+				if err != nil {
+					return nil, err
+				}
 			}
-		} else {
-			file.gzipReader, err = gzip.NewReader(r)
-			if err != nil {
-				return nil, err
-			}
+		}
+	} else {
+		file.readCloser, err = file.storage.Get(file.ctx, hex.EncodeToString(file.info.fileID[:])+path.Ext(file.info.filePath))
+		if err != nil {
+			return nil, err
+		}
+		if file, ok := file.readCloser.(fs.File); ok {
+			return file, nil
 		}
 	}
 	return file, nil
@@ -240,12 +250,6 @@ func (file *RemoteFile) Read(p []byte) (n int, err error) {
 			return file.gzipReader.Read(p)
 		}
 	} else {
-		if file.readCloser == nil {
-			file.readCloser, err = file.storage.Get(file.ctx, hex.EncodeToString(file.info.fileID[:])+path.Ext(file.info.filePath))
-			if err != nil {
-				return 0, err
-			}
-		}
 		return file.readCloser.Read(p)
 	}
 }
@@ -1144,19 +1148,19 @@ func (storage *InMemoryStorage) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-type FileStorage struct {
+type LocalStorage struct {
 	rootDir string
 	tempDir string
 }
 
-func NewFileStorage(rootDir, tempDir string) *FileStorage {
-	return &FileStorage{
+func NewLocalStorage(rootDir, tempDir string) *LocalStorage {
+	return &LocalStorage{
 		rootDir: filepath.FromSlash(rootDir),
 		tempDir: filepath.FromSlash(tempDir),
 	}
 }
 
-func (storage *FileStorage) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+func (storage *LocalStorage) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	err := ctx.Err()
 	if err != nil {
 		return nil, err
@@ -1174,7 +1178,7 @@ func (storage *FileStorage) Get(ctx context.Context, key string) (io.ReadCloser,
 	return file, nil
 }
 
-func (storage *FileStorage) Put(ctx context.Context, key string, reader io.Reader) error {
+func (storage *LocalStorage) Put(ctx context.Context, key string, reader io.Reader) error {
 	err := ctx.Err()
 	if err != nil {
 		return err
@@ -1244,7 +1248,7 @@ func (storage *FileStorage) Put(ctx context.Context, key string, reader io.Reade
 	return nil
 }
 
-func (storage *FileStorage) Delete(ctx context.Context, key string) error {
+func (storage *LocalStorage) Delete(ctx context.Context, key string) error {
 	err := ctx.Err()
 	if err != nil {
 		return err

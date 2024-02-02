@@ -459,6 +459,9 @@ func MatchWildcard(subject, wildcard string) bool {
 	// strings.ToLower and use strings.EqualFold instead. Not sure what the
 	// rest of the code is doing though, if you do optimize this function make
 	// sure to also test it.
+	// TODO: we can also optimize it by implicitly prefixing the wildcard with
+	// "*." so that the caller does not have to concatenate "*." with the
+	// original string and incur an allocation.
 	subject, wildcard = strings.ToLower(subject), strings.ToLower(wildcard)
 	if subject == wildcard {
 		return true

@@ -57,7 +57,7 @@ type Notebrew struct {
 
 	ContentDomain string // localhost:6444, example.com
 
-	CDNDomain string
+	ImgDomain string
 
 	Proxies map[netip.Addr]struct{} // TODO: fill it in in main
 

@@ -303,7 +303,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 		if head == "pages" || head == "posts" {
-			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.CDNDomain)
+			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
