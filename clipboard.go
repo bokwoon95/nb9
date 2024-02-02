@@ -155,10 +155,10 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	}
 }
 
-func moveFile(ctx context.Context, fsys FS, destParent, srcParent, name string) error {
+func moveFile(ctx context.Context, fsys FS, destPath, srcPath, name string) error {
 	return nil
 }
 
-func copyFile(ctx context.Context, fsys FS, destParent, srcParent, name string) error {
+func copyFile(ctx context.Context, fsys FS, destPath, srcPath, name string) error {
 	return nil
 }

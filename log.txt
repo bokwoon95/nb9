@@ -32,7 +32,6 @@ anything in posts/*
 
 GetCreationTime(filePath string, fileInfo fs.FileInfo)
 
-TODO: figure out how to display the creation date on top in list_directory.html
 TODO: clipboard.go get paste to work
 TODO: structured template error
     We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
