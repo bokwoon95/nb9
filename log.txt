@@ -65,7 +65,6 @@ if destFile exists, and is a file, we need to delete it
     if we delete a file in
 if destFile exists and is a folder, we need to merge the contents
 
-TODO: rework fileTypes map to include a new field isStoredInDB, which we actually consult to determine whether or not a file type is stored in the db. This will allow us to avoid storing .woff and .woff2 in object storage, which is very costly and unnecessary since woff files are basically compressed text.
 TODO: clipboard.go get paste to work
 TODO: structured template error
     We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
