@@ -30,7 +30,6 @@ anything in posts/*
     source file is directly correlated to an index.html in its output/posts/* folder
     output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
 
-== part 1: sanity check ==
 if srcPath doesn't exist {
     return, nothing to do
 }
@@ -38,12 +37,6 @@ var action = none
 if destPath doesn't exist {
     action = no need to delete destPath, just move/copy srcPath and its outputDir over
 } else {
-    if destPath is under pages/* {
-        walk all files in srcPath and if any file is not .md return an error immediately
-    }
-    if destPath is under posts/* {
-        walk all files in srcPath and if any file is not .html return an error immediately
-    }
     if destPath is a file {
         action = delete destPath and its outputDir later, then move/copy srcPath and its outputDir over
     } else {
@@ -52,9 +45,6 @@ if destPath doesn't exist {
         }
         action = we will need to initiate recursive merging of the folders
     }
-}
-== part 2: do the action ==
-if action involves deleting destPath {
 }
 
 func pasteFile()

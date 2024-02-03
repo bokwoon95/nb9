@@ -148,10 +148,14 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				continue
 			}
 			g.Go(func() error {
-				if isCut {
-					return moveFile(ctx, nbrew.FS, destParent, srcParent, name)
+				remoteFS, ok := nbrew.FS.(*RemoteFS)
+				if !ok {
+					return nil
 				}
-				return copyFile(ctx, nbrew.FS, destParent, srcParent, name)
+				_ = remoteFS
+				_ = ctx
+				_ = isCut
+				return nil
 			})
 		}
 		err = g.Wait()
@@ -164,6 +168,31 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	default:
 		notFound(w, r)
 	}
+}
+
+type pasteCandidate struct {
+	SrcFilePath  string
+	SrcIsDir     bool
+	DestFilePath string
+	DestIsDir    bool
+}
+
+func remotePasteFile(ctx context.Context, fsys FS, candidates []pasteCandidate) error {
+	g, ctx := errgroup.WithContext(ctx)
+	_ = g
+	for _, candidate := range candidates {
+		if candidate.SrcFilePath == "" {
+			continue
+		}
+		if !candidate.SrcIsDir {
+			if candidate.DestFilePath == "" {
+				// move the file; if file is pages/* or posts/*, move the outputDir over as well
+			} else {
+				// replace the file; if the file is pages/* or posts/*, delete the oldputDir and move over the new one.
+			}
+		}
+	}
+	return nil
 }
 
 func moveFile(ctx context.Context, fsys FS, destPath, srcPath, name string) error {

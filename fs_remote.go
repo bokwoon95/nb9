@@ -995,6 +995,9 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	if err != nil {
 		return err
 	}
+	// TODO: BUG: we need to handle the fileIDs as well, the old fileID needs
+	// to be deleted from storage (if it is an image) and the new fileID needs
+	// to replace the old fileID.
 	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 		Dialect: fsys.filesDialect,
 		Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} WHERE file_path = {oldname}",
