@@ -259,7 +259,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var subdomain string
 	if MatchWildcard(r.Host, "*."+nbrew.ContentDomain) {
 		subdomain = strings.TrimSuffix(r.Host, "."+nbrew.ContentDomain)
-		if subdomain == "img" || subdomain == "www" {
+		if subdomain == "img" {
 			// examples:
 			// img.nbrew.io/foo/bar.jpg             => sitePrefix: <none>,      urlPath: foo/bar.jpg
 			// img.nbrew.io/@username/foo/bar.jpg   => sitePrefix: @username,   urlPath: foo/bar.jpg
@@ -288,12 +288,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ext := path.Ext(urlPath)
 	if ext == "" {
 		if subdomain == "www" {
-			if sitePrefix != "" {
-				// www subdomain never serves page data for other sites.
-				nbrew.site404(w, r, sitePrefix)
-				return
-			}
-			// Redirect the www subdomain to the bare domain.
 			http.Redirect(w, r, scheme+nbrew.ContentDomain+r.URL.RequestURI(), http.StatusMovedPermanently)
 			return
 		}

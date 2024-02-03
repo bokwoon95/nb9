@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -45,6 +46,7 @@ type SiteGenerator struct {
 	mu                 sync.Mutex
 	templateCache      map[string]*template.Template
 	templateInProgress map[string]chan struct{}
+	imgFileIDs         map[string][16]byte
 }
 
 type Site struct {
@@ -114,6 +116,57 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 			return nil, err
 		}
 		siteGen.Site.Description = template.HTML(b.String())
+	}
+	if siteGen.imgDomain == "" {
+		return siteGen, nil
+	}
+	remoteFS, ok := siteGen.fsys.(*RemoteFS)
+	if !ok {
+		return siteGen, nil
+	}
+	_, isS3Storage := remoteFS.storage.(*S3Storage)
+	if !isS3Storage {
+		return siteGen, nil
+	}
+	cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
+		Dialect: remoteFS.filesDialect,
+		Format: "SELECT {*}" +
+			" FROM files" +
+			" WHERE file_path LIKE {pattern}" +
+			" AND (" +
+			"file_path LIKE '%.jpeg'" +
+			" OR file_path LIKE '%.jpg'" +
+			" OR file_path LIKE '%.png'" +
+			" OR file_path LIKE '%.webp'" +
+			" OR file_path LIKE '%.gif'" +
+			" OR file_path LIKE '%.md'" +
+			") ",
+		Values: []any{
+			sq.StringParam("pattern", path.Join(siteGen.sitePrefix, "output")+"/%"),
+		},
+	}, func(row *sq.Row) (result struct {
+		FileID   [16]byte
+		FilePath string
+	}) {
+		row.UUID(&result.FileID, "file_id")
+		result.FilePath = row.String("file_path")
+		return result
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close()
+	siteGen.imgFileIDs = make(map[string][16]byte)
+	for cursor.Next() {
+		result, err := cursor.Result()
+		if err != nil {
+			return nil, err
+		}
+		siteGen.imgFileIDs[result.FilePath] = result.FileID
+	}
+	err = cursor.Close()
+	if err != nil {
+		return nil, err
 	}
 	return siteGen, nil
 }
@@ -676,7 +729,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 		pipeReader, pipeWriter := io.Pipe()
 		result := make(chan error, 1)
 		go func() {
-			result <- rewriteURLs(writer, pipeReader, siteGen.imgDomain, siteGen.sitePrefix, urlPath)
+			result <- siteGen.rewriteURLs(writer, pipeReader, urlPath)
 		}()
 		err = tmpl.Execute(pipeWriter, &pageData)
 		if err != nil {
@@ -847,7 +900,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		pipeReader, pipeWriter := io.Pipe()
 		result := make(chan error, 1)
 		go func() {
-			result <- rewriteURLs(writer, pipeReader, siteGen.imgDomain, siteGen.sitePrefix, urlPath)
+			result <- siteGen.rewriteURLs(writer, pipeReader, urlPath)
 		}()
 		err = tmpl.Execute(pipeWriter, &postData)
 		if err != nil {
@@ -1245,7 +1298,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			pipeReader, pipeWriter := io.Pipe()
 			result := make(chan error, 1)
 			go func() {
-				result <- rewriteURLs(writer, pipeReader, siteGen.imgDomain, siteGen.sitePrefix, "")
+				result <- siteGen.rewriteURLs(writer, pipeReader, "")
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
@@ -1289,7 +1342,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			pipeReader, pipeWriter := io.Pipe()
 			result := make(chan error, 1)
 			go func() {
-				result <- rewriteURLs(writer, pipeReader, siteGen.imgDomain, siteGen.sitePrefix, "")
+				result <- siteGen.rewriteURLs(writer, pipeReader, "")
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
@@ -1426,7 +1479,11 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 	return nil
 }
 
-func rewriteURLs(writer io.Writer, reader io.Reader, imgDomain, sitePrefix, urlPath string) error {
+func (siteGen *SiteGenerator) rewriteURLs(writer io.Writer, reader io.Reader, urlPath string) error {
+	var isS3Storage bool
+	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+		_, isS3Storage = remoteFS.storage.(*S3Storage)
+	}
 	tokenizer := html.NewTokenizer(reader)
 	for {
 		tokenType := tokenizer.Next()
@@ -1488,16 +1545,32 @@ func rewriteURLs(writer io.Writer, reader io.Reader, imgDomain, sitePrefix, urlP
 						switch path.Ext(uri.Path) {
 						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
 							uri.Scheme = "https"
-							uri.Host = imgDomain
+							uri.Host = siteGen.imgDomain
 							if strings.HasPrefix(uri.Path, "/") {
-								if sitePrefix != "" {
-									uri.Path = "/" + path.Join(sitePrefix, uri.Path)
+								if isS3Storage {
+									filePath := path.Join(siteGen.sitePrefix, "output", uri.Path)
+									if fileID, ok := siteGen.imgFileIDs[filePath]; ok {
+										uri.Path = "/" + hex.EncodeToString(fileID[:]) + path.Ext(filePath)
+										val = []byte(uri.String())
+									}
+								} else {
+									if siteGen.sitePrefix != "" {
+										uri.Path = "/" + path.Join(siteGen.sitePrefix, uri.Path)
+									}
+									val = []byte(uri.String())
 								}
-								val = []byte(uri.String())
 							} else {
 								if urlPath != "" {
-									uri.Path = "/" + path.Join(sitePrefix, urlPath, uri.Path)
-									val = []byte(uri.String())
+									if isS3Storage {
+										filePath := path.Join(siteGen.sitePrefix, "output", urlPath, uri.Path)
+										if fileID, ok := siteGen.imgFileIDs[filePath]; ok {
+											uri.Path = "/" + hex.EncodeToString(fileID[:]) + path.Ext(filePath)
+											val = []byte(uri.String())
+										}
+									} else {
+										uri.Path = "/" + path.Join(siteGen.sitePrefix, urlPath, uri.Path)
+										val = []byte(uri.String())
+									}
 								}
 							}
 						}
