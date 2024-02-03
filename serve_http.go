@@ -334,6 +334,16 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cacheControl = "no-cache, must-revalidate"
 	case ".eot", ".otf", ".ttf", ".woff", ".woff2":
 		cacheControl = "no-cache, stale-while-revalidate, max-age=2592000" /* 30 days */
+	case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+		var isS3Storage bool
+		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+			_, isS3Storage = remoteFS.storage.(*S3Storage)
+		}
+		if nbrew.ImgDomain != "" && isS3Storage {
+			cacheControl = "max-age=31536000, immutable"
+		} else {
+			cacheControl = "no-cache, stale-while-revalidate, max-age=120" /* 2 minutes */
+		}
 	default:
 		cacheControl = "no-cache, stale-while-revalidate, max-age=120" /* 2 minutes */
 	}

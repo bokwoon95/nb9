@@ -139,7 +139,6 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 			" OR file_path LIKE '%.png'" +
 			" OR file_path LIKE '%.webp'" +
 			" OR file_path LIKE '%.gif'" +
-			" OR file_path LIKE '%.md'" +
 			") ",
 		Values: []any{
 			sq.StringParam("pattern", path.Join(siteGen.sitePrefix, "output")+"/%"),

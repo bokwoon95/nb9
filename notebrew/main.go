@@ -57,6 +57,7 @@ var (
 // - dynamic private: captcha.json
 // - dynamic public: allowsignup.txt, 503.html
 
+// TODO: move this inline, we only use it twice. We can define an inline variable twice.
 type DatabaseConfig struct {
 	Dialect  string
 	Filepath string
@@ -304,7 +305,12 @@ func main() {
 				go func() {
 					for {
 						<-ticker.C
-						nbrew.UsersDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
+						ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+						_, err = nbrew.UsersDB.ExecContext(ctx, "PRAGMA analysis_limit(400); PRAGMA optimize;")
+						if err != nil {
+							nbrew.Logger.Error(err.Error())
+						}
+						cancel()
 					}
 				}()
 				nbrew.UsersDB.Close()
@@ -520,7 +526,12 @@ func main() {
 				go func() {
 					for {
 						<-ticker.C
-						filesDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
+						ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+						_, err = filesDB.ExecContext(ctx, "PRAGMA analysis_limit(400); PRAGMA optimize;")
+						if err != nil {
+							nbrew.Logger.Error(err.Error())
+						}
+						cancel()
 					}
 				}()
 				filesDB.Close()
