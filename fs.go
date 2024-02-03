@@ -67,6 +67,7 @@ type FileType struct {
 	Ext         string
 	ContentType string
 	IsGzippable bool
+	IsObject      bool
 }
 
 var fileTypes = map[string]FileType{
@@ -77,11 +78,11 @@ var fileTypes = map[string]FileType{
 	".txt":   {Ext: ".txt", ContentType: "text/plain; charset=utf-8", IsGzippable: true},
 	".svg":   {Ext: ".svg", ContentType: "image/svg+xml", IsGzippable: true},
 	".ico":   {Ext: ".ico", ContentType: "image/ico", IsGzippable: true},
-	".jpeg":  {Ext: ".jpeg", ContentType: "image/jpeg"},
-	".jpg":   {Ext: ".jpg", ContentType: "image/jpeg"},
-	".png":   {Ext: ".png", ContentType: "image/png"},
-	".webp":  {Ext: ".webp", ContentType: "image/webp"},
-	".gif":   {Ext: ".gif", ContentType: "image/gif"},
+	".jpeg":  {Ext: ".jpeg", ContentType: "image/jpeg", IsObject: true},
+	".jpg":   {Ext: ".jpg", ContentType: "image/jpeg", IsObject: true},
+	".png":   {Ext: ".png", ContentType: "image/png", IsObject: true},
+	".webp":  {Ext: ".webp", ContentType: "image/webp", IsObject: true},
+	".gif":   {Ext: ".gif", ContentType: "image/gif", IsObject: true},
 	".eot":   {Ext: ".eot", ContentType: "font/eot", IsGzippable: true},
 	".otf":   {Ext: ".otf", ContentType: "font/otf", IsGzippable: true},
 	".ttf":   {Ext: ".ttf", ContentType: "font/ttf", IsGzippable: true},
