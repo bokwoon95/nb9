@@ -228,14 +228,14 @@
     {{- end }}
   </ul>
 </form>
-  {{- if or $.PreviousFileExists $.NextFile }}
+  {{- if or $.PreviousURL $.NextURL }}
   <div class='mv3 flex flex-wrap items-center'>
-    {{- if $.PreviousFileExists }}
-    <div><a href='?before={{ (index $.Files 0).Name }}&limit={{ $.Limit }}'>&larr; previous</a></div>
+    {{- if $.PreviousURL }}
+    <a href='{{ $.PreviousURL }}'>&larr; previous</a>
     {{- end }}
-    <div class='flex-grow-1'></div>
-    {{- if $.NextFile }}
-    <div><a href='?from={{ $.NextFile }}&limit={{ $.Limit }}'>next &rarr;</a></div>
+    <span class='flex-grow-1'></span>
+    {{- if $.NextURL }}
+    <a href='{{ $.NextURL }}'>next &rarr;</a>
     {{- end }}
   </div>
   {{- end }}

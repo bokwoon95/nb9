@@ -558,12 +558,12 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 
 		Files []File `json:"files,omitempty"`
 
-		From               string `json:"from,omitempty"`
-		Before             string `json:"before,omitempty"`
-		Limit              int    `json:"limit"`
-		Sites              []Site `json:"sites"`
-		PreviousSiteExists bool   `json:"previousSiteExists,omitempty"`
-		NextSite           string `json:"nextSite,omitempty"`
+		From        string `json:"from,omitempty"`
+		Before      string `json:"before,omitempty"`
+		Limit       int    `json:"limit"`
+		Sites       []Site `json:"sites"`
+		PreviousURL string `json:"previousURL,omitempty"`
+		NextURL     string `json:"nextURL,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if response.Sites == nil {
@@ -817,8 +817,14 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			}
 			response.Sites = sites
 			if len(response.Sites) > response.Limit {
-				response.NextSite = response.Sites[response.Limit].Name
+				uri := &url.URL{
+					Scheme:   r.URL.Scheme,
+					Host:     r.URL.Host,
+					Path:     r.URL.Path,
+					RawQuery: "from=" + url.QueryEscape(response.Sites[response.Limit].Name) + "&limit=" + strconv.Itoa(response.Limit),
+				}
 				response.Sites = response.Sites[:response.Limit]
+				response.NextURL = uri.String()
 			}
 			return nil
 		})
@@ -838,7 +844,15 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			if err != nil {
 				return err
 			}
-			response.PreviousSiteExists = hasPreviousSite
+			if hasPreviousSite {
+				uri := &url.URL{
+					Scheme:   r.URL.Scheme,
+					Host:     r.URL.Host,
+					Path:     r.URL.Path,
+					RawQuery: "before=" + url.QueryEscape(response.From) + "&limit=" + strconv.Itoa(response.Limit),
+				}
+				response.PreviousURL = uri.String()
+			}
 			return nil
 		})
 		err := g.Wait()
@@ -878,8 +892,14 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				return err
 			}
 			if len(response.Sites) > response.Limit {
-				response.PreviousSiteExists = true
 				response.Sites = response.Sites[1:]
+				uri := &url.URL{
+					Scheme:   r.URL.Scheme,
+					Host:     r.URL.Host,
+					Path:     r.URL.Path,
+					RawQuery: "before=" + url.QueryEscape(response.Sites[0].Name) + "&limit=" + strconv.Itoa(response.Limit),
+				}
+				response.PreviousURL = uri.String()
 			}
 			return nil
 		})
@@ -905,7 +925,13 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				}
 				return err
 			}
-			response.NextSite = nextSite
+			uri := &url.URL{
+				Scheme:   r.URL.Scheme,
+				Host:     r.URL.Host,
+				Path:     r.URL.Path,
+				RawQuery: "from=" + url.QueryEscape(nextSite) + "&limit=" + strconv.Itoa(response.Limit),
+			}
+			response.NextURL = uri.String()
 			return nil
 		})
 		err := g.Wait()
@@ -942,8 +968,14 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	}
 	response.Sites = sites
 	if len(response.Sites) > response.Limit {
-		response.NextSite = response.Sites[response.Limit].Name
+		uri := &url.URL{
+			Scheme:   r.URL.Scheme,
+			Host:     r.URL.Host,
+			Path:     r.URL.Path,
+			RawQuery: "from=" + url.QueryEscape(response.Sites[response.Limit].Name) + "&limit=" + strconv.Itoa(response.Limit),
+		}
 		response.Sites = response.Sites[:response.Limit]
+		response.NextURL = uri.String()
 	}
 	writeResponse(w, r, response)
 	return
@@ -979,14 +1011,14 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		IsDir           bool           `json:"isDir"`
 		SearchSupported bool           `json:"searchSupported"`
 
-		Sort               string `json:"sort,omitempty"`
-		Order              string `json:"order,omitempty"`
-		From               string `json:"from,omitempty"`
-		Before             string `json:"before,omitempty"`
-		Limit              int    `json:"limit,omitempty"`
-		Files              []File `json:"files"`
-		PreviousFileExists bool   `json:"previousFileExists,omitempty"`
-		NextFile           string `json:"nextFile,omitempty"`
+		Sort        string `json:"sort,omitempty"`
+		Order       string `json:"order,omitempty"`
+		From        string `json:"from,omitempty"`
+		Before      string `json:"before,omitempty"`
+		Limit       int    `json:"limit,omitempty"`
+		Files       []File `json:"files"`
+		PreviousURL string `json:"previousURL,omitempty"`
+		NextURL     string `json:"nextURL,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if response.Files == nil {
@@ -1301,11 +1333,19 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			if len(response.Files) > response.Limit {
 				nextFile := response.Files[response.Limit]
 				response.Files = response.Files[:response.Limit]
-				if response.Sort == "name" {
-					response.NextFile = nextFile.Name
-				} else if response.Sort == "edited" || response.Sort == "created" {
-					response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
+				uri := &url.URL{
+					Scheme: r.URL.Scheme,
+					Host:   r.URL.Host,
+					Path:   r.URL.Path,
 				}
+				if response.Sort == "name" {
+					uri.RawQuery = "from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
+				} else if response.Sort == "edited" {
+					uri.RawQuery = "from=" + url.QueryEscape(nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+				} else if response.Sort == "created" {
+					uri.RawQuery = "from=" + url.QueryEscape(nextFile.CreationTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+				}
+				response.NextURL = uri.String()
 			}
 			return nil
 		})
@@ -1344,7 +1384,19 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			if err != nil {
 				return err
 			}
-			response.PreviousFileExists = hasPreviousFile
+			if hasPreviousFile {
+				uri := &url.URL{
+					Scheme: r.URL.Scheme,
+					Host:   r.URL.Host,
+					Path:   r.URL.Path,
+				}
+				if response.Sort == "name" {
+					uri.RawQuery = "before=" + url.QueryEscape(response.From) + "&limit=" + strconv.Itoa(response.Limit)
+				} else if response.Sort == "edited" || response.Sort == "created" {
+					uri.RawQuery = "before=" + url.QueryEscape(fromTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+				}
+				response.PreviousURL = uri.String()
+			}
 			return nil
 		})
 		err := g.Wait()
@@ -1430,8 +1482,20 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			}
 			response.Files = files
 			if len(response.Files) > response.Limit {
-				response.PreviousFileExists = true
 				response.Files = response.Files[1:]
+				uri := &url.URL{
+					Scheme: r.URL.Scheme,
+					Host:   r.URL.Host,
+					Path:   r.URL.Path,
+				}
+				if response.Sort == "name" {
+					uri.RawQuery = "before=" + url.QueryEscape(response.Files[0].Name) + "&limit=" + strconv.Itoa(response.Limit)
+				} else if response.Sort == "edited" {
+					uri.RawQuery = "before=" + url.QueryEscape(response.Files[0].ModTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+				} else if response.Sort == "created" {
+					uri.RawQuery = "before=" + url.QueryEscape(response.Files[0].CreationTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+				}
+				response.PreviousURL = uri.String()
 			}
 			return nil
 		})
@@ -1488,11 +1552,19 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 				return err
 			}
-			if response.Sort == "name" {
-				response.NextFile = nextFile.Name
-			} else if response.Sort == "edited" || response.Sort == "created" {
-				response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
+			uri := &url.URL{
+				Scheme: r.URL.Scheme,
+				Host:   r.URL.Host,
+				Path:   r.URL.Path,
 			}
+			if response.Sort == "name" {
+				uri.RawQuery = "from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
+			} else if response.Sort == "edited" {
+				uri.RawQuery = "from=" + url.QueryEscape(nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+			} else if response.Sort == "created" {
+				uri.RawQuery = "from=" + url.QueryEscape(nextFile.CreationTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+			}
+			response.NextURL = uri.String()
 			return nil
 		})
 		err = g.Wait()
@@ -1555,11 +1627,19 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	if len(response.Files) > response.Limit {
 		nextFile := response.Files[response.Limit]
 		response.Files = response.Files[:response.Limit]
-		if response.Sort == "name" {
-			response.NextFile = nextFile.Name
-		} else if response.Sort == "edited" || response.Sort == "created" {
-			response.NextFile = nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")
+		uri := &url.URL{
+			Scheme: r.URL.Scheme,
+			Host:   r.URL.Host,
+			Path:   r.URL.Path,
 		}
+		if response.Sort == "name" {
+			uri.RawQuery = "from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
+		} else if response.Sort == "edited" {
+			uri.RawQuery = "from=" + url.QueryEscape(nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+		} else if response.Sort == "created" {
+			uri.RawQuery = "from=" + url.QueryEscape(nextFile.CreationTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+		}
+		response.NextURL = uri.String()
 	}
 	writeResponse(w, r, response)
 	return

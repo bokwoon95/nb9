@@ -257,14 +257,14 @@
     <div class='mv2 tc'>- No other sites -</div>
     {{- end }}
   {{- end }}
-  {{- if or $.PreviousSiteExists $.NextSite }}
+  {{- if or $.PreviousURL $.NextURL }}
   <div class='mv3 flex flex-wrap items-center'>
-    {{- if $.PreviousSiteExists }}
-    <div><a href='?before={{ (index $.Sites 0).Name }}&limit={{ $.Limit }}'>&larr; previous</a></div>
+    {{- if $.PreviousURL }}
+    <a href='{{ $.PreviousURL }}'>&larr; previous</a>
     {{- end }}
-    <div class='flex-grow-1'></div>
-    {{- if $.NextSite }}
-    <div><a href='?from={{ $.NextSite }}&limit={{ $.Limit }}'>next &rarr;</a></div>
+    <span class='flex-grow-1'></span>
+    {{- if $.NextURL }}
+    <a href='{{ $.NextURL }}'>next &rarr;</a>
     {{- end }}
   </div>
   {{- end }}

@@ -65,7 +65,7 @@ if destFile exists, and is a file, we need to delete it
     if we delete a file in
 if destFile exists and is a folder, we need to merge the contents
 
-TODO: refactor NextFile and PreviousFileExists into Next and Previous, which contain absolute URLs (without the host). The HTML frontend can use this directly without needing to assemble the URL themselves. APIs can consume a URL more easily than a file ID. Win-win!.
+TODO: refactor NextFile and PreviousFileExists into Next and Previous, which contain absolute URLs (without the host). The HTML frontend can use this directly without needing to assemble the URL themselves. APIs can consume a URL more easily than a file ID. Win-win!
 TODO: Keep the Storage interface as only Get/Put/Delete, but rework rewriteURLs such that it efficiently rewrites not only the host to the imgDomain, but also the filePath to the UUID string e.g. /themes/header.png => https://img.nbrew.io/fced27d70f744351bc08bdc450483542.png.
     - This would involve first doing an SQL query that stores all the filePath to fileIDs in a map[string][16]byte, which I am afraid will consume a lot of memory but is unavoidable because we can reduce the number of network hops needed to serve an image from 2 to 1, while retaining the ability to rename files without incurring massive costs S3-side.
     - Another benefit to having UUID filenames is that we can set the Cache-Control to be immutable, since that UUID filename is irrevocably tied to the set of bytes that make up the image. We can enable this if we detect that nbrew.FS is a RemoteFS and its storage field is an S3Storage. rewriteURL will also have to know whether or not the underlying object storage is S3, so that it knows to rewrite the filePaths to UUID paths.
