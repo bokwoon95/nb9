@@ -2,13 +2,11 @@ package nb9
 
 import (
 	"context"
-	"errors"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
-	"syscall"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -192,33 +190,5 @@ func remotePasteFile(ctx context.Context, fsys FS, candidates []pasteCandidate) 
 			}
 		}
 	}
-	return nil
-}
-
-func moveFile(ctx context.Context, fsys FS, destPath, srcPath, name string) error {
-	if remoteFS, ok := fsys.(*RemoteFS); ok {
-		_ = remoteFS
-	}
-	//
-	err := fsys.WithContext(ctx).Rename(path.Join(srcPath, name), path.Join(destPath, name))
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		if errors.Is(err, syscall.EISDIR) {
-			err := fsys.WithContext(ctx).RemoveAll(path.Join(destPath, name))
-			if err != nil {
-				return err
-			}
-			err = fsys.WithContext(ctx).Rename(path.Join(srcPath, name), path.Join(destPath, name))
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func copyFile(ctx context.Context, fsys FS, destPath, srcPath, name string) error {
 	return nil
 }
