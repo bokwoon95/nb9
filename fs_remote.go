@@ -27,7 +27,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 	"github.com/bokwoon95/nb9/sq"
-	"golang.org/x/sync/errgroup"
 )
 
 type RemoteFSConfig struct {
@@ -889,62 +888,12 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 		return &fs.PathError{Op: "removeall", Path: name, Err: fs.ErrInvalid}
 	}
 	pattern := strings.NewReplacer("%", "\\%", "_", "\\_").Replace(name) + "/%"
-	if fsys.filesDialect == "sqlite" || fsys.filesDialect == "postgres" {
-		cursor, err := sq.FetchCursor(fsys.ctx, fsys.filesDB, sq.Query{
-			Dialect: fsys.filesDialect,
-			Format:  "DELETE FROM files WHERE file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\' RETURNING {*}",
-			Values: []any{
-				sq.StringParam("name", name),
-				sq.StringParam("pattern", pattern),
-			},
-		}, func(row *sq.Row) (result struct {
-			FileID   [16]byte
-			IsDir    bool
-			FilePath string
-		}) {
-			row.UUID(&result.FileID, "file_id")
-			result.IsDir = row.Bool("is_dir")
-			result.FilePath = row.String("file_path")
-			return result
-		})
-		if err != nil {
-			return err
-		}
-		defer cursor.Close()
-		var wg sync.WaitGroup
-		for cursor.Next() {
-			result, err := cursor.Result()
-			if err != nil {
-				return err
-			}
-			if result.IsDir {
-				continue
-			}
-			ext := path.Ext(result.FilePath)
-			switch ext {
-			case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					err := fsys.storage.Delete(fsys.ctx, hex.EncodeToString(result.FileID[:])+ext)
-					if err != nil {
-						fsys.logger.Error(err.Error())
-					}
-				}()
-			}
-		}
-		err = cursor.Close()
-		if err != nil {
-			return err
-		}
-		wg.Wait()
-		return nil
-	}
-	files, err := sq.FetchAll(fsys.ctx, fsys.filesDB, sq.Query{
+	cursor, err := sq.FetchCursor(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
 			" WHERE (file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\')" +
+			" AND NOT is_dir" +
 			" AND file_path LIKE '%.jpeg'" +
 			" AND file_path LIKE '%.jpg'" +
 			" AND file_path LIKE '%.png'" +
@@ -962,17 +911,30 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 		file.filePath = row.String("file_path")
 		return file
 	})
-	g, ctx := errgroup.WithContext(fsys.ctx)
-	for _, file := range files {
-		file := file
-		g.Go(func() error {
-			return fsys.storage.Delete(ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
-		})
-	}
-	err = g.Wait()
 	if err != nil {
 		return err
 	}
+	defer cursor.Close()
+	var wg sync.WaitGroup
+	for cursor.Next() {
+		file, err := cursor.Result()
+		if err != nil {
+			return err
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := fsys.storage.Delete(fsys.ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
+			if err != nil {
+				fsys.logger.Error(err.Error())
+			}
+		}()
+	}
+	err = cursor.Close()
+	if err != nil {
+		return err
+	}
+	wg.Wait()
 	_, err = sq.Exec(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
 		Format:  "DELETE FROM files WHERE file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\'",
