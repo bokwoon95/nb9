@@ -608,6 +608,7 @@ func main() {
 				Storage:        storage,
 				UsersDB:        nbrew.UsersDB,
 				UsersDialect:   nbrew.UsersDialect,
+				Logger:         nbrew.Logger,
 			})
 		}
 		for _, dir := range []string{

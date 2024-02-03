@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -36,6 +37,7 @@ type RemoteFSConfig struct {
 	Storage        Storage
 	UsersDB        *sql.DB
 	UsersDialect   string
+	Logger         *slog.Logger
 }
 
 type RemoteFS struct {
@@ -46,6 +48,7 @@ type RemoteFS struct {
 	storage        Storage
 	usersDB        *sql.DB
 	usersDialect   string
+	logger         *slog.Logger
 }
 
 func NewRemoteFS(config RemoteFSConfig) *RemoteFS {
@@ -57,6 +60,7 @@ func NewRemoteFS(config RemoteFSConfig) *RemoteFS {
 		storage:        config.Storage,
 		usersDB:        config.UsersDB,
 		usersDialect:   config.UsersDialect,
+		logger:         config.Logger,
 	}
 }
 
@@ -857,7 +861,7 @@ func (fsys *RemoteFS) Remove(name string) error {
 		return &fs.PathError{Op: "remove", Path: name, Err: syscall.ENOTEMPTY}
 	}
 	switch path.Ext(name) {
-	case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".woff", ".woff2":
+	case ".jpeg", ".jpg", ".png", ".webp", ".gif":
 		err = fsys.storage.Delete(fsys.ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
 		if err != nil {
 			return err
@@ -885,6 +889,57 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 		return &fs.PathError{Op: "removeall", Path: name, Err: fs.ErrInvalid}
 	}
 	pattern := strings.NewReplacer("%", "\\%", "_", "\\_").Replace(name) + "/%"
+	if fsys.filesDialect == "sqlite" || fsys.filesDialect == "postgres" {
+		cursor, err := sq.FetchCursor(fsys.ctx, fsys.filesDB, sq.Query{
+			Dialect: fsys.filesDialect,
+			Format:  "DELETE FROM files WHERE file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\' RETURNING {*}",
+			Values: []any{
+				sq.StringParam("name", name),
+				sq.StringParam("pattern", pattern),
+			},
+		}, func(row *sq.Row) (result struct {
+			FileID   [16]byte
+			IsDir    bool
+			FilePath string
+		}) {
+			row.UUID(&result.FileID, "file_id")
+			result.IsDir = row.Bool("is_dir")
+			result.FilePath = row.String("file_path")
+			return result
+		})
+		if err != nil {
+			return err
+		}
+		defer cursor.Close()
+		var wg sync.WaitGroup
+		for cursor.Next() {
+			result, err := cursor.Result()
+			if err != nil {
+				return err
+			}
+			if result.IsDir {
+				continue
+			}
+			ext := path.Ext(result.FilePath)
+			switch ext {
+			case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					err := fsys.storage.Delete(fsys.ctx, hex.EncodeToString(result.FileID[:])+ext)
+					if err != nil {
+						fsys.logger.Error(err.Error())
+					}
+				}()
+			}
+		}
+		err = cursor.Close()
+		if err != nil {
+			return err
+		}
+		wg.Wait()
+		return nil
+	}
 	files, err := sq.FetchAll(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
 		Format: "SELECT {*}" +
@@ -894,9 +949,7 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 			" AND file_path LIKE '%.jpg'" +
 			" AND file_path LIKE '%.png'" +
 			" AND file_path LIKE '%.webp'" +
-			" AND file_path LIKE '%.gif'" +
-			" AND file_path LIKE '%.woff'" +
-			" AND file_path LIKE '%.woff2'",
+			" AND file_path LIKE '%.gif'",
 		Values: []any{
 			sq.StringParam("name", name),
 			sq.StringParam("pattern", pattern),

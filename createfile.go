@@ -263,7 +263,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				response.Ext = ".html"
 			}
 		}
-		_, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, response.Parent, response.Name))
+		_, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, response.Parent, response.Name+response.Ext))
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				getLogger(r.Context()).Error(err.Error())

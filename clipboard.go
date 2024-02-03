@@ -106,6 +106,14 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		})
 		redirect(w, r)
 	case "paste":
+		http.SetCookie(w, &http.Cookie{
+			Path:     "/",
+			Name:     "clipboard",
+			Value:    "0",
+			MaxAge:   -1,
+			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
+			HttpOnly: true,
+		})
 		cookie, _ := r.Cookie("clipboard")
 		if cookie == nil {
 			redirect(w, r)
@@ -152,6 +160,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
 			return
 		}
+		redirect(w, r)
 	default:
 		notFound(w, r)
 	}
@@ -161,7 +170,7 @@ func moveFile(ctx context.Context, fsys FS, destPath, srcPath, name string) erro
 	if remoteFS, ok := fsys.(*RemoteFS); ok {
 		_ = remoteFS
 	}
-	// 
+	//
 	err := fsys.WithContext(ctx).Rename(path.Join(srcPath, name), path.Join(destPath, name))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
