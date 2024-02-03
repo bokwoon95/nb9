@@ -894,11 +894,13 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 			" FROM files" +
 			" WHERE (file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\')" +
 			" AND NOT is_dir" +
-			" AND file_path LIKE '%.jpeg'" +
-			" AND file_path LIKE '%.jpg'" +
-			" AND file_path LIKE '%.png'" +
-			" AND file_path LIKE '%.webp'" +
-			" AND file_path LIKE '%.gif'",
+			" AND (" +
+			"file_path LIKE '%.jpeg'" +
+			" OR file_path LIKE '%.jpg'" +
+			" OR file_path LIKE '%.png'" +
+			" OR file_path LIKE '%.webp'" +
+			" OR file_path LIKE '%.gif'" +
+			")",
 		Values: []any{
 			sq.StringParam("name", name),
 			sq.StringParam("pattern", pattern),
