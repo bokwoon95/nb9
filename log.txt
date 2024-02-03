@@ -56,6 +56,7 @@ if destFile exists, and is a file, we need to delete it
 if destFile exists and is a folder, we need to merge the contents
 
 TODO: clipboard.go get paste to work
+TODO: also add the regenerate list button to the output page of a post category
 TODO: structured template error
     We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
     ParseTemplate() error => parseTemplate() (numPrefixLines int, err error)
