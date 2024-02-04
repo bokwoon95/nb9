@@ -53,6 +53,8 @@ if destFile exists, and is a file, we need to delete it
     if we delete a file in
 if destFile exists and is a folder, we need to merge the contents
 
+TODO: clipboard: if a destFile exists, no matter whether it's file or folder, paste will be auto rejected.
+    - 20 MB total upload limit (includes all files). When we hit the limit in the middle of a file, what happens is we get an error on Read() which should be caught and checked for ErrTooLarge or something and sent to badRequest().
 TODO: big turn: remove clipboard (cut/copy/paste). condense "site/list settings" and "regenerate site/list" back into a miscellaneous dropdown button, because we will need to accomodate an "upload file" link as well and there's no space.
     - Uploading files only works for individual files, it doesn't work for folders. If there is a file conflict it simply backs off for that file and refuses to overwrite.
     - Uploaded files do trigger page/post/postlist regeneration when appropriate.
