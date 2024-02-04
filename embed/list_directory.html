@@ -85,7 +85,7 @@
   </div>
   {{- if not $readOnly }}
   <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
-    <input type='hidden' name='destination' value='{{ $.FilePath }}'>
+    <input type='hidden' name='parent' value='{{ $.FilePath }}'>
     <button type='submit' class='button ba br2 pv2 ph2'>paste</button>
   </form>
   {{- end }}

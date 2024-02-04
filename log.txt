@@ -47,14 +47,17 @@ if destPath doesn't exist {
     }
 }
 
-func pasteFile()
-
 if srcFile doesn't exist, return
 if destFile exists, and is a file, we need to delete it
     if we delete a file in posts/*, we need to delete the corresponding output dir in output/posts/*
     if we delete a file in
 if destFile exists and is a folder, we need to merge the contents
 
+TODO: big turn: remove clipboard (cut/copy/paste). condense "site/list settings" and "regenerate site/list" back into a miscellaneous dropdown button, because we will need to accomodate an "upload file" link as well and there's no space.
+    - Uploading files only works for individual files, it doesn't work for folders. If there is a file conflict it simply backs off for that file and refuses to overwrite.
+    - Uploaded files do trigger page/post/postlist regeneration when appropriate.
+    - All files have a little "download" button in the dropdown menu. You can use checkboxes to select multiple files to download. You can only download files not folders, for feature parity with uploading files.
+TODO: Import/Export? How to handle?
 TODO: clipboard.go get paste to work
 TODO: also add the regenerate list button to the output page of a post category
 TODO: structured template error
@@ -76,7 +79,6 @@ TODO: structured template error
     - external templates being a dir instead of a file can only be one error. these have no line number.
     Given the massive number of error types with no line number, maybe it is better to just not highlight line numbers?
 TODO: rename.go
-TODO: listDirectory file sorting
 TODO: download.go
     - "download" becomes a new contextual button users can use on selected files, just like cut/copy/delete.
     - a new "download site" button becomes added to a site, which people can use to export their site folders (and upload it back using plain old uploadfile).
