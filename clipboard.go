@@ -13,9 +13,17 @@ import (
 )
 
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
+	type Request struct {
+		SrcSitePrefix string // TODO: make sure user is authorized for the SrcSitePrefix! // if json, pop
+		SrcParent     string
+		Parent        string
+		Names         []string
+		IsCut         bool
+	}
 	type Response struct {
-		Error string `json:"error,omitempty"`
-		Count string `json:"count"`
+		Error     string `json:"error,omitempty"`
+		Count     string `json:"count"`
+		NumPasted int    `json:"numPasted,omitempty"`
 	}
 	// TODO: consider making this writeResponse instead, together with a
 	// Response struct that makes sense when called for cut | copy | clear |
