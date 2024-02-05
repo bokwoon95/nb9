@@ -1025,10 +1025,10 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 			Values: []any{
 				sq.Param("filePath", sq.DialectExpression{
-					Default: sq.Expr("{} || SUBSTR(file_path, {})", newname, len(oldname)+1),
+					Default: sq.Expr("{} || SUBSTRING(file_path, {})", newname, len(oldname)+1),
 					Cases: []sq.DialectCase{{
 						Dialect: "mysql",
-						Result:  sq.Expr("CONCAT({}, SUBSTR(file_path, {}))", newname, len(oldname)+1),
+						Result:  sq.Expr("CONCAT({}, SUBSTRING(file_path, {}))", newname, len(oldname)+1),
 					}},
 				}),
 				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
