@@ -140,7 +140,8 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		}
 		// 1. Grab all the names that exist in the parent destination, put it in a map.
 		// 2. Iterate the name list and if it's determined to already exist, skip it.
-		// 3. For each name
+		// 3a. If it's cut, do an UPDATE ... JOIN json_table({names})
+		// 3b. If it's copy, do an INSERT ... SELECT ... FROM files JOIN json_table({names})
 		seen := make(map[string]bool)
 		isCut := clipboard.Has("cut")
 		g, ctx := errgroup.WithContext(r.Context())
