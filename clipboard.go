@@ -166,6 +166,10 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	}
 }
 
+func move(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSitePrefix, srcParent, destSitePrefix, destParent string, names []string) error {
+	return nil
+}
+
 func remotePaste(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSitePrefix, srcParent, destSitePrefix, destParent string, names []string) error {
 	destPaths := make([]string, 0, len(names))
 	for _, name := range names {
@@ -237,7 +241,6 @@ func remotePaste(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSitePre
 		if err != nil {
 			return err
 		}
-		destHead, _, _ := strings.Cut(destParent, "/")
 		switch remoteFS.filesDialect {
 		case "sqlite":
 			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
@@ -256,8 +259,6 @@ func remotePaste(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSitePre
 			})
 			if err != nil {
 				return err
-			}
-			if destHead == "pages" {
 			}
 		case "postgres":
 			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
@@ -297,8 +298,13 @@ func remotePaste(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSitePre
 		default:
 			return nil
 		}
-		if destHead == "pages" || destHead == "posts" {
-		}
+		// srcHead, _, _ := strings.Cut(srcParent, "/")
+		// if srcHead == "pages" {
+		// 	srcOutput := path.Join(srcSitePrefix, "output", srcParent)
+		// }
+		// if destHead == "pages" {
+		// 	srcOutput := path.Join(destSitePrefix)
+		// }
 		// if destParent one of pages/* | posts/*, delete the old stuff
 		// for name, delete
 	} else {
