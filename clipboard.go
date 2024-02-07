@@ -22,7 +22,11 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		NumPasted    int      `json:"numPasted,omitempty"`    // files pasted successfully
 		FilesExist   []string `json:"filesExist,omitempty"`   // files that already exist in the destination and were not pasted
 		FilesInvalid []string `json:"filesInvalid,omitempty"` // files or folders that are not .html/.md files
-		// TODO: once we figure out what kind of response we want to send to the user,
+		// TODO: once we figure out what kind of response we want to send to
+		// the user, we can dispatch the errgroup jobs concurrently and make
+		// them write their results into a channel. On the other end of the
+		// channel, we have a goroutine stuffing all the results into
+		// response.FilesExist or response.FilesInvalid.
 		// pasted $x files
 		// the following files already exist
 		// the following files are non-markdown files or contain non-markdown files
