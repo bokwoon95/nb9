@@ -17,9 +17,15 @@ import (
 
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
 	type Response struct {
-		Error     string `json:"error,omitempty"`
-		Count     string `json:"count"`
-		NumPasted int    `json:"numPasted,omitempty"`
+		Error        string   `json:"error,omitempty"`
+		Count        string   `json:"count"`
+		NumPasted    int      `json:"numPasted,omitempty"`    // files pasted successfully
+		FilesExist   []string `json:"filesExist,omitempty"`   // files that already exist in the destination and were not pasted
+		FilesInvalid []string `json:"filesInvalid,omitempty"` // files or folders that are not .html/.md files
+		// TODO: once we figure out what kind of response we want to send to the user,
+		// pasted $x files
+		// the following files already exist
+		// the following files are non-markdown files or contain non-markdown files
 	}
 	// TODO: consider making this writeResponse instead, together with a
 	// Response struct that makes sense when called for cut | copy | clear |
