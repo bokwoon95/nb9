@@ -138,6 +138,15 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			redirect(w, r)
 			return
 		}
+		// names := clipboard["name"]
+		// b, err := json.Marshal(names)
+		// if err != nil {
+		// 	getLogger(r.Context()).Error(err.Error())
+		// 	internalServerError(w, r, err)
+		// 	return
+		// }
+		// skipNames := make(map[string]struct{})
+		// c1, err := sq.FetchCursor(r.Context(), )
 		// 1. Grab all the names that exist in the parent destination, put it in a map.
 		// 2. Iterate the name list and if it's determined to already exist, skip it.
 		// 3a. If it's cut, do an UPDATE ... JOIN json_table({names})
