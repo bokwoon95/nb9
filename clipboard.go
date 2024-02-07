@@ -143,6 +143,9 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		// 3a. If it's cut, do an UPDATE ... JOIN json_table({names})
 		// 3b. If it's copy, do an INSERT ... SELECT ... FROM files JOIN json_table({names})
 		// ["6409929d-442e-4ac3-a675-a07b41368133", "posts/python/libs.md"]
+		// filedata = append(filedata, []string{"", ""})
+		// list
+		// {blob}
 		seen := make(map[string]bool)
 		isCut := clipboard.Has("cut")
 		g, ctx := errgroup.WithContext(r.Context())
