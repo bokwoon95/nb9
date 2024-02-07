@@ -76,7 +76,7 @@
       },
       {
         "dialect": "postgres",
-        "column": "text_tsv",
+        "column": "text_search",
         "type": {
           "default": "TSVECTOR"
         },
@@ -91,7 +91,7 @@
         "dialect": "postgres",
         "type": "GIN",
         "columns": [
-          "text_tsv"
+          "text_search"
         ]
       },
       {
