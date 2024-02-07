@@ -2,14 +2,17 @@ package nb9
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
-	"golang.org/x/sync/errgroup"
+	"github.com/bokwoon95/nb9/sq"
 )
 
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
@@ -123,6 +126,9 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			redirect(w, r)
 			return
 		}
+		names := clipboard["name"]
+		slices.Sort(names)
+		names = slices.Compact(names)
 		srcSitePrefix := clipboard.Get("sitePrefix")
 		if srcSitePrefix != "" && !strings.HasPrefix(srcSitePrefix, "@") && !strings.Contains(srcSitePrefix, ".") {
 			redirect(w, r)
@@ -138,15 +144,14 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			redirect(w, r)
 			return
 		}
-		// names := clipboard["name"]
-		// b, err := json.Marshal(names)
-		// if err != nil {
-		// 	getLogger(r.Context()).Error(err.Error())
-		// 	internalServerError(w, r, err)
-		// 	return
-		// }
-		// skipNames := make(map[string]struct{})
-		// c1, err := sq.FetchCursor(r.Context(), )
+		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+			err := remotePaste(r.Context(), remoteFS, clipboard.Has("cut"), srcSitePrefix, srcParent, sitePrefix, parent, names)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+		}
 		// 1. Grab all the names that exist in the parent destination, put it in a map.
 		// 2. Iterate the name list and if it's determined to already exist, skip it.
 		// 3a. If it's cut, do an UPDATE ... JOIN json_table({names})
@@ -155,262 +160,169 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		// filedata = append(filedata, []string{"", ""})
 		// list
 		// {blob}
-		seen := make(map[string]bool)
-		isCut := clipboard.Has("cut")
-		g, ctx := errgroup.WithContext(r.Context())
-		for _, name := range clipboard["name"] {
-			name := name
-			if seen[name] {
-				continue
-			}
-			g.Go(func() error {
-				remoteFS, ok := nbrew.FS.(*RemoteFS)
-				if !ok {
-					return nil
-				}
-				_ = remoteFS
-				_ = ctx
-				_ = isCut
-				return nil
-			})
-		}
-		err = g.Wait()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
 		redirect(w, r)
 	default:
 		notFound(w, r)
 	}
 }
 
-func (nbrew *Notebrew) clipboardV2(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
-	type Response struct {
-		Error     string     `json:"error,omitempty"`
-		Count     string     `json:"count"`
-		Conflicts []conflict `json:"conflicts"`
+func remotePaste(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSitePrefix, srcParent, destSitePrefix, destParent string, names []string) error {
+	destPaths := make([]string, 0, len(names))
+	for _, name := range names {
+		destPaths = append(destPaths, path.Join(destSitePrefix, destParent, name))
 	}
-	// TODO: consider making this writeResponse instead, together with a
-	// Response struct that makes sense when called for cut | copy | clear |
-	// paste. It also means we can set stuff like InvalidSrcParent |
-	// InvalidDestParent for the Error field.
-	redirect := func(w http.ResponseWriter, r *http.Request) {
-		referer := r.Referer()
-		if referer == "" {
-			http.Redirect(w, r, "/"+path.Join("files", sitePrefix)+"/", http.StatusFound)
-			return
-		}
-		http.Redirect(w, r, referer, http.StatusFound)
-	}
-	isValidParent := func(parent string) bool {
-		head, tail, _ := strings.Cut(parent, "/")
-		switch head {
-		case "notes", "pages", "posts":
-			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, parent))
-			if err != nil {
-				return false
-			}
-			if fileInfo.IsDir() {
-				return true
-			}
-		case "output":
-			next, _, _ := strings.Cut(tail, "/")
-			if next != "themes" {
-				return false
-			}
-			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, parent))
-			if err != nil {
-				return false
-			}
-			if fileInfo.IsDir() {
-				return true
-			}
-		}
-		return false
-	}
-	if r.Method != "POST" {
-		methodNotAllowed(w, r)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
-	err := r.ParseForm()
+	var b strings.Builder
+	encoder := json.NewEncoder(&b)
+	err := encoder.Encode(destPaths)
 	if err != nil {
-		badRequest(w, r, err)
-		return
+		return err
 	}
-	switch action {
-	case "cut", "copy":
-		parent := path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
-		if !isValidParent(parent) {
-			redirect(w, r)
-			return
-		}
-		names := r.Form["name"]
-		if len(names) == 0 {
-			redirect(w, r)
-			return
-		}
-		clipboard := make(url.Values)
-		if action == "cut" {
-			clipboard.Set("cut", "")
-		}
-		clipboard.Set("sitePrefix", sitePrefix)
-		clipboard.Set("parent", parent)
-		clipboard["name"] = names
-		http.SetCookie(w, &http.Cookie{
-			Path:     "/",
-			Name:     "clipboard",
-			Value:    clipboard.Encode(),
-			MaxAge:   int(time.Hour.Seconds()),
-			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
-			HttpOnly: true,
-		})
-		redirect(w, r)
-	case "clear":
-		http.SetCookie(w, &http.Cookie{
-			Path:     "/",
-			Name:     "clipboard",
-			Value:    "0",
-			MaxAge:   -1,
-			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
-			HttpOnly: true,
-		})
-		redirect(w, r)
-	case "paste":
-		http.SetCookie(w, &http.Cookie{
-			Path:     "/",
-			Name:     "clipboard",
-			Value:    "0",
-			MaxAge:   -1,
-			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
-			HttpOnly: true,
-		})
-		cookie, _ := r.Cookie("clipboard")
-		if cookie == nil {
-			redirect(w, r)
-			return
-		}
-		clipboard, err := url.ParseQuery(cookie.Value)
+	cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
+		Dialect: remoteFS.filesDialect,
+		Format: "SELECT {*}" +
+			" FROM files" +
+			" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {destParent})" +
+			" AND EXISTS ({inDestPaths})",
+		Values: []any{
+			sq.StringParam("destParent", path.Join(destSitePrefix, destParent)),
+			sq.Param("inDestPaths", sq.DialectExpression{
+				Default: sq.Expr("SELECT 1 FROM json_each({}) AS dest_paths WHERE dest_paths.value = files.file_path", b.String()),
+				Cases: []sq.DialectCase{{
+					Dialect: "postgres",
+					Result:  sq.Expr("SELECT 1 FROM json_array_elements_text({}) AS dest_paths WHERE dest_paths.value = files.file_path", b.String()),
+				}, {
+					Dialect: "mysql",
+					Result:  sq.Expr("SELECT 1 FROM json_table({}, COLUMNS (value VARCHAR(500) path '$')) AS dest_paths WHERE dest_paths.value = files.file_path", b.String()),
+				}},
+			}),
+		},
+	}, func(row *sq.Row) string {
+		return path.Base(row.String("files.file_path"))
+	})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close()
+	nameAlreadyExists := make(map[string]struct{})
+	for cursor.Next() {
+		name, err := cursor.Result()
 		if err != nil {
-			redirect(w, r)
-			return
+			return err
 		}
-		srcSitePrefix := clipboard.Get("sitePrefix")
-		if srcSitePrefix != "" && !strings.HasPrefix(srcSitePrefix, "@") && !strings.Contains(srcSitePrefix, ".") {
-			redirect(w, r)
-			return
-		}
-		srcParent := path.Clean(strings.Trim(clipboard.Get("parent"), "/"))
-		if !isValidParent(srcParent) {
-			redirect(w, r)
-			return
-		}
-		parent := path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
-		if !isValidParent(parent) {
-			redirect(w, r)
-			return
-		}
-		seen := make(map[string]bool)
-		isCut := clipboard.Has("cut")
-		g, ctx := errgroup.WithContext(r.Context())
-		for _, name := range clipboard["name"] {
-			name := name
-			if seen[name] {
+		nameAlreadyExists[name] = struct{}{}
+	}
+	err = cursor.Close()
+	if err != nil {
+		return err
+	}
+	if len(nameAlreadyExists) > 0 {
+		n := 0
+		for _, name := range names {
+			if _, ok := nameAlreadyExists[name]; ok {
 				continue
 			}
-			g.Go(func() error {
-				remoteFS, ok := nbrew.FS.(*RemoteFS)
-				if !ok {
-					return nil
-				}
-				_ = remoteFS
-				_ = ctx
-				_ = isCut
-				return nil
-			})
+			names[n] = name
+			n++
 		}
-		err = g.Wait()
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		redirect(w, r)
-	default:
-		notFound(w, r)
+		names = names[:n]
 	}
-}
-
-type pasteCandidate struct {
-	SrcExists      bool
-	SrcSitePrefix  string
-	SrcFilePath    string
-	SrcIsDir       bool
-	DestExists     bool
-	DestSitePrefix string
-	DestFilePath   string
-	DestIsDir      bool
-}
-
-type conflict struct {
-	SrcParent    string
-	DestParent   string
-	Name         string
-	ConflictType string // DestExists | FileReplacesDir | DirReplacesFile | HTMLOnly | MarkdownOnly
-	Overwrite    bool   // only application if conflictType == DestExists
-}
-
-// resolution map[conflict]bool
-
-type resolution struct {
-	srcParent  string
-	destParent string
-	name       string
-	overwrite  bool
-}
-
-func remotePasteFileV2(ctx context.Context, remoteFS *RemoteFS, srcSitePrefix, srcParent, destSitePrefix, destParent string, names []string) error {
-	// loop the dir
-	return nil
-}
-
-// srcParent destParent name
-func remotePasteFile(ctx context.Context, remoteFS *RemoteFS, candidates []pasteCandidate) error {
-	g, ctx := errgroup.WithContext(ctx)
-	_ = g
-	// TODO: come up with a better name than "candidate" cos it's so freaking
-	// long.
-	// resolution { srcParent; destParent; name; overwrite bool }
-	for _, c := range candidates {
-		if !c.SrcExists {
-			continue
+	if isCut {
+		srcPaths := make([]string, 0, len(names))
+		for _, name := range names {
+			srcPaths = append(srcPaths, path.Join(srcSitePrefix, srcParent, name))
 		}
-		srcHead, _, _ := strings.Cut(c.SrcFilePath, "/")
-		destHead, _, _ := strings.Cut(c.DestFilePath, "/")
-		if c.DestExists && !c.DestIsDir {
-			// TODO: remove the dest outputDir
-			if destHead == "pages" && strings.HasSuffix(c.DestFilePath, ".html") {
-			} else if destHead == "posts" && strings.HasSuffix(c.DestFilePath, ".md") {
-			}
+		var b strings.Builder
+		encoder := json.NewEncoder(&b)
+		err := encoder.Encode(srcPaths)
+		if err != nil {
+			return err
 		}
-		if !c.SrcIsDir {
-			if !c.DestExists {
-				// TODO: move the file
-			} else {
-				// TODO: replace the file
+		destHead, _, _ := strings.Cut(destParent, "/")
+		switch remoteFS.filesDialect {
+		case "sqlite":
+			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: "sqlite",
+				Format: "UPDATE files" +
+					" SET file_path = {destParent} || substring(file_path, {start})" +
+					", mod_time = {modTime}" +
+					" FROM json_table({srcPaths}) AS src_paths" +
+					" WHERE src_paths.value = files.file_path",
+				Values: []any{
+					sq.StringParam("destParent", path.Join(destSitePrefix, destParent)),
+					sq.IntParam("start", len(path.Join(srcSitePrefix, srcParent))+1),
+					sq.TimeParam("modTime", time.Now().UTC()),
+					sq.StringParam("srcPaths", b.String()),
+				},
+			})
+			if err != nil {
+				return err
 			}
-			if srcHead == "pages" || srcHead == "posts" {
-				// TODO: move the src outputDir
+			if destHead == "pages" {
 			}
-		} else {
-			if !c.DestExists {
-				// TODO: move the folder
-			} else if false {
+		case "postgres":
+			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: "postgres",
+				Format: "UPDATE files" +
+					" SET file_path = {destParent} || substring(file_path, {start})" +
+					", mod_time = {modTime}" +
+					" FROM json_array_elements_text({srcPaths}) AS src_paths" +
+					" WHERE src_paths.value = files.file_path",
+				Values: []any{
+					sq.StringParam("destParent", path.Join(destSitePrefix, destParent)),
+					sq.IntParam("start", len(path.Join(srcSitePrefix, srcParent))+1),
+					sq.TimeParam("modTime", time.Now().UTC()),
+					sq.StringParam("srcPaths", b.String()),
+				},
+			})
+			if err != nil {
+				return err
 			}
+		case "mysql":
+			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: "postgres",
+				Format: "UPDATE files" +
+					" JOIN json_table({srcPaths}, '$[*]' COLUMNS (value VARCHAR(500) PATH '$')) AS src_paths ON src_paths.value = files.file_path" +
+					" SET file_path = concat({destParent}, substring(file_path, {start}))" +
+					", mod_time = {modTime}",
+				Values: []any{
+					sq.StringParam("destParent", path.Join(destSitePrefix, destParent)),
+					sq.IntParam("start", len(path.Join(srcSitePrefix, srcParent))+1),
+					sq.TimeParam("modTime", time.Now().UTC()),
+					sq.StringParam("srcPaths", b.String()),
+				},
+			})
+			if err != nil {
+				return err
+			}
+		default:
+			return nil
 		}
-		// INSERT ON CONFLICT DO UPDATE
+		if destHead == "pages" || destHead == "posts" {
+		}
+		// if destParent one of pages/* | posts/*, delete the old stuff
+		// for name, delete
+	} else {
+		newFiles := make([][2]string, 0, len(names))
+		for _, name := range names {
+			var buf [32 + 4]byte
+			id := NewID()
+			hex.Encode(buf[:], id[:4])
+			buf[8] = '-'
+			hex.Encode(buf[9:13], id[4:6])
+			buf[13] = '-'
+			hex.Encode(buf[14:18], id[6:8])
+			buf[18] = '-'
+			hex.Encode(buf[19:23], id[8:10])
+			buf[23] = '-'
+			hex.Encode(buf[24:], id[10:])
+			newFiles = append(newFiles, [2]string{string(buf[:]), path.Join(srcSitePrefix, srcParent, name)})
+		}
+		var b strings.Builder
+		encoder := json.NewEncoder(&b)
+		err := encoder.Encode(newFiles)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

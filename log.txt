@@ -53,6 +53,8 @@ if destFile exists, and is a file, we need to delete it
     if we delete a file in
 if destFile exists and is a folder, we need to merge the contents
 
+select 1 from json_each({items}) where items.value = files.file_path
+
 -- sqlite
 select unhex(items.value->>0, '-') as file_id, items.value->>1 as file_path
 from json_each('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]') as items;
