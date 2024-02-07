@@ -56,12 +56,18 @@ if destFile exists and is a folder, we need to merge the contents
 -- sqlite
 select unhex(items.value->>0, '-') as file_id, items.value->>1 as file_path
 from json_each('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]') as items;
+select items.value
+from json_each('["one","two"]') as items;
 -- postgres
 select (items.value->>0)::uuid as file_id, items.value->>1 as file_path
 from json_array_elements('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]') as items;
+select items.value
+from json_array_elements_text('["one","two"]') as items;
 -- mysql
 select uuid_to_bin(items.file_id) as file_id, items.file_path
 from json_table('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]', '$[*]' columns (file_id char(32) path '$[0]', file_path varchar(500) path '$[1]')) as items;
+select items.file_path
+from json_table('["one","two"]', '$[*]' columns (file_path varchar(500) path '$')) as items;
 
 TODO: clipboard: if a destFile exists, no matter whether it's file or folder, paste will be auto rejected.
     - 20 MB total upload limit (includes all files). When we hit the limit in the middle of a file, what happens is we get an error on Read() which should be caught and checked for ErrTooLarge or something and sent to badRequest().
