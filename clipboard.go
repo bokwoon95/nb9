@@ -190,14 +190,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		//   else rename the srcFile to the destFile. Do the same for the file's outputDir if destHead is pages or posts
 		// else
 		//   if nbrew.FS is remoteFS, insert a new destFile entry using INSERT ... SELECT from the srcFile, changing only the file_id, parent_id, mod_time and creation_time.
-		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-			err := remotePaste(r.Context(), remoteFS, clipboard.Has("cut"), srcSitePrefix, srcParent, sitePrefix, parent, names)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-		}
+
 		// 1. Grab all the names that exist in the parent destination, put it in a map.
 		// 2. Iterate the name list and if it's determined to already exist, skip it.
 		// 3a. If it's cut, do an UPDATE ... JOIN json_table({names})
