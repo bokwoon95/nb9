@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/bokwoon95/nb9/sq"
+	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
@@ -205,6 +207,101 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		// else
 		//   if nbrew.FS is remoteFS, insert a new destFile entry using INSERT ... SELECT from the srcFile, changing only the file_id, parent_id, mod_time and creation_time.
 		//   else walkdir the srcFile, copying a directory or copying a file when necessary. as an optimization we can actually walk twice, first synchronously to copy the directories. Then copy all files asynchronously using an errgroup.
+		isCut := clipboard.Has("cut")
+		remoteFS, _ := nbrew.FS.(*RemoteFS)
+		g, ctx := errgroup.WithContext(r.Context())
+		for _, name := range names {
+			name := name
+			g.Go(func() error {
+				if remoteFS != nil {
+					return nil
+				}
+				srcFilePath := path.Join(srcSitePrefix, srcParent, name)
+				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), srcFilePath)
+				if err != nil {
+					if errors.Is(err, fs.ErrNotExist) {
+						return nil
+					}
+					return err
+				}
+				destFilePath := path.Join(sitePrefix, parent, name)
+				_, err = fs.Stat(nbrew.FS.WithContext(ctx), destFilePath)
+				if err != nil {
+					if !errors.Is(err, fs.ErrNotExist) {
+						return err
+					}
+				} else {
+					existCh <- destFilePath
+					return nil
+				}
+				// TODO: what happens if a user moves a .html page (which owns several img/css/js/md assets) into notes? What happens to those assets? They don't follow into notes, because even if they did we'd have no idea how to restore it back. Maybe automatically promote a cut into a copy if we are at danger of losing assets? "The following files were copied and not cut because they contain assets that would be lost otherwise"
+				var srcOutputDir, destOutputDir string
+				_, _ = srcOutputDir, destOutputDir
+				head, _, _ := strings.Cut(parent, "/")
+				switch head {
+				case "pages":
+					if !srcFileInfo.IsDir() {
+						srcOutputDir = path.Join(srcSitePrefix, "output", srcParent, strings.TrimSuffix(name, ".html"))
+						destOutputDir = path.Join(sitePrefix, "output", parent, strings.TrimSuffix(name, ".html"))
+						if !strings.HasSuffix(srcFilePath, ".html") {
+							invalidCh <- srcFilePath
+							return nil
+						}
+					} else {
+						srcOutputDir = path.Join(srcSitePrefix, "output", srcParent, name)
+						destOutputDir = path.Join(sitePrefix, "output", parent, name)
+						err := fs.WalkDir(nbrew.FS.WithContext(ctx), path.Join(srcSitePrefix, srcParent, name), func(filePath string, dirEntry fs.DirEntry, err error) error {
+							if err != nil {
+								return err
+							}
+							if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".html") {
+								invalidCh <- filePath
+								return fs.SkipAll
+							}
+							return nil
+						})
+						if err != nil {
+							return err
+						}
+					}
+				case "posts":
+					if !srcFileInfo.IsDir() {
+						if !strings.HasSuffix(srcFilePath, ".md") {
+							invalidCh <- srcFilePath
+							return nil
+						}
+					} else {
+						err := fs.WalkDir(nbrew.FS.WithContext(ctx), path.Join(srcSitePrefix, srcParent, name), func(filePath string, dirEntry fs.DirEntry, err error) error {
+							if err != nil {
+								return err
+							}
+							if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".md") {
+								invalidCh <- filePath
+								return fs.SkipAll
+							}
+							return nil
+						})
+						if err != nil {
+							return err
+						}
+					}
+				}
+				if isCut {
+					err := nbrew.FS.WithContext(ctx).Rename(srcFilePath, destFilePath)
+					if err != nil {
+						return err
+					}
+				} else {
+				}
+				return nil
+			})
+		}
+		err = g.Wait()
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
 
 		// 1. Grab all the names that exist in the parent destination, put it in a map.
 		// 2. Iterate the name list and if it's determined to already exist, skip it.
@@ -223,11 +320,15 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	}
 }
 
+func remotePaste(ctx context.Context, remoteFS *RemoteFS) error {
+	return nil
+}
+
 func move(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSitePrefix, srcParent, destSitePrefix, destParent string, names []string) error {
 	return nil
 }
 
-func remotePaste(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSitePrefix, srcParent, destSitePrefix, destParent string, names []string) error {
+func remotePaste_Old(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSitePrefix, srcParent, destSitePrefix, destParent string, names []string) error {
 	destPaths := make([]string, 0, len(names))
 	for _, name := range names {
 		destPaths = append(destPaths, path.Join(destSitePrefix, destParent, name))
