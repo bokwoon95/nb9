@@ -16,33 +16,6 @@ import (
 )
 
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
-	type Response struct {
-		Error        string   `json:"error,omitempty"`
-		Count        string   `json:"count"`
-		NumPasted    int      `json:"numPasted,omitempty"`    // files pasted successfully
-		FilesExist   []string `json:"filesExist,omitempty"`   // files that already exist in the destination and were not pasted
-		FilesInvalid []string `json:"filesInvalid,omitempty"` // files or folders that are not .html/.md files
-		// TODO: once we figure out what kind of response we want to send to
-		// the user, we can dispatch the errgroup jobs concurrently and make
-		// them write their results into a channel. On the other end of the
-		// channel, we have a goroutine stuffing all the results into
-		// response.FilesExist or response.FilesInvalid.
-		// pasted $x files
-		// the following files already exist
-		// the following files are non-markdown files or contain non-markdown files
-	}
-	// TODO: consider making this writeResponse instead, together with a
-	// Response struct that makes sense when called for cut | copy | clear |
-	// paste. It also means we can set stuff like InvalidSrcParent |
-	// InvalidDestParent for the Error field.
-	redirect := func(w http.ResponseWriter, r *http.Request) {
-		referer := r.Referer()
-		if referer == "" {
-			http.Redirect(w, r, "/"+path.Join("files", sitePrefix)+"/", http.StatusFound)
-			return
-		}
-		http.Redirect(w, r, referer, http.StatusFound)
-	}
 	isValidParent := func(parent string) bool {
 		head, tail, _ := strings.Cut(parent, "/")
 		switch head {
@@ -79,16 +52,20 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		badRequest(w, r, err)
 		return
 	}
+	referer := r.Referer()
+	if referer == "" {
+		referer = "/" + path.Join("files", sitePrefix) + "/"
+	}
 	switch action {
 	case "cut", "copy":
 		parent := path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
 		if !isValidParent(parent) {
-			redirect(w, r)
+			http.Redirect(w, r, referer, http.StatusFound)
 			return
 		}
 		names := r.Form["name"]
 		if len(names) == 0 {
-			redirect(w, r)
+			http.Redirect(w, r, referer, http.StatusFound)
 			return
 		}
 		clipboard := make(url.Values)
@@ -106,7 +83,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 			HttpOnly: true,
 		})
-		redirect(w, r)
+		http.Redirect(w, r, referer, http.StatusFound)
 	case "clear":
 		http.SetCookie(w, &http.Cookie{
 			Path:     "/",
@@ -116,8 +93,48 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 			HttpOnly: true,
 		})
-		redirect(w, r)
+		http.Redirect(w, r, referer, http.StatusFound)
 	case "paste":
+		type Response struct {
+			Error        string   `json:"error,omitempty"`
+			NumPasted    int      `json:"numPasted,omitempty"`
+			FilesExist   []string `json:"filesExist,omitempty"`
+			FilesInvalid []string `json:"filesInvalid,omitempty"`
+			// NOTE:
+			// pasted $x files
+			// the following files already exist:
+			// the following files are non-markdown files or contain non-markdown files:
+		}
+		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
+			if r.Form.Has("api") {
+				w.Header().Set("Content-Type", "application/json")
+				encoder := json.NewEncoder(w)
+				encoder.SetEscapeHTML(false)
+				err := encoder.Encode(&response)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+				}
+				return
+			}
+			if response.Error != "" {
+				http.Redirect(w, r, referer, http.StatusFound)
+				return
+			}
+			err := nbrew.setSession(w, r, "flash", map[string]any{
+				"postRedirectGet": map[string]any{
+					"from":         "clipboard/paste",
+					"numPasted":    response.NumPasted,
+					"filesExist":   response.FilesExist,
+					"filesInvalid": response.FilesInvalid,
+				},
+			})
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			http.Redirect(w, r, referer, http.StatusFound)
+		}
 		http.SetCookie(w, &http.Cookie{
 			Path:     "/",
 			Name:     "clipboard",
@@ -126,14 +143,17 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 			HttpOnly: true,
 		})
+		var response Response
 		cookie, _ := r.Cookie("clipboard")
 		if cookie == nil {
-			redirect(w, r)
+			response.Error = "CookieNotProvided"
+			writeResponse(w, r, response)
 			return
 		}
 		clipboard, err := url.ParseQuery(cookie.Value)
 		if err != nil {
-			redirect(w, r)
+			response.Error = "InvalidCookieValue"
+			writeResponse(w, r, response)
 			return
 		}
 		names := clipboard["name"]
@@ -141,19 +161,35 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		names = slices.Compact(names)
 		srcSitePrefix := clipboard.Get("sitePrefix")
 		if srcSitePrefix != "" && !strings.HasPrefix(srcSitePrefix, "@") && !strings.Contains(srcSitePrefix, ".") {
-			redirect(w, r)
+			response.Error = "InvalidSrcSitePrefix"
+			writeResponse(w, r, response)
 			return
 		}
 		srcParent := path.Clean(strings.Trim(clipboard.Get("parent"), "/"))
 		if !isValidParent(srcParent) {
-			redirect(w, r)
+			response.Error = "InvalidSrcParent"
+			writeResponse(w, r, response)
 			return
 		}
 		parent := path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
 		if !isValidParent(parent) {
-			redirect(w, r)
+			response.Error = "InvalidDestParent"
+			writeResponse(w, r, response)
 			return
 		}
+		// stat srcFile; if not exist, return
+		// stat destFile; if exist, append to FilesExist and return
+		// if destHead is pages,
+		//   if srcFile is a file and does not end in .html, append to FilesInvalid and return
+		//   if srcFile is a folder and contains a non .html file, append to FilesInvalid and return
+		// if destHead is posts,
+		//   if srcFile is a file and does not end in .md, append to FilesInvalid and return
+		//   if srcFile is a folder and contains a non .md file, append to FilesInvalid and return
+		// if isCut
+		//   if nbrew.FS is remoteFS, reparent the srcFile by changing its parentID and filePath then batch rename all its descendents (follow Rename() in fs_remote.go). Do the same for the file's outputDir if destHead is pages or posts
+		//   else rename the srcFile to the destFile. Do the same for the file's outputDir if destHead is pages or posts
+		// else
+		//   if nbrew.FS is remoteFS, insert a new destFile entry using INSERT ... SELECT from the srcFile, changing only the file_id, parent_id, mod_time and creation_time.
 		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
 			err := remotePaste(r.Context(), remoteFS, clipboard.Has("cut"), srcSitePrefix, srcParent, sitePrefix, parent, names)
 			if err != nil {
@@ -170,7 +206,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		// filedata = append(filedata, []string{"", ""})
 		// list
 		// {blob}
-		redirect(w, r)
+		writeResponse(w, r, response)
 	default:
 		notFound(w, r)
 	}

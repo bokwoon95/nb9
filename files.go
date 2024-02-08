@@ -1011,14 +1011,16 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		IsDir           bool           `json:"isDir"`
 		SearchSupported bool           `json:"searchSupported"`
 
-		Sort        string `json:"sort,omitempty"`
-		Order       string `json:"order,omitempty"`
-		From        string `json:"from,omitempty"`
-		Before      string `json:"before,omitempty"`
-		Limit       int    `json:"limit,omitempty"`
-		Files       []File `json:"files"`
-		PreviousURL string `json:"previousURL,omitempty"`
-		NextURL     string `json:"nextURL,omitempty"`
+		Sort        string    `json:"sort,omitempty"`
+		Order       string    `json:"order,omitempty"`
+		From        string    `json:"from,omitempty"`
+		FromTime    time.Time `json:"fromTime,omitempty"` // TODO: make use of response.FromTime
+		Before      string    `json:"before,omitempty"`
+		BeforeTime  time.Time `json:"beforeTime,omitempty"` // TODO: make use of response.BeforeTime
+		Limit       int       `json:"limit,omitempty"`
+		Files       []File    `json:"files"`
+		PreviousURL string    `json:"previousURL,omitempty"`
+		NextURL     string    `json:"nextURL,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if response.Files == nil {

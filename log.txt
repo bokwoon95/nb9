@@ -71,6 +71,7 @@ from json_table('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739
 select items.file_path
 from json_table('["one","two"]', '$[*]' columns (file_path varchar(500) path '$')) as items;
 
+TODO: rework listDirectory such that fromTime is response.FromTime and always pulls from the fromtime query param instead of the from query param (same for beforeTime). Then from is always used as the tiebreaker so that even if there are millions of files with the same mod_time or creation_time, we can still paginate them chunk by chunk using the name as the tiebreaker.
 TODO: clipboard: if a destFile exists, no matter whether it's file or folder, paste will be auto rejected.
     - 20 MB total upload limit (includes all files). When we hit the limit in the middle of a file, what happens is we get an error on Read() which should be caught and checked for ErrTooLarge or something and sent to badRequest().
 TODO: big turn: remove clipboard (cut/copy/paste). condense "site/list settings" and "regenerate site/list" back into a miscellaneous dropdown button, because we will need to accomodate an "upload file" link as well and there's no space.
