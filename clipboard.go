@@ -97,7 +97,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	case "paste":
 		type Response struct {
 			Error        string   `json:"error,omitempty"`
-			NumPasted    int      `json:"numPasted,omitempty"`
+			NumPasted    int64    `json:"numPasted,omitempty"`
 			FilesExist   []string `json:"filesExist,omitempty"`
 			FilesInvalid []string `json:"filesInvalid,omitempty"`
 			// NOTE:
@@ -177,6 +177,18 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			writeResponse(w, r, response)
 			return
 		}
+		filesExist := make(chan string)
+		go func() {
+			for filePath := range filesExist {
+				response.FilesExist = append(response.FilesExist, filePath)
+			}
+		}()
+		filesInvalid := make(chan string)
+		go func() {
+			for filePath := range filesInvalid {
+				response.FilesInvalid = append(response.FilesInvalid, filePath)
+			}
+		}()
 		// stat srcFile; if not exist, return
 		// stat destFile; if exist, append to FilesExist and return
 		// if destHead is pages,
