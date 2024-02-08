@@ -88,5 +88,5 @@ var fileTypes = map[string]FileType{
 	".ttf":   {Ext: ".ttf", ContentType: "font/ttf", IsGzippable: true},
 	".woff":  {Ext: ".woff", ContentType: "font/woff"},
 	".woff2": {Ext: ".woff2", ContentType: "font/woff2"},
-	".atom":  {Ext: ".atom", ContentType: "application/xml; charset=utf-8", IsGzippable: true},
+	".atom":  {Ext: ".atom", ContentType: "application/atom+xml; charset=utf-8", IsGzippable: true},
 }
