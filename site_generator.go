@@ -1434,9 +1434,9 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 					Type:    "text",
 					Content: string(post.Preview),
 				},
-				Content: AtomText{
+				Content: AtomCDATA{
 					Type:    "html",
-					Content: string(post.Content),
+					Content: strings.ReplaceAll(string(post.Content), "]]>", "]]]]><![CDATA[>"), // https://stackoverflow.com/a/36331725
 				},
 			}
 		}
@@ -1871,7 +1871,7 @@ type AtomEntry struct {
 	Updated   string     `xml:"updated"`
 	Link      []AtomLink `xml:"link"`
 	Summary   AtomText   `xml:"summary"`
-	Content   AtomText   `xml:"content"`
+	Content   AtomCDATA  `xml:"content"`
 }
 
 type AtomLink struct {
@@ -1882,6 +1882,11 @@ type AtomLink struct {
 type AtomText struct {
 	Type    string `xml:"type,attr"`
 	Content string `xml:",chardata"`
+}
+
+type AtomCDATA struct {
+	Type    string `xml:"type,attr"`
+	Content string `xml:",cdata"`
 }
 
 func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Template, error) {

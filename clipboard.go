@@ -10,6 +10,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/bokwoon95/nb9/sq"
@@ -97,7 +98,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	case "paste":
 		type Response struct {
 			Error        string   `json:"error,omitempty"`
-			NumPasted    int64    `json:"numPasted,omitempty"`
+			NumPasted    int      `json:"numPasted,omitempty"`
 			FilesExist   []string `json:"filesExist,omitempty"`
 			FilesInvalid []string `json:"filesInvalid,omitempty"`
 			// NOTE:
@@ -177,15 +178,16 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			writeResponse(w, r, response)
 			return
 		}
-		filesExist := make(chan string)
+		var numPasted atomic.Int64
+		existCh := make(chan string)
 		go func() {
-			for filePath := range filesExist {
+			for filePath := range existCh {
 				response.FilesExist = append(response.FilesExist, filePath)
 			}
 		}()
-		filesInvalid := make(chan string)
+		invalidCh := make(chan string)
 		go func() {
-			for filePath := range filesInvalid {
+			for filePath := range invalidCh {
 				response.FilesInvalid = append(response.FilesInvalid, filePath)
 			}
 		}()
@@ -212,6 +214,9 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		// filedata = append(filedata, []string{"", ""})
 		// list
 		// {blob}
+		response.NumPasted = int(numPasted.Load())
+		close(existCh)
+		close(invalidCh)
 		writeResponse(w, r, response)
 	default:
 		notFound(w, r)
