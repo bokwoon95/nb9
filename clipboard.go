@@ -190,6 +190,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		//   else rename the srcFile to the destFile. Do the same for the file's outputDir if destHead is pages or posts
 		// else
 		//   if nbrew.FS is remoteFS, insert a new destFile entry using INSERT ... SELECT from the srcFile, changing only the file_id, parent_id, mod_time and creation_time.
+		//   else walkdir the srcFile, copying a directory or copying a file when necessary. as an optimization we can actually walk twice, first synchronously to copy the directories. Then copy all files asynchronously using an errgroup.
 
 		// 1. Grab all the names that exist in the parent destination, put it in a map.
 		// 2. Iterate the name list and if it's determined to already exist, skip it.
