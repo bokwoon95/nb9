@@ -234,7 +234,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					existCh <- destFilePath
 					return nil
 				}
-				// TODO: what happens if a user moves a .html page (which owns several img/css/js/md assets) into notes? What happens to those assets? They don't follow into notes, because even if they did we'd have no idea how to restore it back. Maybe automatically promote a cut into a copy if we are at danger of losing assets? "The following files were copied and not cut because they contain assets that would be lost otherwise"
+				// TODO: what happens if a user moves a .html page (which owns several img/css/js/md assets) into notes? What happens to those assets? They don't follow into notes, because even if they did we'd have no idea how to restore it back. Maybe automatically promote a cut into a copy if we are at danger of losing assets? "The following files were copied and not cut because they contain assets that would be lost otherwise".
 				var srcOutputDir, destOutputDir string
 				_, _ = srcOutputDir, destOutputDir
 				head, _, _ := strings.Cut(parent, "/")
