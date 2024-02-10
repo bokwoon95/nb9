@@ -16,6 +16,10 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 		FilePath string `json:"filePath"`
 		Preview  string `json:"preview"`
 	}
+	type Request struct {
+		Parent string `json:"parent"`
+		Text   string `json:"text"`
+	}
 	type Response struct {
 		Error       string     `json:"error,omitempty"`
 		ContentSite string     `json:"contentSite,omitempty"`

@@ -107,6 +107,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			// pasted $x files
 			// the following files already exist:
 			// the following files are non-markdown files or contain non-markdown files:
+			// 
 		}
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 			if r.Form.Has("api") {
