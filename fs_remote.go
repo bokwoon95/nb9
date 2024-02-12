@@ -620,6 +620,8 @@ func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	if !fs.ValidPath(name) || strings.Contains(name, "\\") {
 		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrInvalid}
 	}
+	// TODO: return syscall.ENOTDIR if name is not a dir? Or follow stdlib and
+	// return fs.ErrNotExist?
 	var condition sq.Expression
 	if name == "." {
 		condition = sq.Expr("parent_id IS NULL")

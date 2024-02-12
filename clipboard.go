@@ -5,12 +5,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -184,24 +187,20 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			writeResponse(w, r, response)
 			return
 		}
-		srcHead, _, _ := strings.Cut(srcParent, "/")
-		destHead, _, _ := strings.Cut(parent, "/")
-		isCut := clipboard.Has("cut")
-		if isCut && ((srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")) {
-			response.CopiedNotMoved = true
-		}
-		if srcHead == "pages" && destHead == "pages" {
-		} else if srcHead == "posts" && destHead == "posts" {
-		}
 		var numPasted atomic.Int64
+		var wg sync.WaitGroup
 		existCh := make(chan string)
 		go func() {
+			wg.Add(1)
+			defer wg.Done()
 			for filePath := range existCh {
 				response.FilesExist = append(response.FilesExist, filePath)
 			}
 		}()
 		invalidCh := make(chan string)
 		go func() {
+			wg.Add(1)
+			defer wg.Done()
 			for filePath := range invalidCh {
 				response.FilesInvalid = append(response.FilesInvalid, filePath)
 			}
@@ -220,16 +219,23 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		// else
 		//   if nbrew.FS is remoteFS, insert a new destFile entry using INSERT ... SELECT from the srcFile, changing only the file_id, parent_id, mod_time and creation_time.
 		//   else walkdir the srcFile, copying a directory or copying a file when necessary. as an optimization we can actually walk twice, first synchronously to copy the directories. Then copy all files asynchronously using an errgroup.
+		srcHead, srcTail, _ := strings.Cut(srcParent, "/")
+		destHead, destTail, _ := strings.Cut(parent, "/")
+		isCut := clipboard.Has("cut")
+		if isCut && ((srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")) {
+			response.CopiedNotMoved = true
+		}
 		remoteFS, _ := nbrew.FS.(*RemoteFS)
-		g, ctx := errgroup.WithContext(r.Context())
+		errInvalid := fmt.Errorf("file is invalid or contains invalid files")
+		g1, ctx1 := errgroup.WithContext(r.Context())
 		for _, name := range names {
 			name := name
-			g.Go(func() error {
+			g1.Go(func() error {
 				if remoteFS != nil {
 					return nil
 				}
 				srcFilePath := path.Join(srcSitePrefix, srcParent, name)
-				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), srcFilePath)
+				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx1), srcFilePath)
 				if err != nil {
 					if errors.Is(err, fs.ErrNotExist) {
 						return nil
@@ -237,7 +243,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					return err
 				}
 				destFilePath := path.Join(sitePrefix, parent, name)
-				_, err = fs.Stat(nbrew.FS.WithContext(ctx), destFilePath)
+				_, err = fs.Stat(nbrew.FS.WithContext(ctx1), destFilePath)
 				if err != nil {
 					if !errors.Is(err, fs.ErrNotExist) {
 						return err
@@ -246,76 +252,198 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					existCh <- destFilePath
 					return nil
 				}
-				// TODO: what happens if a user moves a .html page (which owns several img/css/js/md assets) into notes? What happens to those assets? They don't follow into notes, because even if they did we'd have no idea how to restore it back. Maybe automatically promote a cut into a copy if we are at danger of losing assets? "The following files were copied and not moved because they have assets that cannot be moved"
-				// But of course a user can freely move a file from pages/ to pages/, from posts/ to posts/ (the assets are moved over accordingly). It's only to notes that assets do not follow over, and from notes no assets could possibly follow over.
 				var srcOutputDir, destOutputDir string
-				_, _ = srcOutputDir, destOutputDir
 				head, _, _ := strings.Cut(parent, "/")
 				switch head {
 				case "pages":
 					if !srcFileInfo.IsDir() {
-						srcOutputDir = path.Join(srcSitePrefix, "output", srcParent, strings.TrimSuffix(name, ".html"))
-						destOutputDir = path.Join(sitePrefix, "output", parent, strings.TrimSuffix(name, ".html"))
+						srcOutputDir = path.Join(srcSitePrefix, "output", srcTail, strings.TrimSuffix(name, ".html"))
+						destOutputDir = path.Join(sitePrefix, "output", destTail, strings.TrimSuffix(name, ".html"))
 						if !strings.HasSuffix(srcFilePath, ".html") {
 							invalidCh <- srcFilePath
 							return nil
 						}
 					} else {
-						srcOutputDir = path.Join(srcSitePrefix, "output", srcParent, name)
-						destOutputDir = path.Join(sitePrefix, "output", parent, name)
-						err := fs.WalkDir(nbrew.FS.WithContext(ctx), path.Join(srcSitePrefix, srcParent, name), func(filePath string, dirEntry fs.DirEntry, err error) error {
+						srcOutputDir = path.Join(srcSitePrefix, "output", srcTail, name)
+						destOutputDir = path.Join(sitePrefix, "output", destTail, name)
+						err := fs.WalkDir(nbrew.FS.WithContext(ctx1), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
 							if err != nil {
 								return err
 							}
 							if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".html") {
-								invalidCh <- filePath
-								return fs.SkipAll
+								return errInvalid
 							}
 							return nil
 						})
 						if err != nil {
+							if errors.Is(err, errInvalid) {
+								invalidCh <- srcFilePath
+								return nil
+							}
 							return err
 						}
 					}
 				case "posts":
 					if !srcFileInfo.IsDir() {
+						srcOutputDir = path.Join(srcSitePrefix, "output/posts", srcTail, strings.TrimSuffix(name, ".md"))
+						destOutputDir = path.Join(sitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
 						if !strings.HasSuffix(srcFilePath, ".md") {
 							invalidCh <- srcFilePath
 							return nil
 						}
 					} else {
-						err := fs.WalkDir(nbrew.FS.WithContext(ctx), path.Join(srcSitePrefix, srcParent, name), func(filePath string, dirEntry fs.DirEntry, err error) error {
+						srcOutputDir = path.Join(srcSitePrefix, "output/posts", srcTail, name)
+						destOutputDir = path.Join(sitePrefix, "output/posts", destTail, name)
+						err := fs.WalkDir(nbrew.FS.WithContext(ctx1), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
 							if err != nil {
 								return err
 							}
 							if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".md") {
-								invalidCh <- filePath
-								return fs.SkipAll
+								return errInvalid
 							}
 							return nil
 						})
 						if err != nil {
+							if errors.Is(err, errInvalid) {
+								invalidCh <- srcFilePath
+								return nil
+							}
 							return err
 						}
 					}
 				}
 				if isCut && !response.CopiedNotMoved {
-					err := nbrew.FS.WithContext(ctx).Rename(srcFilePath, destFilePath)
+					err := nbrew.FS.WithContext(ctx1).Rename(srcFilePath, destFilePath)
 					if err != nil {
 						return err
 					}
+					if srcOutputDir != "" && destOutputDir != "" {
+						err := nbrew.FS.WithContext(ctx1).Rename(srcOutputDir, destOutputDir)
+						if err != nil {
+							return err
+						}
+					}
 				} else {
+					// TODO: check if it's a file first. If so, just copy the file instead of walking the dir.
+					if !srcFileInfo.IsDir() {
+						srcFile, err := nbrew.FS.WithContext(ctx1).Open(srcFilePath)
+						if err != nil {
+							return err
+						}
+						defer srcFile.Close()
+						destFile, err := nbrew.FS.WithContext(ctx1).OpenWriter(destFilePath, 0644)
+						if err != nil {
+							return err
+						}
+						defer destFile.Close()
+						_, err = io.Copy(destFile, srcFile)
+						if err != nil {
+							return err
+						}
+						err = destFile.Close()
+						if err != nil {
+							return err
+						}
+					} else {
+						g2A, ctx2A := errgroup.WithContext(ctx1)
+						err := fs.WalkDir(nbrew.FS.WithContext(ctx2A), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+							if err != nil {
+								return err
+							}
+							relPath := strings.Trim(strings.TrimSuffix(filePath, srcFilePath), "/")
+							if dirEntry.IsDir() {
+								err := nbrew.FS.WithContext(ctx2A).MkdirAll(path.Join(destFilePath, relPath), 0755)
+								if err != nil {
+									return err
+								}
+								return nil
+							}
+							g2A.Go(func() error {
+								srcFile, err := nbrew.FS.WithContext(ctx2A).Open(filePath)
+								if err != nil {
+									return err
+								}
+								defer srcFile.Close()
+								destFile, err := nbrew.FS.WithContext(ctx2A).OpenWriter(path.Join(destFilePath, relPath), 0644)
+								if err != nil {
+									return err
+								}
+								defer destFile.Close()
+								_, err = io.Copy(destFile, srcFile)
+								if err != nil {
+									return err
+								}
+								err = destFile.Close()
+								if err != nil {
+									return err
+								}
+								return nil
+							})
+							return nil
+						})
+						if err != nil {
+							return nil
+						}
+						err = g2A.Wait()
+						if err != nil {
+							return nil
+						}
+					}
+					if srcOutputDir != "" && destOutputDir != "" {
+						g2B, ctx2B := errgroup.WithContext(ctx1)
+						err := fs.WalkDir(nbrew.FS.WithContext(ctx2B), srcOutputDir, func(filePath string, dirEntry fs.DirEntry, err error) error {
+							if err != nil {
+								return err
+							}
+							relPath := strings.Trim(strings.TrimSuffix(filePath, srcOutputDir), "/")
+							if dirEntry.IsDir() {
+								err := nbrew.FS.WithContext(ctx2B).MkdirAll(path.Join(destOutputDir, relPath), 0755)
+								if err != nil {
+									return err
+								}
+								return nil
+							}
+							g2B.Go(func() error {
+								srcFile, err := nbrew.FS.WithContext(ctx2B).Open(filePath)
+								if err != nil {
+									return err
+								}
+								defer srcFile.Close()
+								destFile, err := nbrew.FS.WithContext(ctx2B).OpenWriter(path.Join(destOutputDir, relPath), 0644)
+								if err != nil {
+									return err
+								}
+								defer destFile.Close()
+								_, err = io.Copy(destFile, srcFile)
+								if err != nil {
+									return err
+								}
+								err = destFile.Close()
+								if err != nil {
+									return err
+								}
+								return nil
+							})
+							return nil
+						})
+						if err != nil {
+							return nil
+						}
+						err = g2B.Wait()
+						if err != nil {
+							return nil
+						}
+					}
 				}
 				return nil
 			})
 		}
-		err = g.Wait()
+		err = g1.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
 		}
-
 		// 1. Grab all the names that exist in the parent destination, put it in a map.
 		// 2. Iterate the name list and if it's determined to already exist, skip it.
 		// 3a. If it's cut, do an UPDATE ... JOIN json_table({names})
@@ -327,6 +455,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		response.NumPasted = int(numPasted.Load())
 		close(existCh)
 		close(invalidCh)
+		wg.Wait()
 		writeResponse(w, r, response)
 	default:
 		notFound(w, r)
