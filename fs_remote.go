@@ -1033,24 +1033,31 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			}
 		}
 	case "mysql":
-		deletedFileID, err = sq.FetchOne(fsys.ctx, tx, sq.Query{
+		result, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format:  "SELECT {*} FROM files WHERE file_path = {newname} AND NOT is_dir",
+			Format:  "SELECT {*} FROM files WHERE file_path = {newname}",
 			Values: []any{
 				sq.StringParam("newname", newname),
 			},
-		}, func(row *sq.Row) (fileID [16]byte) {
-			row.UUID(&fileID, "file_id")
-			return fileID
+		}, func(row *sq.Row) (result struct {
+			FileID [16]byte
+			IsDir  bool
+		}) {
+			row.UUID(&result.FileID, "file_id")
+			result.IsDir = row.Bool("is_dir")
+			return result
 		})
 		if err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
 		} else {
+			if result.IsDir {
+				return &fs.PathError{Op: "rename", Path: newname, Err: syscall.EISDIR}
+			}
 			_, err := sq.Exec(fsys.ctx, tx, sq.Query{
 				Dialect: fsys.filesDialect,
-				Format:  "DELETE FROM files WHERE file_path = {newname} AND NOT is_dir",
+				Format:  "DELETE FROM files WHERE file_path = {newname}",
 				Values: []any{
 					sq.StringParam("newname", newname),
 				},
@@ -1058,6 +1065,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			if err != nil {
 				return err
 			}
+			deletedFileID = result.FileID
 		}
 		oldnameIsDir, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.filesDialect,
@@ -1103,6 +1111,17 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		}
 	default:
 		return fmt.Errorf("unsupported dialect %q", fsys.filesDialect)
+	}
+	// If the parent has changed, updated the parent_id.
+	if path.Dir(oldname) != path.Dir(newname) {
+		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.filesDialect,
+			Format:  "UPDATE files SET parent_id = (SELECT file_id FROM files WHERE file_path = {newparent}) WHERE file_path = {newname}",
+			Values: []any{
+				sq.Param("newparent", path.Dir(newname)),
+				sq.Param("newname", newname),
+			},
+		})
 	}
 	err = tx.Commit()
 	if err != nil {

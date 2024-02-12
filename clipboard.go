@@ -102,18 +102,17 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		http.Redirect(w, r, referer, http.StatusFound)
 	case "paste":
 		type Response struct {
-			Error          string   `json:"error,omitempty"`
-			CopiedNotMoved bool     `json:"copiedNotMoved,omitempty"`
-			NumPasted      int      `json:"numPasted,omitempty"`
-			FilesExist     []string `json:"filesExist,omitempty"`
-			FilesInvalid   []string `json:"filesInvalid,omitempty"`
+			Error        string   `json:"error,omitempty"`
+			IsCut        bool     `json:"isCut,omitempty"`
+			CopyOnly     bool     `json:"copyOnly,omitempty"`
+			NumPasted    int      `json:"numPasted,omitempty"`
+			FilesExist   []string `json:"filesExist,omitempty"`
+			FilesInvalid []string `json:"filesInvalid,omitempty"`
 			// NOTE:
 			// pasted $x files (copied instead of moved)
 			// the following files already exist:
 			// the following files are non-markdown files or contain non-markdown files:
-			//
 		}
-		// if srcHead is pages or posts and destHead is notes or themes, the files will always be copied instead of moved
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 			if r.Form.Has("api") {
 				w.Header().Set("Content-Type", "application/json")
@@ -132,7 +131,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
 					"from":           "clipboard/paste",
-					"copiedNotMoved": response.CopiedNotMoved,
+					"copiedNotMoved": response.CopyOnly,
 					"numPasted":      response.NumPasted,
 					"filesExist":     response.FilesExist,
 					"filesInvalid":   response.FilesInvalid,
@@ -187,6 +186,11 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			writeResponse(w, r, response)
 			return
 		}
+		srcHead, srcTail, _ := strings.Cut(srcParent, "/")
+		destHead, destTail, _ := strings.Cut(parent, "/")
+		response.IsCut = clipboard.Has("cut")
+		response.CopyOnly = (srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")
+
 		var numPasted atomic.Int64
 		var wg sync.WaitGroup
 		existCh := make(chan string)
@@ -205,6 +209,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				response.FilesInvalid = append(response.FilesInvalid, filePath)
 			}
 		}()
+
 		// stat srcFile; if not exist, return
 		// stat destFile; if exist, append to FilesExist and return
 		// if destHead is pages,
@@ -219,21 +224,13 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		// else
 		//   if nbrew.FS is remoteFS, insert a new destFile entry using INSERT ... SELECT from the srcFile, changing only the file_id, parent_id, mod_time and creation_time.
 		//   else walkdir the srcFile, copying a directory or copying a file when necessary. as an optimization we can actually walk twice, first synchronously to copy the directories. Then copy all files asynchronously using an errgroup.
-		srcHead, srcTail, _ := strings.Cut(srcParent, "/")
-		destHead, destTail, _ := strings.Cut(parent, "/")
-		isCut := clipboard.Has("cut")
-		if isCut && ((srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")) {
-			response.CopiedNotMoved = true
-		}
 		errInvalid := fmt.Errorf("file is invalid or contains invalid files")
-		g1, ctx1 := errgroup.WithContext(r.Context())
+		group, ctx := errgroup.WithContext(r.Context())
 		for _, name := range names {
 			name := name
-			g1.Go(func() error {
-				if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-				}
+			group.Go(func() error {
 				srcFilePath := path.Join(srcSitePrefix, srcParent, name)
-				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx1), srcFilePath)
+				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), srcFilePath)
 				if err != nil {
 					if errors.Is(err, fs.ErrNotExist) {
 						return nil
@@ -241,7 +238,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					return err
 				}
 				destFilePath := path.Join(sitePrefix, parent, name)
-				_, err = fs.Stat(nbrew.FS.WithContext(ctx1), destFilePath)
+				_, err = fs.Stat(nbrew.FS.WithContext(ctx), destFilePath)
 				if err != nil {
 					if !errors.Is(err, fs.ErrNotExist) {
 						return err
@@ -251,204 +248,241 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					return nil
 				}
 				var srcOutputDir, destOutputDir string
-				head, _, _ := strings.Cut(parent, "/")
-				switch head {
+				switch srcHead {
 				case "pages":
 					if !srcFileInfo.IsDir() {
 						srcOutputDir = path.Join(srcSitePrefix, "output", srcTail, strings.TrimSuffix(name, ".html"))
-						destOutputDir = path.Join(sitePrefix, "output", destTail, strings.TrimSuffix(name, ".html"))
+						if destHead == "pages" {
+							destOutputDir = path.Join(sitePrefix, "output", destTail, strings.TrimSuffix(name, ".html"))
+						}
 						if !strings.HasSuffix(srcFilePath, ".html") {
 							invalidCh <- srcFilePath
 							return nil
 						}
 					} else {
 						srcOutputDir = path.Join(srcSitePrefix, "output", srcTail, name)
-						destOutputDir = path.Join(sitePrefix, "output", destTail, name)
-						err := fs.WalkDir(nbrew.FS.WithContext(ctx1), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+						if destHead == "pages" {
+							destOutputDir = path.Join(sitePrefix, "output", destTail, name)
+						}
+						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+							exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+								Dialect: remoteFS.filesDialect,
+								Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.html'",
+								Values: []any{
+									sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcFilePath)+"/%"),
+								},
+							})
 							if err != nil {
 								return err
 							}
-							if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".html") {
-								return errInvalid
-							}
-							return nil
-						})
-						if err != nil {
-							if errors.Is(err, errInvalid) {
+							if exists {
 								invalidCh <- srcFilePath
 								return nil
 							}
-							return err
+						} else {
+							err := fs.WalkDir(nbrew.FS.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+								if err != nil {
+									return err
+								}
+								if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".html") {
+									return errInvalid
+								}
+								return nil
+							})
+							if err != nil {
+								if errors.Is(err, errInvalid) {
+									invalidCh <- srcFilePath
+									return nil
+								}
+								return err
+							}
 						}
 					}
 				case "posts":
 					if !srcFileInfo.IsDir() {
 						srcOutputDir = path.Join(srcSitePrefix, "output/posts", srcTail, strings.TrimSuffix(name, ".md"))
-						destOutputDir = path.Join(sitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
+						if destHead == "posts" {
+							destOutputDir = path.Join(sitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
+						}
 						if !strings.HasSuffix(srcFilePath, ".md") {
 							invalidCh <- srcFilePath
 							return nil
 						}
 					} else {
 						srcOutputDir = path.Join(srcSitePrefix, "output/posts", srcTail, name)
-						destOutputDir = path.Join(sitePrefix, "output/posts", destTail, name)
-						err := fs.WalkDir(nbrew.FS.WithContext(ctx1), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+						if destHead == "posts" {
+							destOutputDir = path.Join(sitePrefix, "output/posts", destTail, name)
+						}
+						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+							exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+								Dialect: remoteFS.filesDialect,
+								Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.md'",
+								Values: []any{
+									sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcFilePath)+"/%"),
+								},
+							})
 							if err != nil {
 								return err
 							}
-							if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".md") {
-								return errInvalid
-							}
-							return nil
-						})
-						if err != nil {
-							if errors.Is(err, errInvalid) {
+							if exists {
 								invalidCh <- srcFilePath
 								return nil
 							}
-							return err
+						} else {
+							err := fs.WalkDir(nbrew.FS.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+								if err != nil {
+									return err
+								}
+								if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".md") {
+									return errInvalid
+								}
+								return nil
+							})
+							if err != nil {
+								if errors.Is(err, errInvalid) {
+									invalidCh <- srcFilePath
+									return nil
+								}
+								return err
+							}
 						}
 					}
 				}
-				if isCut && !response.CopiedNotMoved {
-					err := nbrew.FS.WithContext(ctx1).Rename(srcFilePath, destFilePath)
+				if response.IsCut && !response.CopyOnly {
+					err := nbrew.FS.WithContext(ctx).Rename(srcFilePath, destFilePath)
 					if err != nil {
 						return err
 					}
 					if srcOutputDir != "" && destOutputDir != "" {
-						err := nbrew.FS.WithContext(ctx1).Rename(srcOutputDir, destOutputDir)
+						err := nbrew.FS.WithContext(ctx).Rename(srcOutputDir, destOutputDir)
 						if err != nil {
 							return err
 						}
+					}
+					return nil
+				}
+				if !srcFileInfo.IsDir() {
+					if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+					}
+				}
+				if !srcFileInfo.IsDir() {
+					srcFile, err := nbrew.FS.WithContext(ctx).Open(srcFilePath)
+					if err != nil {
+						return err
+					}
+					defer srcFile.Close()
+					destFile, err := nbrew.FS.WithContext(ctx).OpenWriter(destFilePath, 0644)
+					if err != nil {
+						return err
+					}
+					defer destFile.Close()
+					_, err = io.Copy(destFile, srcFile)
+					if err != nil {
+						return err
+					}
+					err = destFile.Close()
+					if err != nil {
+						return err
 					}
 				} else {
-					if !srcFileInfo.IsDir() {
-						srcFile, err := nbrew.FS.WithContext(ctx1).Open(srcFilePath)
+					subgroupA, subctxA := errgroup.WithContext(ctx)
+					err := fs.WalkDir(nbrew.FS.WithContext(subctxA), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
 						if err != nil {
 							return err
 						}
-						defer srcFile.Close()
-						destFile, err := nbrew.FS.WithContext(ctx1).OpenWriter(destFilePath, 0644)
-						if err != nil {
-							return err
-						}
-						defer destFile.Close()
-						_, err = io.Copy(destFile, srcFile)
-						if err != nil {
-							return err
-						}
-						err = destFile.Close()
-						if err != nil {
-							return err
-						}
-					} else {
-						g2A, ctx2A := errgroup.WithContext(ctx1)
-						err := fs.WalkDir(nbrew.FS.WithContext(ctx2A), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+						relPath := strings.Trim(strings.TrimSuffix(filePath, srcFilePath), "/")
+						if dirEntry.IsDir() {
+							err := nbrew.FS.WithContext(subctxA).MkdirAll(path.Join(destFilePath, relPath), 0755)
 							if err != nil {
 								return err
 							}
-							relPath := strings.Trim(strings.TrimSuffix(filePath, srcFilePath), "/")
-							if dirEntry.IsDir() {
-								err := nbrew.FS.WithContext(ctx2A).MkdirAll(path.Join(destFilePath, relPath), 0755)
-								if err != nil {
-									return err
-								}
-								return nil
+							return nil
+						}
+						subgroupA.Go(func() error {
+							srcFile, err := nbrew.FS.WithContext(subctxA).Open(filePath)
+							if err != nil {
+								return err
 							}
-							g2A.Go(func() error {
-								srcFile, err := nbrew.FS.WithContext(ctx2A).Open(filePath)
-								if err != nil {
-									return err
-								}
-								defer srcFile.Close()
-								destFile, err := nbrew.FS.WithContext(ctx2A).OpenWriter(path.Join(destFilePath, relPath), 0644)
-								if err != nil {
-									return err
-								}
-								defer destFile.Close()
-								_, err = io.Copy(destFile, srcFile)
-								if err != nil {
-									return err
-								}
-								err = destFile.Close()
-								if err != nil {
-									return err
-								}
-								return nil
-							})
+							defer srcFile.Close()
+							destFile, err := nbrew.FS.WithContext(subctxA).OpenWriter(path.Join(destFilePath, relPath), 0644)
+							if err != nil {
+								return err
+							}
+							defer destFile.Close()
+							_, err = io.Copy(destFile, srcFile)
+							if err != nil {
+								return err
+							}
+							err = destFile.Close()
+							if err != nil {
+								return err
+							}
 							return nil
 						})
-						if err != nil {
-							return nil
-						}
-						err = g2A.Wait()
-						if err != nil {
-							return nil
-						}
+						return nil
+					})
+					if err != nil {
+						return nil
 					}
-					if srcOutputDir != "" && destOutputDir != "" {
-						g2B, ctx2B := errgroup.WithContext(ctx1)
-						err := fs.WalkDir(nbrew.FS.WithContext(ctx2B), srcOutputDir, func(filePath string, dirEntry fs.DirEntry, err error) error {
+					err = subgroupA.Wait()
+					if err != nil {
+						return nil
+					}
+				}
+				if srcOutputDir != "" && destOutputDir != "" {
+					g2B, ctx2B := errgroup.WithContext(ctx)
+					err := fs.WalkDir(nbrew.FS.WithContext(ctx2B), srcOutputDir, func(filePath string, dirEntry fs.DirEntry, err error) error {
+						if err != nil {
+							return err
+						}
+						relPath := strings.Trim(strings.TrimSuffix(filePath, srcOutputDir), "/")
+						if dirEntry.IsDir() {
+							err := nbrew.FS.WithContext(ctx2B).MkdirAll(path.Join(destOutputDir, relPath), 0755)
 							if err != nil {
 								return err
 							}
-							relPath := strings.Trim(strings.TrimSuffix(filePath, srcOutputDir), "/")
-							if dirEntry.IsDir() {
-								err := nbrew.FS.WithContext(ctx2B).MkdirAll(path.Join(destOutputDir, relPath), 0755)
-								if err != nil {
-									return err
-								}
-								return nil
+							return nil
+						}
+						g2B.Go(func() error {
+							srcFile, err := nbrew.FS.WithContext(ctx2B).Open(filePath)
+							if err != nil {
+								return err
 							}
-							g2B.Go(func() error {
-								srcFile, err := nbrew.FS.WithContext(ctx2B).Open(filePath)
-								if err != nil {
-									return err
-								}
-								defer srcFile.Close()
-								destFile, err := nbrew.FS.WithContext(ctx2B).OpenWriter(path.Join(destOutputDir, relPath), 0644)
-								if err != nil {
-									return err
-								}
-								defer destFile.Close()
-								_, err = io.Copy(destFile, srcFile)
-								if err != nil {
-									return err
-								}
-								err = destFile.Close()
-								if err != nil {
-									return err
-								}
-								return nil
-							})
+							defer srcFile.Close()
+							destFile, err := nbrew.FS.WithContext(ctx2B).OpenWriter(path.Join(destOutputDir, relPath), 0644)
+							if err != nil {
+								return err
+							}
+							defer destFile.Close()
+							_, err = io.Copy(destFile, srcFile)
+							if err != nil {
+								return err
+							}
+							err = destFile.Close()
+							if err != nil {
+								return err
+							}
 							return nil
 						})
-						if err != nil {
-							return nil
-						}
-						err = g2B.Wait()
-						if err != nil {
-							return nil
-						}
+						return nil
+					})
+					if err != nil {
+						return nil
+					}
+					err = g2B.Wait()
+					if err != nil {
+						return nil
 					}
 				}
 				return nil
 			})
 		}
-		err = g1.Wait()
+		err = group.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
 		}
-		// 1. Grab all the names that exist in the parent destination, put it in a map.
-		// 2. Iterate the name list and if it's determined to already exist, skip it.
-		// 3a. If it's cut, do an UPDATE ... JOIN json_table({names})
-		// 3b. If it's copy, do an INSERT ... SELECT ... FROM files JOIN json_table({names})
-		// ["6409929d-442e-4ac3-a675-a07b41368133", "posts/python/libs.md"]
-		// filedata = append(filedata, []string{"", ""})
-		// list
-		// {blob}
 		response.NumPasted = int(numPasted.Load())
 		close(existCh)
 		close(invalidCh)
