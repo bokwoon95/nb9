@@ -362,8 +362,6 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					return nil
 				}
 				if !srcFileInfo.IsDir() {
-					if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-					}
 				}
 				if !srcFileInfo.IsDir() {
 					srcFile, err := nbrew.FS.WithContext(ctx).Open(srcFilePath)

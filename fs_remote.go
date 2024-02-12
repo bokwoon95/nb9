@@ -989,12 +989,18 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
+		// If the parent changes, also update the parent_id.
+		var updateParent sq.Expression
+		if path.Dir(oldname) != path.Dir(newname) {
+			updateParent = sq.Expr(", parent_id = (SELECT file_id FROM files WHERE file_path = {})", path.Dir(newname))
+		}
 		oldnameIsDir, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} WHERE file_path = {oldname} RETURNING {*}",
+			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime}{updateParent} WHERE file_path = {oldname} RETURNING {*}",
 			Values: []any{
 				sq.StringParam("newname", newname),
 				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
+				sq.Param("updateParent", updateParent),
 				sq.StringParam("oldname", oldname),
 			},
 		}, func(row *sq.Row) bool {
@@ -1085,12 +1091,18 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		if !oldnameIsDir && path.Ext(oldname) != path.Ext(newname) {
 			return fmt.Errorf("file extension cannot be changed")
 		}
+		// If the parent changes, also update the parent_id.
+		var updateParent sq.Expression
+		if path.Dir(oldname) != path.Dir(newname) {
+			updateParent = sq.Expr(", parent_id = (SELECT file_id FROM files WHERE file_path = {})", path.Dir(newname))
+		}
 		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.filesDialect,
-			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} WHERE file_path = {oldname}",
+			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime}{updateParent} WHERE file_path = {oldname}",
 			Values: []any{
 				sq.StringParam("newname", newname),
 				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
+				sq.Param("updateParent", updateParent),
 				sq.StringParam("oldname", oldname),
 			},
 		})
@@ -1111,17 +1123,6 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		}
 	default:
 		return fmt.Errorf("unsupported dialect %q", fsys.filesDialect)
-	}
-	// If the parent has changed, updated the parent_id.
-	if path.Dir(oldname) != path.Dir(newname) {
-		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
-			Dialect: fsys.filesDialect,
-			Format:  "UPDATE files SET parent_id = (SELECT file_id FROM files WHERE file_path = {newparent}) WHERE file_path = {newname}",
-			Values: []any{
-				sq.Param("newparent", path.Dir(newname)),
-				sq.Param("newname", newname),
-			},
-		})
 	}
 	err = tx.Commit()
 	if err != nil {
