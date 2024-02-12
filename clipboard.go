@@ -99,16 +99,18 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		http.Redirect(w, r, referer, http.StatusFound)
 	case "paste":
 		type Response struct {
-			Error        string   `json:"error,omitempty"`
-			NumPasted    int      `json:"numPasted,omitempty"`
-			FilesExist   []string `json:"filesExist,omitempty"`
-			FilesInvalid []string `json:"filesInvalid,omitempty"`
+			Error          string   `json:"error,omitempty"`
+			CopiedNotMoved bool     `json:"copiedNotMoved,omitempty"`
+			NumPasted      int      `json:"numPasted,omitempty"`
+			FilesExist     []string `json:"filesExist,omitempty"`
+			FilesInvalid   []string `json:"filesInvalid,omitempty"`
 			// NOTE:
-			// pasted $x files
+			// pasted $x files (copied instead of moved)
 			// the following files already exist:
 			// the following files are non-markdown files or contain non-markdown files:
-			// 
+			//
 		}
+		// if srcHead is pages or posts and destHead is notes or themes, the files will always be copied instead of moved
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 			if r.Form.Has("api") {
 				w.Header().Set("Content-Type", "application/json")
@@ -181,6 +183,15 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			writeResponse(w, r, response)
 			return
 		}
+		srcHead, _, _ := strings.Cut(srcParent, "/")
+		destHead, _, _ := strings.Cut(parent, "/")
+		isCut := clipboard.Has("cut")
+		if isCut && ((srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")) {
+			response.CopiedNotMoved = true
+		}
+		if srcHead == "pages" && destHead == "pages" {
+		} else if srcHead == "posts" && destHead == "posts" {
+		}
 		var numPasted atomic.Int64
 		existCh := make(chan string)
 		go func() {
@@ -208,7 +219,6 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		// else
 		//   if nbrew.FS is remoteFS, insert a new destFile entry using INSERT ... SELECT from the srcFile, changing only the file_id, parent_id, mod_time and creation_time.
 		//   else walkdir the srcFile, copying a directory or copying a file when necessary. as an optimization we can actually walk twice, first synchronously to copy the directories. Then copy all files asynchronously using an errgroup.
-		isCut := clipboard.Has("cut")
 		remoteFS, _ := nbrew.FS.(*RemoteFS)
 		g, ctx := errgroup.WithContext(r.Context())
 		for _, name := range names {
@@ -288,7 +298,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						}
 					}
 				}
-				if isCut {
+				if isCut && !response.CopiedNotMoved {
 					err := nbrew.FS.WithContext(ctx).Rename(srcFilePath, destFilePath)
 					if err != nil {
 						return err
