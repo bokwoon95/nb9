@@ -128,10 +128,11 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
-					"from":         "clipboard/paste",
-					"numPasted":    response.NumPasted,
-					"filesExist":   response.FilesExist,
-					"filesInvalid": response.FilesInvalid,
+					"from":           "clipboard/paste",
+					"copiedNotMoved": response.CopiedNotMoved,
+					"numPasted":      response.NumPasted,
+					"filesExist":     response.FilesExist,
+					"filesInvalid":   response.FilesInvalid,
 				},
 			})
 			if err != nil {
