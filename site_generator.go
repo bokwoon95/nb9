@@ -479,9 +479,9 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 			}, func(row *sq.Row) *RemoteFile {
 				file := &RemoteFile{
 					ctx:  ctx1,
-					info: &remoteFileInfo{},
+					info: &RemoteFileInfo{},
 				}
-				file.info.filePath = row.String("file_path")
+				file.info.FilePath = row.String("file_path")
 				b := bufPool.Get().(*bytes.Buffer).Bytes()
 				row.Scan(&b, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
 				if b != nil {
@@ -499,8 +499,8 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 				if err != nil {
 					return err
 				}
-				name := path.Base(file.info.filePath)
-				switch path.Ext(file.info.filePath) {
+				name := path.Base(file.info.FilePath)
+				switch path.Ext(file.info.FilePath) {
 				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
 					pageData.Images = append(pageData.Images, Image{Parent: urlPath, Name: name})
 				case ".md":

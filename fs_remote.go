@@ -86,7 +86,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		file := &RemoteFile{
 			ctx:     fsys.ctx,
 			storage: fsys.storage,
-			info:    &remoteFileInfo{filePath: ".", isDir: true},
+			info:    &RemoteFileInfo{FilePath: ".", isDir: true},
 		}
 		return file, nil
 	}
@@ -105,14 +105,14 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 			ctx:      fsys.ctx,
 			fileType: fileType,
 			storage:  fsys.storage,
-			info:     &remoteFileInfo{},
+			info:     &RemoteFileInfo{},
 		}
-		row.UUID(&file.info.fileID, "file_id")
-		file.info.filePath = row.String("file_path")
+		row.UUID(&file.info.FileID, "file_id")
+		file.info.FilePath = row.String("file_path")
 		file.info.isDir = row.Bool("is_dir")
 		file.info.size = row.Int64("size")
 		file.info.modTime = row.Time("mod_time")
-		file.info.creationTime = row.Time("creation_time")
+		file.info.CreationTime = row.Time("creation_time")
 		if !fileType.IsObject {
 			b := bufPool.Get().(*bytes.Buffer).Bytes()
 			row.Scan(&b, "COALESCE(text, data)")
@@ -126,9 +126,9 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		}
 		return nil, err
 	}
-	file.isFulltextIndexed = isFulltextIndexed(file.info.filePath)
+	file.isFulltextIndexed = isFulltextIndexed(file.info.FilePath)
 	if fileType.IsObject {
-		file.readCloser, err = file.storage.Get(file.ctx, hex.EncodeToString(file.info.fileID[:])+path.Ext(file.info.filePath))
+		file.readCloser, err = file.storage.Get(file.ctx, hex.EncodeToString(file.info.FileID[:])+path.Ext(file.info.FilePath))
 		if err != nil {
 			return nil, err
 		}
@@ -168,7 +168,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
 	}
 	if name == "." {
-		return &remoteFileInfo{filePath: ".", isDir: true}, nil
+		return &RemoteFileInfo{FilePath: ".", isDir: true}, nil
 	}
 	fileInfo, err := sq.FetchOne(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
@@ -176,13 +176,14 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		Values: []any{
 			sq.StringParam("name", name),
 		},
-	}, func(row *sq.Row) *remoteFileInfo {
-		fileInfo := &remoteFileInfo{}
-		fileInfo.filePath = row.String("file_path")
+	}, func(row *sq.Row) *RemoteFileInfo {
+		fileInfo := &RemoteFileInfo{}
+		row.UUID(&fileInfo.FileID, "file_id")
+		fileInfo.FilePath = row.String("file_path")
 		fileInfo.isDir = row.Bool("is_dir")
 		fileInfo.size = row.Int64("size")
 		fileInfo.modTime = row.Time("mod_time")
-		fileInfo.creationTime = row.Time("creation_time")
+		fileInfo.CreationTime = row.Time("creation_time")
 		return fileInfo
 	})
 	if err != nil {
@@ -194,30 +195,30 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 	return fileInfo, nil
 }
 
-type remoteFileInfo struct {
-	fileID       [16]byte
-	filePath     string
+type RemoteFileInfo struct {
+	FileID       [16]byte
+	FilePath     string
 	isDir        bool
 	size         int64
 	modTime      time.Time
-	creationTime time.Time
+	CreationTime time.Time
 }
 
-func (fileInfo *remoteFileInfo) Name() string { return path.Base(fileInfo.filePath) }
+func (fileInfo *RemoteFileInfo) Name() string { return path.Base(fileInfo.FilePath) }
 
-func (fileInfo *remoteFileInfo) Size() int64 { return fileInfo.size }
+func (fileInfo *RemoteFileInfo) Size() int64 { return fileInfo.size }
 
-func (fileInfo *remoteFileInfo) ModTime() time.Time { return fileInfo.modTime }
+func (fileInfo *RemoteFileInfo) ModTime() time.Time { return fileInfo.modTime }
 
-func (fileInfo *remoteFileInfo) IsDir() bool { return fileInfo.isDir }
+func (fileInfo *RemoteFileInfo) IsDir() bool { return fileInfo.isDir }
 
-func (fileInfo *remoteFileInfo) Sys() any { return nil }
+func (fileInfo *RemoteFileInfo) Sys() any { return nil }
 
-func (fileInfo *remoteFileInfo) Type() fs.FileMode { return fileInfo.Mode().Type() }
+func (fileInfo *RemoteFileInfo) Type() fs.FileMode { return fileInfo.Mode().Type() }
 
-func (fileInfo *remoteFileInfo) Info() (fs.FileInfo, error) { return fileInfo, nil }
+func (fileInfo *RemoteFileInfo) Info() (fs.FileInfo, error) { return fileInfo, nil }
 
-func (fileInfo *remoteFileInfo) Mode() fs.FileMode {
+func (fileInfo *RemoteFileInfo) Mode() fs.FileMode {
 	if fileInfo.isDir {
 		return fs.ModeDir
 	}
@@ -229,7 +230,7 @@ type RemoteFile struct {
 	fileType          FileType
 	isFulltextIndexed bool
 	storage           Storage
-	info              *remoteFileInfo
+	info              *RemoteFileInfo
 	buf               *bytes.Buffer
 	gzipReader        *gzip.Reader
 	readCloser        io.ReadCloser
@@ -245,7 +246,7 @@ func (file *RemoteFile) Read(p []byte) (n int, err error) {
 		return 0, err
 	}
 	if file.info.isDir {
-		return 0, &fs.PathError{Op: "read", Path: file.info.filePath, Err: syscall.EISDIR}
+		return 0, &fs.PathError{Op: "read", Path: file.info.FilePath, Err: syscall.EISDIR}
 	}
 	if file.fileType.IsObject {
 		return file.readCloser.Read(p)
@@ -635,13 +636,13 @@ func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
 			sq.Param("condition", condition),
 		},
 	}, func(row *sq.Row) fs.DirEntry {
-		file := &remoteFileInfo{}
-		row.UUID(&file.fileID, "file_id")
-		file.filePath = row.String("file_path")
+		file := &RemoteFileInfo{}
+		row.UUID(&file.FileID, "file_id")
+		file.FilePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
 		file.size = row.Int64("size")
 		file.modTime = row.Time("mod_time")
-		file.creationTime = row.Time("creation_time")
+		file.CreationTime = row.Time("creation_time")
 		return file
 	})
 	if err != nil {
@@ -1141,6 +1142,7 @@ type Storage interface {
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	Put(ctx context.Context, key string, reader io.Reader) error
 	Delete(ctx context.Context, key string) error
+	Copy(ctx context.Context, srcKey, destKey string) error
 }
 
 type S3Storage struct {
@@ -1218,6 +1220,24 @@ func (storage *S3Storage) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
+func (storage *S3Storage) Copy(ctx context.Context, srcKey, destKey string) error {
+	_, err := storage.Client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     &storage.Bucket,
+		CopySource: aws.String(srcKey),
+		Key:        aws.String(destKey),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			if apiErr.ErrorCode() == "NoSuchKey" {
+				return &fs.PathError{Op: "copy", Path: srcKey, Err: fs.ErrNotExist}
+			}
+		}
+		return err
+	}
+	return nil
+}
+
 type InMemoryStorage struct {
 	mu      sync.RWMutex
 	entries map[string][]byte
@@ -1256,6 +1276,17 @@ func (storage *InMemoryStorage) Put(ctx context.Context, key string, reader io.R
 func (storage *InMemoryStorage) Delete(ctx context.Context, key string) error {
 	storage.mu.Lock()
 	delete(storage.entries, key)
+	storage.mu.Unlock()
+	return nil
+}
+
+func (storage *InMemoryStorage) Copy(ctx context.Context, srcKey, destKey string) error {
+	storage.mu.Lock()
+	value, ok := storage.entries[srcKey]
+	if !ok {
+		return &fs.PathError{Op: "copy", Path: srcKey, Err: fs.ErrNotExist}
+	}
+	storage.entries[destKey] = value
 	storage.mu.Unlock()
 	return nil
 }
@@ -1369,6 +1400,41 @@ func (storage *LocalStorage) Delete(ctx context.Context, key string) error {
 		return &fs.PathError{Op: "delete", Path: key, Err: fs.ErrInvalid}
 	}
 	err = os.Remove(filepath.Join(storage.rootDir, key[:4], key))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (storage *LocalStorage) Copy(ctx context.Context, srcKey, destKey string) error {
+	err := ctx.Err()
+	if err != nil {
+		return err
+	}
+	if len(srcKey) < 4 {
+		return &fs.PathError{Op: "copy", Path: srcKey, Err: fs.ErrInvalid}
+	}
+	if len(destKey) < 4 {
+		return &fs.PathError{Op: "copy", Path: destKey, Err: fs.ErrInvalid}
+	}
+	srcFile, err := os.Open(filepath.Join(storage.rootDir, srcKey[:4], srcKey))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return &fs.PathError{Op: "copy", Path: srcKey, Err: fs.ErrNotExist}
+		}
+		return err
+	}
+	defer srcFile.Close()
+	destFile, err := os.OpenFile(filepath.Join(storage.rootDir, destKey[:4], destKey), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+	_, err = io.Copy(destFile, srcFile)
+	if err != nil {
+		return err
+	}
+	err = destFile.Close()
 	if err != nil {
 		return err
 	}

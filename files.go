@@ -142,8 +142,8 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		response.FilePath = filePath
 		response.IsDir = fileInfo.IsDir()
 		response.ModTime = fileInfo.ModTime()
-		if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
-			response.CreationTime = fileInfo.creationTime
+		if fileInfo, ok := fileInfo.(*RemoteFileInfo); ok {
+			response.CreationTime = fileInfo.CreationTime
 		} else {
 			var absolutePath string
 			if localFS, ok := nbrew.FS.(*LocalFS); ok {
@@ -446,8 +446,8 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			ModTime:     fileInfo.ModTime(),
 			Content:     request.Content,
 		}
-		if fileInfo, ok := fileInfo.(*remoteFileInfo); ok {
-			response.CreationTime = fileInfo.creationTime
+		if fileInfo, ok := fileInfo.(*RemoteFileInfo); ok {
+			response.CreationTime = fileInfo.CreationTime
 		} else {
 			var absolutePath string
 			if localFS, ok := nbrew.FS.(*LocalFS); ok {
