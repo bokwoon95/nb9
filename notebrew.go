@@ -136,9 +136,9 @@ func (nbrew *Notebrew) getSession(r *http.Request, name string, valuePtr any) (o
 	if cookie == nil {
 		return false, nil
 	}
-	var dataBytes []byte
+	var data []byte
 	if nbrew.UsersDB == nil {
-		dataBytes, err = base64.URLEncoding.DecodeString(cookie.Value)
+		data, err = base64.URLEncoding.DecodeString(cookie.Value)
 		if err != nil {
 			return false, nil
 		}
@@ -155,7 +155,7 @@ func (nbrew *Notebrew) getSession(r *http.Request, name string, valuePtr any) (o
 		if time.Now().Sub(creationTime) > 5*time.Minute {
 			return false, nil
 		}
-		dataBytes, err = sq.FetchOne(r.Context(), nbrew.UsersDB, sq.Query{
+		data, err = sq.FetchOne(r.Context(), nbrew.UsersDB, sq.Query{
 			Dialect: nbrew.UsersDialect,
 			Format:  "SELECT {*} FROM session WHERE session_token_hash = {sessionTokenHash}",
 			Values: []any{
@@ -171,7 +171,7 @@ func (nbrew *Notebrew) getSession(r *http.Request, name string, valuePtr any) (o
 			return false, err
 		}
 	}
-	err = json.Unmarshal(dataBytes, valuePtr)
+	err = json.Unmarshal(data, valuePtr)
 	if err != nil {
 		return false, err
 	}
