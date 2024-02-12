@@ -604,7 +604,7 @@ func remotePaste_Old(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSit
 					Result:  sq.Expr("SELECT 1 FROM json_array_elements_text({}) AS dest_paths WHERE dest_paths.value = files.file_path", b.String()),
 				}, {
 					Dialect: "mysql",
-					Result:  sq.Expr("SELECT 1 FROM json_table({}, COLUMNS (value VARCHAR(500) path '$')) AS dest_paths WHERE dest_paths.value = files.file_path", b.String()),
+					Result:  sq.Expr("SELECT 1 FROM json_table({}, COLUMNS (value VARCHAR(500) PATH '$')) AS dest_paths WHERE dest_paths.value = files.file_path", b.String()),
 				}},
 			}),
 		},
