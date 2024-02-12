@@ -225,14 +225,12 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		if isCut && ((srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")) {
 			response.CopiedNotMoved = true
 		}
-		remoteFS, _ := nbrew.FS.(*RemoteFS)
 		errInvalid := fmt.Errorf("file is invalid or contains invalid files")
 		g1, ctx1 := errgroup.WithContext(r.Context())
 		for _, name := range names {
 			name := name
 			g1.Go(func() error {
-				if remoteFS != nil {
-					return nil
+				if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
 				}
 				srcFilePath := path.Join(srcSitePrefix, srcParent, name)
 				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx1), srcFilePath)
@@ -324,7 +322,6 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						}
 					}
 				} else {
-					// TODO: check if it's a file first. If so, just copy the file instead of walking the dir.
 					if !srcFileInfo.IsDir() {
 						srcFile, err := nbrew.FS.WithContext(ctx1).Open(srcFilePath)
 						if err != nil {
