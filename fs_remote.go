@@ -973,70 +973,127 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		return err
 	}
 	defer tx.Rollback()
-	oldnameIsDir, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
-		Dialect: fsys.filesDialect,
-		Format:  "SELECT {*} FROM files WHERE file_path = {oldname}",
-		Values: []any{
-			sq.StringParam("oldname", oldname),
-		},
-	}, func(row *sq.Row) bool {
-		return row.Bool("is_dir")
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrNotExist}
-		}
-		return err
-	}
-	if !oldnameIsDir && path.Ext(oldname) != path.Ext(newname) {
-		return fmt.Errorf("file extension cannot be renamed")
-	}
-	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
-		Dialect: fsys.filesDialect,
-		Format:  "DELETE FROM files WHERE file_path = {newname} AND NOT is_dir",
-		Values: []any{
-			sq.StringParam("newname", newname),
-		},
-	})
-	if err != nil {
-		return err
-	}
-	// TODO: BUG: we need to handle the fileIDs as well, the old fileID needs
-	// to be deleted from storage (if it is an image) and the new fileID needs
-	// to replace the old fileID.
-	_, err = sq.Exec(fsys.ctx, tx, sq.Query{
-		Dialect: fsys.filesDialect,
-		Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} WHERE file_path = {oldname}",
-		Values: []any{
-			sq.StringParam("newname", newname),
-			sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
-			sq.StringParam("oldname", oldname),
-		},
-	})
-	if err != nil {
-		if fsys.filesErrorCode == nil {
+	var deletedFileID [16]byte
+	switch fsys.filesDialect {
+	case "sqlite", "postgres":
+		deletedFileID, err = sq.FetchOne(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.filesDialect,
+			Format:  "DELETE FROM files WHERE file_path = {newname} AND NOT is_dir RETURNING {*}",
+			Values: []any{
+				sq.StringParam("newname", newname),
+			},
+		}, func(row *sq.Row) (fileID [16]byte) {
+			row.UUID(&fileID, "file_id")
+			return fileID
+		})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		errcode := fsys.filesErrorCode(err)
-		if IsKeyViolation(fsys.filesDialect, errcode) {
-			// We weren't able to delete {newname} earlier, which means it is a
-			// directory.
-			return &fs.PathError{Op: "rename", Path: newname, Err: syscall.EISDIR}
+		oldnameIsDir, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.filesDialect,
+			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} WHERE file_path = {oldname} RETURNING {*}",
+			Values: []any{
+				sq.StringParam("newname", newname),
+				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
+				sq.StringParam("oldname", oldname),
+			},
+		}, func(row *sq.Row) bool {
+			return row.Bool("is_dir")
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrNotExist}
+			}
+			if fsys.filesErrorCode != nil {
+				errcode := fsys.filesErrorCode(err)
+				if IsKeyViolation(fsys.filesDialect, errcode) {
+					// We weren't able to delete {newname} earlier, which means it is a
+					// directory.
+					return &fs.PathError{Op: "rename", Path: newname, Err: syscall.EISDIR}
+				}
+			}
+			return err
 		}
-		return err
-	}
-	if oldnameIsDir {
+		if oldnameIsDir {
+			_, err := sq.Exec(fsys.ctx, tx, sq.Query{
+				Dialect: fsys.filesDialect,
+				Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
+				Values: []any{
+					sq.Param("filePath", sq.Expr("{} || substring(file_path, {})", newname, len(oldname)+1)),
+					sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
+					sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldname)+"/%"),
+				},
+			})
+			if err != nil {
+				return err
+			}
+		} else {
+			if path.Ext(oldname) != path.Ext(newname) {
+				return fmt.Errorf("file extension cannot be changed")
+			}
+		}
+	case "mysql":
+		deletedFileID, err = sq.FetchOne(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.filesDialect,
+			Format:  "SELECT {*} FROM files WHERE file_path = {newname} AND NOT is_dir",
+			Values: []any{
+				sq.StringParam("newname", newname),
+			},
+		}, func(row *sq.Row) (fileID [16]byte) {
+			row.UUID(&fileID, "file_id")
+			return fileID
+		})
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		} else {
+			_, err := sq.Exec(fsys.ctx, tx, sq.Query{
+				Dialect: fsys.filesDialect,
+				Format:  "DELETE FROM files WHERE file_path = {newname} AND NOT is_dir",
+				Values: []any{
+					sq.StringParam("newname", newname),
+				},
+			})
+			if err != nil {
+				return err
+			}
+		}
+		oldnameIsDir, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.filesDialect,
+			Format:  "SELECT {*} FROM files WHERE file_path = {oldname}",
+			Values: []any{
+				sq.StringParam("oldname", oldname),
+			},
+		}, func(row *sq.Row) bool {
+			return row.Bool("is_dir")
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrNotExist}
+			}
+			return err
+		}
+		if !oldnameIsDir && path.Ext(oldname) != path.Ext(newname) {
+			return fmt.Errorf("file extension cannot be changed")
+		}
+		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
+			Dialect: fsys.filesDialect,
+			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime} WHERE file_path = {oldname}",
+			Values: []any{
+				sq.StringParam("newname", newname),
+				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
+				sq.StringParam("oldname", oldname),
+			},
+		})
+		if err != nil {
+			return err
+		}
 		_, err = sq.Exec(fsys.ctx, tx, sq.Query{
 			Dialect: fsys.filesDialect,
 			Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 			Values: []any{
-				sq.Param("filePath", sq.DialectExpression{
-					Default: sq.Expr("{} || SUBSTRING(file_path, {})", newname, len(oldname)+1),
-					Cases: []sq.DialectCase{{
-						Dialect: "mysql",
-						Result:  sq.Expr("CONCAT({}, SUBSTRING(file_path, {}))", newname, len(oldname)+1),
-					}},
-				}),
+				sq.Param("filePath", sq.Expr("concat({}, substring(file_path, {}))", newname, len(oldname)+1)),
 				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
 				sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldname)+"/%"),
 			},
@@ -1044,10 +1101,18 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		if err != nil {
 			return err
 		}
+	default:
+		return fmt.Errorf("unsupported dialect %q", fsys.filesDialect)
 	}
 	err = tx.Commit()
 	if err != nil {
 		return err
+	}
+	if deletedFileID != [16]byte{} {
+		err := fsys.storage.Delete(fsys.ctx, hex.EncodeToString(deletedFileID[:])+path.Ext(newname))
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
