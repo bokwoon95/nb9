@@ -658,18 +658,11 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			},
 		}, func(row *sq.Row) Site {
 			return Site{
-				Name: row.String("CASE"+
-					" WHEN site.site_name LIKE '%.%' THEN site.site_name"+
-					" WHEN site.site_name <> '' THEN {concatSiteName}"+
-					" ELSE ''"+
+				Name: row.String("CASE" +
+					" WHEN site.site_name LIKE '%.%' THEN site.site_name" +
+					" WHEN site.site_name <> '' THEN concat('@', site.site_name)" +
+					" ELSE ''" +
 					" END AS site_prefix",
-					sq.Param("concatSiteName", sq.DialectExpression{
-						Default: sq.Expr("'@' || site.site_name"),
-						Cases: []sq.DialectCase{{
-							Dialect: "mysql",
-							Result:  sq.Expr("concat('@', site.site_name)"),
-						}},
-					}),
 				),
 				Owner: row.String("owner.username"),
 			}

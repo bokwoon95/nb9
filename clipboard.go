@@ -13,8 +13,6 @@ import (
 	"path"
 	"slices"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/bokwoon95/nb9/sq"
@@ -105,7 +103,23 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		})
 		http.Redirect(w, r, referer, http.StatusFound)
 	case "paste":
-		writeResponse := func(w http.ResponseWriter, r *http.Request, response pasteResponse) {
+		type Response struct {
+			Error          string   `json:"error,omitempty"`
+			IsCut          bool     `json:"isCut,omitempty"`
+			SrcSitePrefix  string   `json:"srcSitePrefix,omitempty"`
+			SrcParent      string   `json:"srcParent,omitempty"`
+			DestSitePrefix string   `json:"destSitePrefix,omitempty"`
+			DestParent     string   `json:"destParent,omitempty"`
+			FilesNotExist  []string `json:"filesNotExist,omitempty"`
+			FilesExist     []string `json:"filesExist,omitempty"`
+			FilesInvalid   []string `json:"filesInvalid,omitempty"`
+			FilesPasted    []string `json:"filesPasted,omitmepty"`
+			// NOTE:
+			// pasted $x files (copied instead of moved)
+			// the following files already exist:
+			// the following files are non-markdown files or contain non-markdown files:
+		}
+		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 			if r.Form.Has("api") {
 				w.Header().Set("Content-Type", "application/json")
 				encoder := json.NewEncoder(w)
@@ -125,13 +139,14 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			// NOTE: copyOnly = (srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
-					"from":         "clipboard/paste",
-					"srcHead":      srcHead,
-					"destHead":     destHead,
-					"isCut":        response.IsCut,
-					"numPasted":    response.NumPasted,
-					"filesExist":   response.FilesExist,
-					"filesInvalid": response.FilesInvalid,
+					"from":          "paste",
+					"srcHead":       srcHead,
+					"destHead":      destHead,
+					"isCut":         response.IsCut,
+					"filesNotExist": response.FilesNotExist,
+					"filesExist":    response.FilesExist,
+					"filesInvalid":  response.FilesInvalid,
+					"filesPasted":   response.FilesPasted,
 				},
 			})
 			if err != nil {
@@ -149,7 +164,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 			HttpOnly: true,
 		})
-		var response pasteResponse
+		var response Response
 		cookie, _ := r.Cookie("clipboard")
 		if cookie == nil {
 			response.Error = "CookieNotProvided"
@@ -186,29 +201,52 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			return
 		}
 
-		var numPasted atomic.Int64
-		var wg sync.WaitGroup
+		notExistCh := make(chan string)
+		go func() {
+			for name := range notExistCh {
+				response.FilesNotExist = append(response.FilesNotExist, name)
+			}
+		}()
 		existCh := make(chan string)
 		go func() {
-			wg.Add(1)
-			defer wg.Done()
-			for filePath := range existCh {
-				response.FilesExist = append(response.FilesExist, filePath)
+			for name := range existCh {
+				response.FilesExist = append(response.FilesExist, name)
 			}
 		}()
 		invalidCh := make(chan string)
 		go func() {
-			wg.Add(1)
-			defer wg.Done()
-			for filePath := range invalidCh {
-				response.FilesInvalid = append(response.FilesInvalid, filePath)
+			for name := range invalidCh {
+				response.FilesInvalid = append(response.FilesInvalid, name)
+			}
+		}()
+		pastedCh := make(chan string)
+		go func() {
+			for name := range pastedCh {
+				response.FilesPasted = append(response.FilesPasted, name)
 			}
 		}()
 		group, ctx := errgroup.WithContext(r.Context())
 		for _, name := range names {
 			name := name
 			group.Go(func() error {
-				return paste(ctx, nbrew.FS, response, name, &numPasted, existCh, invalidCh)
+				err := paste(ctx, nbrew.FS, response.SrcSitePrefix, response.SrcParent, response.DestParent, response.DestSitePrefix, name, response.IsCut)
+				if err != nil {
+					if errors.Is(err, errNotExist) {
+						notExistCh <- name
+						return nil
+					}
+					if errors.Is(err, errExist) {
+						existCh <- name
+						return nil
+					}
+					if errors.Is(err, errInvalid) {
+						invalidCh <- name
+						return nil
+					}
+					return err
+				}
+				pastedCh <- name
+				return nil
 			})
 		}
 		err = group.Wait()
@@ -217,33 +255,17 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			internalServerError(w, r, err)
 			return
 		}
-		response.NumPasted = int(numPasted.Load())
-		close(existCh)
-		close(invalidCh)
-		wg.Wait()
 		writeResponse(w, r, response)
 	default:
 		notFound(w, r)
 	}
 }
 
-type pasteResponse struct {
-	Error          string   `json:"error,omitempty"`
-	SrcSitePrefix  string   `json:"srcSitePrefix,omitempty"`
-	SrcParent      string   `json:"srcParent,omitempty"`
-	DestSitePrefix string   `json:"destSitePrefix,omitempty"`
-	DestParent     string   `json:"destParent,omitempty"`
-	IsCut          bool     `json:"isCut,omitempty"`
-	NumPasted      int      `json:"numPasted,omitempty"`
-	FilesExist     []string `json:"filesExist,omitempty"`
-	FilesInvalid   []string `json:"filesInvalid,omitempty"`
-	// NOTE:
-	// pasted $x files (copied instead of moved)
-	// the following files already exist:
-	// the following files are non-markdown files or contain non-markdown files:
-}
-
-var errFileInvalid = fmt.Errorf("file is invalid or is a directory containing invalid files")
+var (
+	errNotExist = fmt.Errorf("src file does not exist")
+	errExist    = fmt.Errorf("dest file already exists")
+	errInvalid  = fmt.Errorf("src file is invalid or is a directory containing files that are invalid")
+)
 
 // stat srcFile; if not exist, return
 // stat destFile; if exist, append to FilesExist and return
@@ -266,55 +288,51 @@ var errFileInvalid = fmt.Errorf("file is invalid or is a directory containing in
 //
 //	if nbrew.FS is remoteFS, insert a new destFile entry using INSERT ... SELECT from the srcFile, changing only the file_id, parent_id, mod_time and creation_time.
 //	else walkdir the srcFile, copying a directory or copying a file when necessary. as an optimization we can actually walk twice, first synchronously to copy the directories. Then copy all files asynchronously using an errgroup.
-//
-// NOTE: isMove := response.IsCut && !response.CopyOnly
-func paste(ctx context.Context, fsys FS, response pasteResponse, name string, numPasted *atomic.Int64, existCh, invalidCh chan<- string) error {
-	srcHead, srcTail, _ := strings.Cut(response.SrcParent, "/")
-	srcFilePath := path.Join(response.SrcSitePrefix, response.SrcParent, name)
+func paste(ctx context.Context, fsys FS, srcSitePrefix, srcParent, destSitePrefix, destParent, name string, isCut bool) error {
+	srcHead, srcTail, _ := strings.Cut(srcParent, "/")
+	srcFilePath := path.Join(srcSitePrefix, srcParent, name)
 	srcFileInfo, err := fs.Stat(fsys.WithContext(ctx), srcFilePath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return nil
+			return errNotExist
 		}
 		return err
 	}
-	destHead, destTail, _ := strings.Cut(response.DestParent, "/")
-	destFilePath := path.Join(response.DestSitePrefix, response.DestParent, name)
+	destHead, destTail, _ := strings.Cut(destParent, "/")
+	destFilePath := path.Join(destSitePrefix, destParent, name)
 	_, err = fs.Stat(fsys.WithContext(ctx), destFilePath)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
 	} else {
-		existCh <- destFilePath
-		return nil
+		return errExist
 	}
 	var srcOutputDir string
 	switch srcHead {
 	case "pages":
 		if !srcFileInfo.IsDir() {
-			srcOutputDir = path.Join(response.SrcSitePrefix, "output", srcTail, strings.TrimSuffix(name, ".html"))
+			srcOutputDir = path.Join(srcSitePrefix, "output", srcTail, strings.TrimSuffix(name, ".html"))
 		} else {
-			srcOutputDir = path.Join(response.SrcSitePrefix, "output", srcTail, name)
+			srcOutputDir = path.Join(srcSitePrefix, "output", srcTail, name)
 		}
 	case "posts":
 		if !srcFileInfo.IsDir() {
-			srcOutputDir = path.Join(response.SrcSitePrefix, "output/posts", srcTail, strings.TrimSuffix(name, ".md"))
+			srcOutputDir = path.Join(srcSitePrefix, "output/posts", srcTail, strings.TrimSuffix(name, ".md"))
 		} else {
-			srcOutputDir = path.Join(response.SrcSitePrefix, "output/posts", srcTail, name)
+			srcOutputDir = path.Join(srcSitePrefix, "output/posts", srcTail, name)
 		}
 	}
 	var destOutputDir string
 	switch destHead {
 	case "pages":
 		if !srcFileInfo.IsDir() {
-			destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, strings.TrimSuffix(name, ".html"))
+			destOutputDir = path.Join(destSitePrefix, "output", destTail, strings.TrimSuffix(name, ".html"))
 			if !strings.HasSuffix(srcFilePath, ".html") {
-				invalidCh <- srcFilePath
-				return nil
+				return errInvalid
 			}
 		} else {
-			destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, name)
+			destOutputDir = path.Join(destSitePrefix, "output", destTail, name)
 			if remoteFS, ok := fsys.(*RemoteFS); ok {
 				exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
 					Dialect: remoteFS.filesDialect,
@@ -327,8 +345,7 @@ func paste(ctx context.Context, fsys FS, response pasteResponse, name string, nu
 					return err
 				}
 				if exists {
-					invalidCh <- srcFilePath
-					return nil
+					return errInvalid
 				}
 			} else {
 				err := fs.WalkDir(fsys.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
@@ -336,28 +353,23 @@ func paste(ctx context.Context, fsys FS, response pasteResponse, name string, nu
 						return err
 					}
 					if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".html") {
-						return errFileInvalid
+						return errInvalid
 					}
 					return nil
 				})
 				if err != nil {
-					if errors.Is(err, errFileInvalid) {
-						invalidCh <- srcFilePath
-						return nil
-					}
 					return err
 				}
 			}
 		}
 	case "posts":
 		if !srcFileInfo.IsDir() {
-			destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
+			destOutputDir = path.Join(destSitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
 			if !strings.HasSuffix(srcFilePath, ".md") {
-				invalidCh <- srcFilePath
-				return nil
+				return errInvalid
 			}
 		} else {
-			destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, name)
+			destOutputDir = path.Join(destSitePrefix, "output/posts", destTail, name)
 			if remoteFS, ok := fsys.(*RemoteFS); ok {
 				exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
 					Dialect: remoteFS.filesDialect,
@@ -370,8 +382,7 @@ func paste(ctx context.Context, fsys FS, response pasteResponse, name string, nu
 					return err
 				}
 				if exists {
-					invalidCh <- srcFilePath
-					return nil
+					return errInvalid
 				}
 			} else {
 				err := fs.WalkDir(fsys.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
@@ -379,30 +390,42 @@ func paste(ctx context.Context, fsys FS, response pasteResponse, name string, nu
 						return err
 					}
 					if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".md") {
-						return errFileInvalid
+						return errInvalid
 					}
 					return nil
 				})
 				if err != nil {
-					if errors.Is(err, errFileInvalid) {
-						invalidCh <- srcFilePath
-						return nil
+					if errors.Is(err, errInvalid) {
+						return errInvalid
 					}
 					return err
 				}
 			}
 		}
 	case "output":
-		next, _, _ := strings.Cut(srcTail, "/")
+		next, _, _ := strings.Cut(destTail, "/")
+		if srcFileInfo.IsDir() {
+			return errInvalid
+		}
+		ext := path.Ext(srcFilePath)
 		if next == "posts" {
-			// TODO: check that srcFilePath only contains images files
+			switch ext {
+			case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+				break
+			default:
+				return errInvalid
+			}
 		} else if next != "themes" {
-			// TODO: check that srcFilePath only contains images, css, javascript or markdown files
+			switch ext {
+			case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".css", ".js", ".md":
+				break
+			default:
+				return errInvalid
+			}
 		}
 	}
-	numPasted.Add(1)
 	moveNotAllowed := (srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")
-	if response.IsCut && !moveNotAllowed {
+	if isCut && !moveNotAllowed {
 		err := fsys.WithContext(ctx).Rename(srcFilePath, destFilePath)
 		if err != nil {
 			return err
@@ -483,6 +506,11 @@ func paste(ctx context.Context, fsys FS, response pasteResponse, name string, nu
 			// parent fileIDs in a map as we generate them, and use
 			// path.Dir(filePath) to consult the map for the correct parentID
 			// to put inside the json row.
+			//
+			// read: srcFileID, srcFilePath
+			// write: destFileID, parentID, parentPath, srcFilePath
+			// destFilePath = concat(destParent, substring(srcFilePath, length(srcParent)+1))
+			//
 			_ = remoteFS
 		} else {
 			subgroupA, subctxA := errgroup.WithContext(ctx)
@@ -490,7 +518,7 @@ func paste(ctx context.Context, fsys FS, response pasteResponse, name string, nu
 				if err != nil {
 					return err
 				}
-				relPath := strings.Trim(strings.TrimSuffix(filePath, srcFilePath), "/")
+				relPath := strings.TrimPrefix(strings.TrimSuffix(filePath, srcFilePath), "/")
 				if dirEntry.IsDir() {
 					err := fsys.WithContext(subctxA).MkdirAll(path.Join(destFilePath, relPath), 0755)
 					if err != nil {
@@ -536,7 +564,7 @@ func paste(ctx context.Context, fsys FS, response pasteResponse, name string, nu
 			if err != nil {
 				return err
 			}
-			relPath := strings.Trim(strings.TrimSuffix(filePath, srcOutputDir), "/")
+			relPath := strings.TrimPrefix(strings.TrimSuffix(filePath, srcOutputDir), "/")
 			if dirEntry.IsDir() {
 				err := fsys.WithContext(subctxB).MkdirAll(path.Join(destOutputDir, relPath), 0755)
 				if err != nil {

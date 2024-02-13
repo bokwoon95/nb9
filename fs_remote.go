@@ -1026,7 +1026,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 				Dialect: fsys.filesDialect,
 				Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 				Values: []any{
-					sq.Param("filePath", sq.Expr("{} || substring(file_path, {})", newname, len(oldname)+1)),
+					sq.Param("filePath", sq.Expr("concat({}, substring(file_path, {}))", newname, len(oldname)+1)),
 					sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
 					sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldname)+"/%"),
 				},
