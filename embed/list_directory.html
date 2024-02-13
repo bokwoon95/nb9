@@ -77,14 +77,10 @@
   {{- $filesExist := index $.PostRedirectGet "filesExist" }}
   {{- $filesInvalid := index $.PostRedirectGet "filesInvalid" }}
   {{- $numPasted := len (index $.PostRedirectGet "filesPasted") }}
-  {{- $copiedNotMoved := and
-    $isCut
-    (or
-      (and (eq $srcHead "pages") (ne $destHead "pages"))
-      (and (eq $srcHead "posts") (ne $destHead "posts"))) }}
   <div>
-    <div>{{ $numPasted }} file{{ if ne $numPasted 1 }}s{{ end }} pasted{{ if $copiedNotMoved }} (copied instead of moved){{ end }}</div>
+    <div>{{ $numPasted }} file{{ if ne $numPasted 1 }}s{{ end }} pasted</div>
     {{- if $filesExist }}
+    <br>
     <div>
       The following files already exist:
       <ul class='list-style-disc ph3'>
@@ -95,6 +91,7 @@
     </div>
     {{- end }}
     {{- if $filesInvalid }}
+    <br>
     <div>
       {{- if eq $destHead "pages" }}
       The following files are non-html files or contain non-html files:

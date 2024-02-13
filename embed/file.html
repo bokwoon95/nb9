@@ -1,3 +1,4 @@
+{{- $clipboard := clipboard }}
 <!DOCTYPE html>
 <html lang='en'>
 <meta charset='utf-8'>
@@ -44,6 +45,65 @@
   {{- end }}
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
+</div>
+{{- end }}
+{{- if eq (index $.PostRedirectGet "from") "paste" }}
+<div role='alert' class='alert mv2 pa2 br2 flex items-center'>
+  {{- $srcHead := head (index $.PostRedirectGet "srcParent") }}
+  {{- $destHead := head (index $.PostRedirectGet "destParent") }}
+  {{- $isCut := index $.PostRedirectGet "isCut" }}
+  {{- $filesExist := index $.PostRedirectGet "filesExist" }}
+  {{- $filesInvalid := index $.PostRedirectGet "filesInvalid" }}
+  {{- $numPasted := len (index $.PostRedirectGet "filesPasted") }}
+  <div>
+    <div>{{ $numPasted }} file{{ if ne $numPasted 1 }}s{{ end }} pasted</div>
+    {{- if $filesExist }}
+    <br>
+    <div>
+      The following files already exist:
+      <ul class='list-style-disc ph3'>
+        {{- range $name := $filesExist }}
+        <li>{{ $name }}</li>
+        {{- end }}
+      </ul>
+    </div>
+    {{- end }}
+    {{- if $filesInvalid }}
+    <br>
+    <div>
+      {{- if eq $destHead "pages" }}
+      The following files are non-html files or contain non-html files:
+      {{- else if eq $destHead "posts" }}
+      The following files are non-markdown files or contain non-markdown files:
+      {{- else }}
+      The following files are invalid or contain invalid files:
+      {{- end }}
+      <ul class='list-style-disc ph3'>
+        {{- range $name := $filesInvalid }}
+        <li>{{ $name }}</li>
+        {{- end }}
+      </ul>
+    </div>
+    {{- end }}
+  </div>
+  <div class='flex-grow-1'></div>
+  <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
+</div>
+{{- end }}
+{{- if gt (len $clipboard) 0 }}
+<div class='dashed-border mv2 pa2 br2 flex items-center'>
+  <div class='flex-grow-1 truncate'>
+    <a href='/{{ join "files" ($clipboard.Get "sitePrefix") ($clipboard.Get "parent") }}/'>{{ len (index $clipboard "name") }} file{{ if ne (len (index $clipboard "name")) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := index $clipboard "name" }}{{ if gt $i 0 }}, {{ end }}{{ $name }}{{ end }}
+  </div>
+  {{- if false }}
+  <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
+    <input type='hidden' name='parent' value='{{ $.FilePath }}'>
+    <button type='submit' class='button ba br2 pv2 ph2'>paste</button>
+  </form>
+  {{- end }}
+  <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/clear" }}/' class='ml2'>
+    <button type='submit' class='button-danger ba br2 b--dark-red pv2 ph2'>clear</button>
+  </form>
 </div>
 {{- end }}
 <div class='mv2'>

@@ -23,60 +23,9 @@ uploadfile.go
 serve_http.go
 notebrew/main.go
 
-anything in pages/*
-    source file is directly correlated to an index.html in its output/* folder
-    output folder can contain .css, .js and .md files (just regard all files?)
-anything in posts/*
-    source file is directly correlated to an index.html in its output/posts/* folder
-    output folder can contain .jpeg, .jpg, .png, .webp, .gif files (just regard all files?)
-
-if srcPath doesn't exist {
-    return, nothing to do
-}
-var action = none
-if destPath doesn't exist {
-    action = no need to delete destPath, just move/copy srcPath and its outputDir over
-} else {
-    if destPath is a file {
-        action = delete destPath and its outputDir later, then move/copy srcPath and its outputDir over
-    } else {
-        if srcPath is a file {
-            return an error, we will not allow a file to replace a folder
-        }
-        action = we will need to initiate recursive merging of the folders
-    }
-}
-
-if srcFile doesn't exist, return
-if destFile exists, and is a file, we need to delete it
-    if we delete a file in posts/*, we need to delete the corresponding output dir in output/posts/*
-    if we delete a file in
-if destFile exists and is a folder, we need to merge the contents
-
-select 1 from json_each({items}) where items.value = files.file_path
-
-files/subscriptions.opml -> view the subscriptions, Google Reader view
-files/subscriptions.opml/create/ -> add a new subscription
-files/opml/ -> this is the trickiest part. this is where the opml rss feeds are stored site-wide, shared between all subscription files. What's the eviction policy? How do we efficiently join? If we can't efficiently join to display a Google Reader view to the user, should we drop the "backed by a single OPML file" idea and resort to database tables instead? Then we can offer to import/export the data as a opml files. But that means a user not using UsersDB will not be able to use notebrew locally purely as an rss feed reader.
-
--- sqlite
-select unhex(items.value->>0, '-') as file_id, items.value->>1 as file_path
-from json_each('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]') as items;
-select items.value
-from json_each('["one","two"]') as items;
--- postgres
-select (items.value->>0)::uuid as file_id, items.value->>1 as file_path
-from json_array_elements('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]') as items;
-select items.value
-from json_array_elements_text('["one","two"]') as items;
--- mysql
-select uuid_to_bin(items.file_id) as file_id, items.file_path
-from json_table('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]', '$[*]' columns (file_id char(32) path '$[0]', file_path varchar(500) path '$[1]')) as items;
-select items.file_path
-from json_table('["one","two"]', '$[*]' columns (file_path varchar(500) path '$')) as items;
-
-TODO: what are the user-expected semantics when they cut or copy a note/page/post/theme file and paste it in notes/pages/posts/themes? Do the output files follow?
-    - note -> pages:
+TODO: UAT the clipboard/paste feature. Some bugs:
+    - copy some html/txt files from notes and try to paste it into the posts folder. why does it fail with 500 Internal Server Error "src file is invalid or is a directory containing files that are invalid"?
+    - When showing the clipboard info in file.html, how to construct the paste form accordingly such that it will paste into the page/post's output directory instead of the file itself?
 TODO: rework listDirectory such that fromTime is response.FromTime and always pulls from the fromtime query param instead of the from query param (same for beforeTime). Then from is always used as the tiebreaker so that even if there are millions of files with the same mod_time or creation_time, we can still paginate them chunk by chunk using the name as the tiebreaker.
 TODO: modify search.go such that it takes into account sort=created or sort=edited. The options: default sort | sort by creation time | sort by modification time
 TODO: clipboard: if a destFile exists, no matter whether it's file or folder, paste will be auto rejected.
@@ -116,6 +65,26 @@ TODO: /users/language/?redirect=foo/bar/baz which lets people set the language c
     NOTE: for languages don't parse all the language json files and keep them in memory, instead implement a TTL using timers and timer.Reset everytime someone requests for that language file. Once the timer expires, delete it from the map.
     BEFORE YOU DO THIS: look at how big the language files are. If it's an acceptable cost to keep them all in memory then just keep it in memory and reads will be much faster since you don't have to guard reads behind a mutex.
 TODO: a little "view data" link on file.html that simply the href "?data". When clicked, it generates live data of the page in real time if we're on a page.html, or the latest post/last page data if we're on post.html/postlist.html.
+
+-- sqlite
+select unhex(items.value->>0, '-') as file_id, items.value->>1 as file_path
+from json_each('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]') as items;
+select items.value
+from json_each('["one","two"]') as items;
+-- postgres
+select (items.value->>0)::uuid as file_id, items.value->>1 as file_path
+from json_array_elements('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]') as items;
+select items.value
+from json_array_elements_text('["one","two"]') as items;
+-- mysql
+select uuid_to_bin(items.file_id) as file_id, items.file_path
+from json_table('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]', '$[*]' columns (file_id char(32) path '$[0]', file_path varchar(500) path '$[1]')) as items;
+select items.file_path
+from json_table('["one","two"]', '$[*]' columns (file_path varchar(500) path '$')) as items;
+
+files/subscriptions.opml -> view the subscriptions, Google Reader view
+files/subscriptions.opml/create/ -> add a new subscription
+files/opml/ -> this is the trickiest part. this is where the opml rss feeds are stored site-wide, shared between all subscription files. What's the eviction policy? How do we efficiently join? If we can't efficiently join to display a Google Reader view to the user, should we drop the "backed by a single OPML file" idea and resort to database tables instead? Then we can offer to import/export the data as a opml files. But that means a user not using UsersDB will not be able to use notebrew locally purely as an rss feed reader.
 
 NOTE: `notebrew regenerate` will regenerate all sites. `notebrew regenerate -site ''` will only regenerate the base site. This is great if you change the ImgDomain and need to regenerate all pages in all sites to keep image links up-to-date.
 

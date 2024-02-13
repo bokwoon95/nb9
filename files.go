@@ -343,6 +343,26 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		}
 
 		referer := getReferer(r)
+		clipboard := make(url.Values)
+		isInClipboard := make(map[string]bool)
+		cookie, _ := r.Cookie("clipboard")
+		if cookie != nil {
+			values, err := url.ParseQuery(cookie.Value)
+			if err == nil {
+				if values.Has("cut") {
+					clipboard.Set("cut", "")
+				}
+				clipboard.Set("sitePrefix", values.Get("sitePrefix"))
+				clipboard.Set("parent", values.Get("parent"))
+				for _, name := range values["name"] {
+					if isInClipboard[name] {
+						continue
+					}
+					clipboard.Add("name", name)
+					isInClipboard[name] = true
+				}
+			}
+		}
 		funcMap := map[string]any{
 			"join":             path.Join,
 			"dir":              path.Dir,
@@ -356,6 +376,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
 			"baselineJS":       func() template.JS { return template.JS(baselineJS) },
 			"referer":          func() string { return referer },
+			"clipboard":        func() url.Values { return clipboard },
 			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
 			"head": func(s string) string {
 				head, _, _ := strings.Cut(s, "/")

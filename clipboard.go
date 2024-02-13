@@ -208,26 +208,32 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			return
 		}
 
+		var wg sync.WaitGroup
+		wg.Add(4)
 		notExistCh := make(chan string)
 		go func() {
+			defer wg.Done()
 			for name := range notExistCh {
 				response.FilesNotExist = append(response.FilesNotExist, name)
 			}
 		}()
 		existCh := make(chan string)
 		go func() {
+			defer wg.Done()
 			for name := range existCh {
 				response.FilesExist = append(response.FilesExist, name)
 			}
 		}()
 		invalidCh := make(chan string)
 		go func() {
+			defer wg.Done()
 			for name := range invalidCh {
 				response.FilesInvalid = append(response.FilesInvalid, name)
 			}
 		}()
 		pastedCh := make(chan string)
 		go func() {
+			defer wg.Done()
 			for name := range pastedCh {
 				response.FilesPasted = append(response.FilesPasted, name)
 			}
@@ -386,7 +392,16 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					}
 				}
 				pastedCh <- name
-				if response.IsCut && !moveNotAllowed {
+				isMandatoryFile := false
+				if !srcFileInfo.IsDir() {
+					switch response.SrcParent {
+					case "pages":
+						isMandatoryFile = name == "index.html"
+					case "output/themes":
+						isMandatoryFile = name == "post.html" || name == "postlist.html"
+					}
+				}
+				if response.IsCut && !moveNotAllowed && !isMandatoryFile {
 					err := nbrew.FS.WithContext(ctx).Rename(srcFilePath, destFilePath)
 					if err != nil {
 						return err
@@ -425,6 +440,11 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			internalServerError(w, r, err)
 			return
 		}
+		close(notExistCh)
+		close(existCh)
+		close(invalidCh)
+		close(pastedCh)
+		wg.Wait()
 		writeResponse(w, r, response)
 	default:
 		notFound(w, r)
