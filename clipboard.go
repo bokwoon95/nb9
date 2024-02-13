@@ -510,6 +510,7 @@ func paste(ctx context.Context, fsys FS, srcSitePrefix, srcParent, destSitePrefi
 			// read: srcFileID, srcFilePath
 			// write: destFileID, parentID, parentPath, srcFilePath
 			// destFilePath = concat(destParent, substring(srcFilePath, length(srcParent)+1))
+			// parent_id = coalesce(items.parent_id, (SELECT file_id FROM files WHERE file_path = items.parent_path))
 			//
 			_ = remoteFS
 		} else {
@@ -767,4 +768,7 @@ func remotePaste_Old(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSit
 		}
 	}
 	return nil
+}
+
+func uuidToString() {
 }

@@ -55,6 +55,10 @@ if destFile exists and is a folder, we need to merge the contents
 
 select 1 from json_each({items}) where items.value = files.file_path
 
+files/subscriptions.opml -> view the subscriptions, Google Reader view
+files/subscriptions.opml/create/ -> add a new subscription
+files/opml/ -> this is the trickiest part. this is where the opml rss feeds are stored site-wide, shared between all subscription files. What's the eviction policy? How do we efficiently join? If we can't efficiently join to display a Google Reader view to the user, should we drop the "backed by a single OPML file" idea and resort to database tables instead? Then we can offer to import/export the data as a opml files. But that means a user not using UsersDB will not be able to use notebrew locally purely as an rss feed reader.
+
 -- sqlite
 select unhex(items.value->>0, '-') as file_id, items.value->>1 as file_path
 from json_each('[["e4ac0341-0fd0-4b7c-95f6-f53d9273638c","one"],["f026a58e-8739-4105-b74f-3f2aa8244e4d","two"]]') as items;
