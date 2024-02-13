@@ -101,6 +101,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 .flex { display: flex; }
 .flex-grow-1 { flex-grow: 1; }
 .items-center { align-items: center; }
+.items-start { align-items: flex-start; }
 .items-end { align-items: flex-end; }
 .justify-between { justify-content: space-between; }
 .justify-center { justify-content: center; }

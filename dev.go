@@ -9,4 +9,5 @@ import (
 
 func init() {
 	RuntimeFS = os.DirFS(".")
+	logSessions = true
 }

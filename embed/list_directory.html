@@ -71,8 +71,45 @@
 {{- end }}
 {{- if eq (index $.PostRedirectGet "from") "paste" }}
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
-  <div class='flex items-center'>
-    <span class='ml2'>lorem upsum dolor sit amet</span>
+  {{- $srcHead := head (index $.PostRedirectGet "srcParent") }}
+  {{- $destHead := head (index $.PostRedirectGet "destParent") }}
+  {{- $isCut := index $.PostRedirectGet "isCut" }}
+  {{- $filesExist := index $.PostRedirectGet "filesExist" }}
+  {{- $filesInvalid := index $.PostRedirectGet "filesInvalid" }}
+  {{- $numPasted := len (index $.PostRedirectGet "filesPasted") }}
+  {{- $copiedNotMoved := and
+    $isCut
+    (or
+      (and (eq $srcHead "pages") (ne $destHead "pages"))
+      (and (eq $srcHead "posts") (ne $destHead "posts"))) }}
+  <div>
+    <div>{{ $numPasted }} file{{ if ne $numPasted 1 }}s{{ end }} pasted{{ if $copiedNotMoved }} (copied instead of moved){{ end }}</div>
+    {{- if $filesExist }}
+    <div>
+      The following files already exist:
+      <ul class='list-style-disc ph3'>
+        {{- range $name := $filesExist }}
+        <li>{{ $name }}</li>
+        {{- end }}
+      </ul>
+    </div>
+    {{- end }}
+    {{- if $filesInvalid }}
+    <div>
+      {{- if eq $destHead "pages" }}
+      The following files are non-html files or contain non-html files:
+      {{- else if eq $destHead "posts" }}
+      The following files are non-markdown files or contain non-markdown files:
+      {{- else }}
+      The following files are invalid or contain invalid files:
+      {{- end }}
+      <ul class='list-style-disc ph3'>
+        {{- range $name := $filesInvalid }}
+        <li>{{ $name }}</li>
+        {{- end }}
+      </ul>
+    </div>
+    {{- end }}
   </div>
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>

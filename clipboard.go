@@ -99,10 +99,6 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			FilesExist     []string `json:"filesExist,omitempty"`
 			FilesInvalid   []string `json:"filesInvalid,omitempty"`
 			FilesPasted    []string `json:"filesPasted,omitmepty"`
-			// NOTE:
-			// pasted $x files (copied instead of moved)
-			// the following files already exist:
-			// the following files are non-markdown files or contain non-markdown files:
 		}
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 			if r.Form.Has("api") {
@@ -119,18 +115,11 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				http.Redirect(w, r, referer, http.StatusFound)
 				return
 			}
-			srcHead, _, _ := strings.Cut(response.SrcParent, "/")
-			destHead, _, _ := strings.Cut(response.DestParent, "/")
-			/* {{ if and
-			$isCut
-			(or
-				(and (eq $srcHead "pages") (ne $destHead "pages"))
-				(and (eq $srcHead "posts") (ne $destHead $posts))) }} */
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
 					"from":          "paste",
-					"srcHead":       srcHead,
-					"destHead":      destHead,
+					"srcParent":     response.SrcParent,
+					"destParent":    response.DestParent,
 					"isCut":         response.IsCut,
 					"filesNotExist": response.FilesNotExist,
 					"filesExist":    response.FilesExist,
@@ -153,7 +142,12 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 			HttpOnly: true,
 		})
-		var response Response
+		response := Response{
+			FilesNotExist: []string{},
+			FilesExist:    []string{},
+			FilesInvalid:  []string{},
+			FilesPasted:   []string{},
+		}
 		cookie, _ := r.Cookie("clipboard")
 		if cookie == nil {
 			response.Error = "CookieNotProvided"
@@ -391,6 +385,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						}
 					}
 				}
+				pastedCh <- name
 				if response.IsCut && !moveNotAllowed {
 					err := nbrew.FS.WithContext(ctx).Rename(srcFilePath, destFilePath)
 					if err != nil {
@@ -421,7 +416,6 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						return err
 					}
 				}
-				pastedCh <- name
 				return nil
 			})
 		}
