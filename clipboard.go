@@ -138,10 +138,10 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			srcHead, _, _ := strings.Cut(response.SrcParent, "/")
 			destHead, _, _ := strings.Cut(response.DestParent, "/")
 			/* {{ if and
-					$isCut
-					(or
-						(and (eq $srcHead "pages") (ne $destHead "pages"))
-						(and (eq $srcHead "posts") (ne $destHead $posts))) }} */
+			$isCut
+			(or
+				(and (eq $srcHead "pages") (ne $destHead "pages"))
+				(and (eq $srcHead "posts") (ne $destHead $posts))) }} */
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
 					"from":          "paste",
@@ -192,6 +192,30 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			writeResponse(w, r, response)
 			return
 		}
+		if nbrew.UsersDB != nil {
+			exists, err := sq.FetchExists(r.Context(), nbrew.UsersDB, sq.Query{
+				Dialect: nbrew.UsersDialect,
+				Format: "SELECT 1" +
+					" FROM site" +
+					" JOIN site_user ON site_user.site_id = site.site_id" +
+					" JOIN users ON users.user_id = site_user.user_id" +
+					" WHERE site.site_name = {siteName}" +
+					" AND users.username = {username}",
+				Values: []any{
+					sq.StringParam("siteName", strings.TrimPrefix(response.SrcSitePrefix, "@")),
+					sq.StringParam("username", username),
+				},
+			})
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			if !exists {
+				notAuthorized(w, r)
+				return
+			}
+		}
 		response.SrcParent = path.Clean(strings.Trim(clipboard.Get("parent"), "/"))
 		if !isValidParent(response.SrcParent) {
 			response.Error = "InvalidSrcParent"
@@ -230,6 +254,8 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				response.FilesPasted = append(response.FilesPasted, name)
 			}
 		}()
+		srcHead, srcTail, _ := strings.Cut(response.SrcParent, "/")
+		destHead, destTail, _ := strings.Cut(response.DestParent, "/")
 		group, ctx := errgroup.WithContext(r.Context())
 		for _, name := range names {
 			name := name

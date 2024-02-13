@@ -549,7 +549,8 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		serverErr = encoder.Encode(map[string]any{
-			"status": "BadRequest: " + msg,
+			"error": "BadRequest",
+			"msg":   msg,
 		})
 		if serverErr != nil {
 			getLogger(r.Context()).Error(serverErr.Error())
@@ -585,7 +586,7 @@ func notAuthenticated(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": "NotAuthenticated",
+			"error": "NotAuthenticated",
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -629,7 +630,7 @@ func notAuthorized(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": "NotAuthorized",
+			"error": "NotAuthorized",
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -643,11 +644,17 @@ func notAuthorized(w http.ResponseWriter, r *http.Request) {
 			bufPool.Put(buf)
 		}
 	}()
+	var byline string
+	if r.Method != "GET" {
+		byline = "You do not have permission to view this page (try logging in to a different account)."
+	} else {
+		byline = "You do not have permission to perform that action (try using a different account)."
+	}
 	err := errorTemplate.Execute(buf, map[string]any{
 		"Referer":  getReferer(r),
 		"Title":    "403 forbidden",
 		"Headline": "403 forbidden",
-		"Byline":   "You do not have permission to view this page (try logging in to a different account).",
+		"Byline":   byline,
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
@@ -666,7 +673,7 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": "NotFound",
+			"error": "NotFound",
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -703,7 +710,8 @@ func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": "MethodNotAllowed: " + r.Method,
+			"error":  "MethodNotAllowed",
+			"method": r.Method,
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -746,7 +754,8 @@ func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": "UnsupportedMediaType " + msg,
+			"error": "UnsupportedMediaType",
+			"msg":   msg,
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -782,7 +791,8 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"status": "ServerError: " + serverErr.Error(),
+			"error": "InternalServerError",
+			"msg":   serverErr.Error(),
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
