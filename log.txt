@@ -23,6 +23,7 @@ uploadfile.go
 serve_http.go
 notebrew/main.go
 
+TODO: change all instances of TimeParam to accept in start/end times instead.
 TODO: UAT the clipboard/paste feature. Some bugs:
     - copy some html/txt files from notes and try to paste it into the posts folder. why does it fail with 500 Internal Server Error "src file is invalid or is a directory containing files that are invalid"?
     - When showing the clipboard info in file.html, how to construct the paste form accordingly such that it will paste into the page/post's output directory instead of the file itself?
