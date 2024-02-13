@@ -22,25 +22,9 @@ import (
 
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
 	isValidParent := func(parent string) bool {
-		head, tail, _ := strings.Cut(parent, "/")
+		head, _, _ := strings.Cut(parent, "/")
 		switch head {
-		case "notes", "pages", "posts":
-			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, parent))
-			if err != nil {
-				return false
-			}
-			if fileInfo.IsDir() {
-				return true
-			}
-		case "output":
-			// TODO: allow non-themes files (but that means we need to impose
-			// additional checks when pasting, such as output/* only allowing
-			// image, css, javascript or markdown files and output/posts/* only
-			// allowing image files).
-			next, _, _ := strings.Cut(tail, "/")
-			if next != "themes" {
-				return false
-			}
+		case "notes", "pages", "posts", "output":
 			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, parent))
 			if err != nil {
 				return false
@@ -256,25 +240,186 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		}()
 		srcHead, srcTail, _ := strings.Cut(response.SrcParent, "/")
 		destHead, destTail, _ := strings.Cut(response.DestParent, "/")
+		moveNotAllowed := (srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")
+		errInvalid := fmt.Errorf("src file is invalid or is a directory containing files that are invalid")
 		group, ctx := errgroup.WithContext(r.Context())
 		for _, name := range names {
 			name := name
 			group.Go(func() error {
-				err := paste(ctx, nbrew.FS, response.SrcSitePrefix, response.SrcParent, response.DestParent, response.DestSitePrefix, name, response.IsCut)
+				srcFilePath := path.Join(response.SrcSitePrefix, response.SrcParent, name)
+				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), srcFilePath)
 				if err != nil {
-					if errors.Is(err, errNotExist) {
+					if errors.Is(err, fs.ErrNotExist) {
 						notExistCh <- name
 						return nil
 					}
-					if errors.Is(err, errExist) {
-						existCh <- name
-						return nil
-					}
-					if errors.Is(err, errInvalid) {
-						invalidCh <- name
-						return nil
-					}
 					return err
+				}
+				destFilePath := path.Join(response.DestSitePrefix, response.DestParent, name)
+				_, err = fs.Stat(nbrew.FS.WithContext(ctx), destFilePath)
+				if err != nil {
+					if !errors.Is(err, fs.ErrNotExist) {
+						return err
+					}
+				} else {
+					existCh <- name
+					return nil
+				}
+				var srcOutputDir string
+				switch srcHead {
+				case "pages":
+					if !srcFileInfo.IsDir() {
+						srcOutputDir = path.Join(response.SrcSitePrefix, "output", srcTail, strings.TrimSuffix(name, ".html"))
+					} else {
+						srcOutputDir = path.Join(response.SrcSitePrefix, "output", srcTail, name)
+					}
+				case "posts":
+					if !srcFileInfo.IsDir() {
+						srcOutputDir = path.Join(response.SrcSitePrefix, "output/posts", srcTail, strings.TrimSuffix(name, ".md"))
+					} else {
+						srcOutputDir = path.Join(response.SrcSitePrefix, "output/posts", srcTail, name)
+					}
+				}
+				var destOutputDir string
+				switch destHead {
+				case "pages":
+					if !srcFileInfo.IsDir() {
+						destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, strings.TrimSuffix(name, ".html"))
+						if !strings.HasSuffix(srcFilePath, ".html") {
+							invalidCh <- name
+							return nil
+						}
+					} else {
+						destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, name)
+						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+							exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+								Dialect: remoteFS.filesDialect,
+								Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.html'",
+								Values: []any{
+									sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcFilePath)+"/%"),
+								},
+							})
+							if err != nil {
+								return err
+							}
+							if exists {
+								invalidCh <- name
+								return nil
+							}
+						} else {
+							err := fs.WalkDir(nbrew.FS.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+								if err != nil {
+									return err
+								}
+								if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".html") {
+									return errInvalid
+								}
+								return nil
+							})
+							if err != nil {
+								if errors.Is(err, errInvalid) {
+									invalidCh <- name
+									return nil
+								}
+								return err
+							}
+						}
+					}
+				case "posts":
+					if !srcFileInfo.IsDir() {
+						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
+						if !strings.HasSuffix(srcFilePath, ".md") {
+							return errInvalid
+						}
+					} else {
+						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, name)
+						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+							exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+								Dialect: remoteFS.filesDialect,
+								Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.md'",
+								Values: []any{
+									sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcFilePath)+"/%"),
+								},
+							})
+							if err != nil {
+								return err
+							}
+							if exists {
+								invalidCh <- name
+								return nil
+							}
+						} else {
+							err := fs.WalkDir(nbrew.FS.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+								if err != nil {
+									return err
+								}
+								if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".md") {
+									return errInvalid
+								}
+								return nil
+							})
+							if err != nil {
+								if errors.Is(err, errInvalid) {
+									invalidCh <- name
+									return nil
+								}
+								return err
+							}
+						}
+					}
+				case "output":
+					next, _, _ := strings.Cut(destTail, "/")
+					if srcFileInfo.IsDir() {
+						return errInvalid
+					}
+					ext := path.Ext(srcFilePath)
+					if next == "posts" {
+						switch ext {
+						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+							break
+						default:
+							invalidCh <- name
+							return nil
+						}
+					} else if next != "themes" {
+						switch ext {
+						case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".css", ".js", ".md":
+							break
+						default:
+							invalidCh <- name
+							return nil
+						}
+					}
+				}
+				if response.IsCut && !moveNotAllowed {
+					err := nbrew.FS.WithContext(ctx).Rename(srcFilePath, destFilePath)
+					if err != nil {
+						return err
+					}
+					if srcOutputDir != "" && destOutputDir != "" {
+						err := nbrew.FS.WithContext(ctx).Rename(srcOutputDir, destOutputDir)
+						if err != nil {
+							return err
+						}
+					}
+					return nil
+				}
+				if srcFileInfo.IsDir() {
+					err = copyDir(ctx, nbrew.FS, srcFilePath, destFilePath)
+					if err != nil {
+						return err
+					}
+				} else {
+					err := copyFile(ctx, nbrew.FS, srcFileInfo, srcFilePath, destFilePath)
+					if err != nil {
+						return err
+					}
+				}
+				if srcOutputDir != "" && destOutputDir != "" {
+					err := copyDir(ctx, nbrew.FS, srcOutputDir, destOutputDir)
+					if err != nil {
+						return err
+					}
 				}
 				pastedCh <- name
 				return nil
@@ -290,182 +435,6 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	default:
 		notFound(w, r)
 	}
-}
-
-var (
-	errNotExist = fmt.Errorf("src file does not exist")
-	errExist    = fmt.Errorf("dest file already exists")
-	errInvalid  = fmt.Errorf("src file is invalid or is a directory containing files that are invalid")
-)
-
-func paste(ctx context.Context, fsys FS, srcSitePrefix, srcParent, destSitePrefix, destParent, name string, isCut bool) error {
-	srcHead, srcTail, _ := strings.Cut(srcParent, "/")
-	srcFilePath := path.Join(srcSitePrefix, srcParent, name)
-	srcFileInfo, err := fs.Stat(fsys.WithContext(ctx), srcFilePath)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return errNotExist
-		}
-		return err
-	}
-	destHead, destTail, _ := strings.Cut(destParent, "/")
-	destFilePath := path.Join(destSitePrefix, destParent, name)
-	_, err = fs.Stat(fsys.WithContext(ctx), destFilePath)
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-	} else {
-		return errExist
-	}
-	var srcOutputDir string
-	switch srcHead {
-	case "pages":
-		if !srcFileInfo.IsDir() {
-			srcOutputDir = path.Join(srcSitePrefix, "output", srcTail, strings.TrimSuffix(name, ".html"))
-		} else {
-			srcOutputDir = path.Join(srcSitePrefix, "output", srcTail, name)
-		}
-	case "posts":
-		if !srcFileInfo.IsDir() {
-			srcOutputDir = path.Join(srcSitePrefix, "output/posts", srcTail, strings.TrimSuffix(name, ".md"))
-		} else {
-			srcOutputDir = path.Join(srcSitePrefix, "output/posts", srcTail, name)
-		}
-	}
-	var destOutputDir string
-	switch destHead {
-	case "pages":
-		if !srcFileInfo.IsDir() {
-			destOutputDir = path.Join(destSitePrefix, "output", destTail, strings.TrimSuffix(name, ".html"))
-			if !strings.HasSuffix(srcFilePath, ".html") {
-				return errInvalid
-			}
-		} else {
-			destOutputDir = path.Join(destSitePrefix, "output", destTail, name)
-			if remoteFS, ok := fsys.(*RemoteFS); ok {
-				exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
-					Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.html'",
-					Values: []any{
-						sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcFilePath)+"/%"),
-					},
-				})
-				if err != nil {
-					return err
-				}
-				if exists {
-					return errInvalid
-				}
-			} else {
-				err := fs.WalkDir(fsys.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
-					if err != nil {
-						return err
-					}
-					if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".html") {
-						return errInvalid
-					}
-					return nil
-				})
-				if err != nil {
-					return err
-				}
-			}
-		}
-	case "posts":
-		if !srcFileInfo.IsDir() {
-			destOutputDir = path.Join(destSitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
-			if !strings.HasSuffix(srcFilePath, ".md") {
-				return errInvalid
-			}
-		} else {
-			destOutputDir = path.Join(destSitePrefix, "output/posts", destTail, name)
-			if remoteFS, ok := fsys.(*RemoteFS); ok {
-				exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
-					Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.md'",
-					Values: []any{
-						sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcFilePath)+"/%"),
-					},
-				})
-				if err != nil {
-					return err
-				}
-				if exists {
-					return errInvalid
-				}
-			} else {
-				err := fs.WalkDir(fsys.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
-					if err != nil {
-						return err
-					}
-					if !dirEntry.IsDir() && !strings.HasSuffix(filePath, ".md") {
-						return errInvalid
-					}
-					return nil
-				})
-				if err != nil {
-					if errors.Is(err, errInvalid) {
-						return errInvalid
-					}
-					return err
-				}
-			}
-		}
-	case "output":
-		next, _, _ := strings.Cut(destTail, "/")
-		if srcFileInfo.IsDir() {
-			return errInvalid
-		}
-		ext := path.Ext(srcFilePath)
-		if next == "posts" {
-			switch ext {
-			case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-				break
-			default:
-				return errInvalid
-			}
-		} else if next != "themes" {
-			switch ext {
-			case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".css", ".js", ".md":
-				break
-			default:
-				return errInvalid
-			}
-		}
-	}
-	moveNotAllowed := (srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")
-	if isCut && !moveNotAllowed {
-		err := fsys.WithContext(ctx).Rename(srcFilePath, destFilePath)
-		if err != nil {
-			return err
-		}
-		if srcOutputDir != "" && destOutputDir != "" {
-			err := fsys.WithContext(ctx).Rename(srcOutputDir, destOutputDir)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if srcFileInfo.IsDir() {
-		err = copyDir(ctx, fsys, srcFilePath, destFilePath)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := copyFile(ctx, fsys, srcFileInfo, srcFilePath, destFilePath)
-		if err != nil {
-			return err
-		}
-	}
-	if srcOutputDir != "" && destOutputDir != "" {
-		err := copyDir(ctx, fsys, srcOutputDir, destOutputDir)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath, destFilePath string) error {
@@ -579,17 +548,16 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 			}
 			ext := path.Ext(srcFile.FilePath)
 			fileType := fileTypes[ext]
-			if !fileType.IsObject {
-				continue
+			if fileType.IsObject {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					err := remoteFS.storage.Copy(ctx, hex.EncodeToString(srcFile.FileID[:])+ext, hex.EncodeToString(destFileID[:])+ext)
+					if err != nil {
+						getLogger(ctx).Error(err.Error())
+					}
+				}()
 			}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				err := remoteFS.storage.Copy(ctx, hex.EncodeToString(srcFile.FileID[:])+ext, hex.EncodeToString(destFileID[:])+ext)
-				if err != nil {
-					getLogger(ctx).Error(err.Error())
-				}
-			}()
 		}
 		err = cursor.Close()
 		if err != nil {
