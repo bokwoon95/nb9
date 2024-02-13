@@ -13,6 +13,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bokwoon95/nb9/sq"
@@ -446,7 +447,16 @@ func paste(ctx context.Context, fsys FS, srcSitePrefix, srcParent, destSitePrefi
 			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
-					" SELECT {destFileID}, (SELECT file_id FROM files WHERE file_path = {destParent}), {destFilePath}, {modTime}, {modTime}, is_dir, size, text, data" +
+					" SELECT" +
+					" {destFileID}" +
+					", (SELECT file_id FROM files WHERE file_path = {destParent})" +
+					", {destFilePath}" +
+					", {modTime}" +
+					", {modTime}" +
+					", is_dir" +
+					", size" +
+					", text" +
+					", data" +
 					" FROM files" +
 					" WHERE file_path = {srcFilePath}",
 				Values: []any{
@@ -511,8 +521,158 @@ func paste(ctx context.Context, fsys FS, srcSitePrefix, srcParent, destSitePrefi
 			// write: destFileID, parentID, parentPath, srcFilePath
 			// destFilePath = concat(destParent, substring(srcFilePath, length(srcParent)+1))
 			// parent_id = coalesce(items.parent_id, (SELECT file_id FROM files WHERE file_path = items.parent_path))
-			//
-			_ = remoteFS
+			cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
+				Dialect: remoteFS.filesDialect,
+				Format:  "SELECT * FROM files WHERE file_path = {srcFilePath} OR file_path LIKE {pattern} ORDER BY file_path",
+				Values: []any{
+					sq.StringParam("srcFilePath", srcFilePath),
+					sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcFilePath)+"/%"),
+				},
+			}, func(row *sq.Row) (result struct {
+				FileID   [16]byte
+				FilePath string
+				IsDir    bool
+			}) {
+				row.UUID(&result.FileID, "file_id")
+				result.FilePath = row.String("file_path")
+				result.IsDir = row.Bool("is_dir")
+				return result
+			})
+			if err != nil {
+				return err
+			}
+			defer cursor.Close()
+			var wg sync.WaitGroup
+			var items [][4]string // destFileID, parentID, parent, srcFilePath
+			fileIDs := make(map[string][16]byte)
+			for cursor.Next() {
+				result, err := cursor.Result()
+				if err != nil {
+					return nil
+				}
+				fileID := NewID()
+				filePath := path.Join(destSitePrefix, destParent) + strings.TrimPrefix(result.FilePath, path.Join(srcSitePrefix, srcParent))
+				fileIDs[filePath] = fileID
+				item := [4]string{
+					0: encodeUUID(fileID),
+					3: result.FilePath,
+				}
+				parentPath := path.Dir(filePath)
+				if parentID, ok := fileIDs[parentPath]; ok {
+					item[1] = encodeUUID(parentID)
+				} else {
+					item[2] = parentPath
+				}
+				items = append(items, item)
+				if !result.IsDir {
+					ext := path.Ext(result.FilePath)
+					fileType := fileTypes[ext]
+					if fileType.IsObject {
+						wg.Add(1)
+						go func() {
+							defer wg.Done()
+							err := remoteFS.storage.Copy(ctx, hex.EncodeToString(result.FileID[:])+ext, hex.EncodeToString(fileID[:])+ext)
+							if err != nil {
+								getLogger(ctx).Error(err.Error())
+							}
+						}()
+					}
+				}
+			}
+			err = cursor.Close()
+			if err != nil {
+				return err
+			}
+			var b strings.Builder
+			err = json.NewEncoder(&b).Encode(items)
+			if err != nil {
+				return err
+			}
+			switch remoteFS.filesDialect {
+			case "sqlite":
+				_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
+					Dialect: remoteFS.filesDialect,
+					Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
+						" SELECT" +
+						" unhex(items->>0, '-')" +
+						", CASE WHEN items->>1 <> '' THEN unhex(items->>1, '-') ELSE (SELECT file_id FROM files WHERE file_path = items->>2) END" +
+						", concat({destParent}, substring(files.file_path, {start}))" +
+						", {modTime}" +
+						", {modTime}" +
+						", files.size" +
+						", files.text" +
+						", files.data" +
+						" FROM files" +
+						" JOIN json_each({items}) AS items ON items->>3 = files.file_path",
+					Values: []any{
+						sq.StringParam("destParent", path.Join(destSitePrefix, destParent)),
+						sq.IntParam("start", len(path.Join(srcSitePrefix, srcParent))+1),
+						sq.TimeParam("modTime", time.Now().UTC()),
+						sq.StringParam("items", b.String()),
+					},
+				})
+				if err != nil {
+					return err
+				}
+			case "postgres":
+				_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
+					Dialect: remoteFS.filesDialect,
+					Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
+						" SELECT" +
+						" (items->>0)::UUID" +
+						", CASE WHEN items->>1 <> '' THEN (items->>1)::UUID ELSE (SELECT file_id FROM files WHERE file_path = items->>2) END" +
+						", concat({destParent}, substring(files.file_path, {start}))" +
+						", {modTime}" +
+						", {modTime}" +
+						", files.size" +
+						", files.text" +
+						", files.data" +
+						" FROM files" +
+						" JOIN json_array_elements({items}) AS items ON items->>3 = files.file_path",
+					Values: []any{
+						sq.StringParam("destParent", path.Join(destSitePrefix, destParent)),
+						sq.IntParam("start", len(path.Join(srcSitePrefix, srcParent))+1),
+						sq.TimeParam("modTime", time.Now().UTC()),
+						sq.StringParam("items", b.String()),
+					},
+				})
+				if err != nil {
+					return err
+				}
+			case "mysql":
+				_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
+					Dialect: remoteFS.filesDialect,
+					Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
+						" SELECT" +
+						" uuid_to_bin(items.file_id)" +
+						", CASE WHEN items.parent_id <> '' THEN uuid_to_bin(items.parent_id) ELSE (SELECT file_id FROM files WHERE file_path = items.parent_path) END" +
+						", concat({destParent}, substring(files.file_path, {start}))" +
+						", {modTime}" +
+						", {modTime}" +
+						", files.size" +
+						", files.text" +
+						", files.data" +
+						" FROM files" +
+						" JOIN json_table({items}, '$[*]' COLUMNS (" +
+						"file_id VARCHAR(36) PATH '$[0]'" +
+						", parent_id VARCHAR(36) PATH '$[1]'" +
+						", parent_path VARCHAR(500) PATH '$[2]'" +
+						", file_path VARCHAR(500) PATH '$[3]'" +
+						")) AS items ON items.file_path = files.file_path",
+					Values: []any{
+						sq.StringParam("destParent", path.Join(destSitePrefix, destParent)),
+						sq.IntParam("start", len(path.Join(srcSitePrefix, srcParent))+1),
+						sq.TimeParam("modTime", time.Now().UTC()),
+						sq.StringParam("items", b.String()),
+					},
+				})
+				if err != nil {
+					return err
+				}
+			default:
+				return fmt.Errorf("unsupported dialect %q", remoteFS.filesDialect)
+			}
+			wg.Wait()
 		} else {
 			subgroupA, subctxA := errgroup.WithContext(ctx)
 			err := fs.WalkDir(fsys.WithContext(subctxA), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
@@ -560,6 +720,7 @@ func paste(ctx context.Context, fsys FS, srcSitePrefix, srcParent, destSitePrefi
 		}
 	}
 	if srcOutputDir != "" && destOutputDir != "" {
+		// TODO: do the same above for remoteFS below here.
 		subgroupB, subctxB := errgroup.WithContext(ctx)
 		err := fs.WalkDir(fsys.WithContext(subctxB), srcOutputDir, func(filePath string, dirEntry fs.DirEntry, err error) error {
 			if err != nil {
@@ -770,5 +931,16 @@ func remotePaste_Old(ctx context.Context, remoteFS *RemoteFS, isCut bool, srcSit
 	return nil
 }
 
-func uuidToString() {
+func encodeUUID(id [16]byte) string {
+	var b [32 + 4]byte
+	hex.Encode(b[:], id[:4])
+	b[8] = '-'
+	hex.Encode(b[9:13], id[4:6])
+	b[13] = '-'
+	hex.Encode(b[14:18], id[6:8])
+	b[18] = '-'
+	hex.Encode(b[19:23], id[8:10])
+	b[23] = '-'
+	hex.Encode(b[24:], id[10:])
+	return string(b[:])
 }
