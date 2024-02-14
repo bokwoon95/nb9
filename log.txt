@@ -75,7 +75,7 @@ files/subscriptions.opml -> view the subscriptions, Google Reader view
 files/subscriptions.opml/create/ -> add a new subscription
 files/opml/ -> this is the trickiest part. this is where the opml rss feeds are stored site-wide, shared between all subscription files. What's the eviction policy? How do we efficiently join? If we can't efficiently join to display a Google Reader view to the user, should we drop the "backed by a single OPML file" idea and resort to database tables instead? Then we can offer to import/export the data as a opml files. But that means a user not using UsersDB will not be able to use notebrew locally purely as an rss feed reader.
 
-NOTE: `notebrew regenerate` will regenerate all sites. `notebrew regenerate -site ''` will only regenerate the base site. This is great if you change the ImgDomain and need to regenerate all pages in all sites to keep image links up-to-date.
+NOTE: `notebrew regenerate` will regenerate all sites. `notebrew regenerate -site ''` will only regenerate the base site. This is great if you change the ImgDomain and need to regenerate all pages in all sites to keep image links up-to-date. notebrew regenerate will rename any posts it finds without a timestamp prefix to include the timestamp prefix (if creation_time can be sourced).
 
 https://www.cs.umd.edu/~ben/goldenrules.html
 - Every user action should have feedback. Common user actions can have modest feedback, major user actions should have big feedback.
