@@ -23,8 +23,6 @@ uploadfile.go
 serve_http.go
 notebrew/main.go
 
-TODO: change all instances of TimeParam to accept in start/end times instead.
-TODO: change clipboard such that it takes in srcSitePrefix, srcParent, destSitePrefix, destParent and name entirely through parameters (not URL parameters). This will likely involve rethinking how authorization is handled in serve_http.go, because we want users to have unconditional access to files/clipboard/* and validate their access to the sitePrefixes directly inside the clipboard handler itself.
 TODO: UAT the clipboard/paste feature. Some bugs:
     filepath: posts/1jvxgb4-red-fish-blue-fish.md
     outputDir: $sitePrefix/output/posts/1jvxgb4-red-fish-blue-fish

@@ -102,7 +102,7 @@
   </form>
   {{- else if eq (head $.FilePath) "posts" }}
   <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
-    <input type='hidden' name='parent' value='{{ $.FilePath }}'>
+    <input type='hidden' name='parent' value='/{{ join "files" $.SitePrefix "output" (trimSuffix $.FilePath (ext $.FilePath)) }}/'>
     <button type='submit' class='button ba br2 pv2 ph2'>paste</button>
   </form>
   {{- end }}
