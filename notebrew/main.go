@@ -127,7 +127,7 @@ func main() {
 			})),
 		}
 
-		// Determine the domain.
+		// CMS domain.
 		b, err := os.ReadFile(filepath.Join(configDir, "cmsdomain.txt"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("%s: %w", filepath.Join(configDir, "cmsdomain.txt"), err)
@@ -161,7 +161,7 @@ func main() {
 			}
 		}
 
-		// Determine the content domain.
+		// Content domain.
 		b, err = os.ReadFile(filepath.Join(configDir, "contentdomain.txt"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("%s: %w", filepath.Join(configDir, "contentdomain.txt"), err)
@@ -169,6 +169,16 @@ func main() {
 		nbrew.ContentDomain = string(bytes.TrimSpace(b))
 		if nbrew.ContentDomain == "" {
 			nbrew.ContentDomain = nbrew.CMSDomain
+		}
+
+		// Img domain.
+		b, err = os.ReadFile(filepath.Join(configDir, "imgdomain.txt"))
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("%s: %w", filepath.Join(configDir, "imgdomain.txt"), err)
+			}
+		} else {
+			nbrew.ImgDomain = string(bytes.TrimSpace(b))
 		}
 
 		b, err = os.ReadFile(filepath.Join(configDir, "users.json"))
@@ -804,6 +814,8 @@ func main() {
 			if server.Addr == "localhost" || strings.HasPrefix(server.Addr, "localhost:") {
 				fmt.Printf(startmsg, "http://"+server.Addr+"/files/")
 				open("http://" + server.Addr + "/files/")
+			} else {
+				fmt.Printf(startmsg, server.Addr)
 			}
 		}
 		<-wait

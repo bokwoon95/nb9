@@ -329,7 +329,8 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					if !srcFileInfo.IsDir() {
 						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
 						if !strings.HasSuffix(srcFilePath, ".md") {
-							return errInvalid
+							invalidCh <- name
+							return nil
 						}
 					} else {
 						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, name)
@@ -368,11 +369,12 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						}
 					}
 				case "output":
-					next, _, _ := strings.Cut(destTail, "/")
 					if srcFileInfo.IsDir() {
-						return errInvalid
+						invalidCh <- name
+						return nil
 					}
 					ext := path.Ext(srcFilePath)
+					next, _, _ := strings.Cut(destTail, "/")
 					if next == "posts" {
 						switch ext {
 						case ".jpeg", ".jpg", ".png", ".webp", ".gif":

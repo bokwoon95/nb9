@@ -24,7 +24,6 @@ serve_http.go
 notebrew/main.go
 
 TODO: UAT the clipboard/paste feature. Some bugs:
-    - copy some html/txt files from notes and try to paste it into the posts folder. why does it fail with 500 Internal Server Error "src file is invalid or is a directory containing files that are invalid"?
     - When showing the clipboard info in file.html, how to construct the paste form accordingly such that it will paste into the page/post's output directory instead of the file itself?
     - post markdown files don't just end with .md, they also start with a timestamp prefix. What happens if you paste a file with the same timestamp prefix? It's no longer globally unique. Atom IDs have to be globally unique. How? Do we regenerate the timestamp prefix to match the new creation_time of the duplicated file? We can do it for a single copyFile no problem, the issue is what happens if we copyDir in a whole batch using remoteFS? That's potentially multiple filenames we have to generate timestamp prefixes for, how to do it in one swoop? Don't think it's possible. We may have to forbid copying posts into the posts directory.
 TODO: rework listDirectory such that fromTime is response.FromTime and always pulls from the fromtime query param instead of the from query param (same for beforeTime). Then from is always used as the tiebreaker so that even if there are millions of files with the same mod_time or creation_time, we can still paginate them chunk by chunk using the name as the tiebreaker.
