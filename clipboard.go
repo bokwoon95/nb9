@@ -591,6 +591,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 		switch remoteFS.filesDialect {
 		case "sqlite":
 			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
+				Debug:   true,
 				Dialect: remoteFS.filesDialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 					" SELECT" +

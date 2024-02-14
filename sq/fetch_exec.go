@@ -114,37 +114,9 @@ func FetchCursor[T any](ctx context.Context, db DB, query Query, rowmapper func(
 	if err != nil {
 		return nil, err
 	}
-
 	if query.Debug {
-		var b strings.Builder
-		b.Grow(buf.Len() * 3)
-		b.Write(buf.Bytes())
-		b.WriteString(";")
-		str, _ := Sprintf(query.Dialect, b.String(), *args)
-		for i, arg := range *args {
-			if i == 0 {
-				b.WriteString(" [")
-			} else {
-				b.WriteString(", ")
-			}
-			if namedArg, ok := arg.(sql.NamedArg); ok {
-				b.WriteString(namedArg.Name + "=")
-				arg = namedArg.Value
-			}
-			switch arg := arg.(type) {
-			case string:
-				b.WriteString(arg)
-			default:
-				b.WriteString(fmt.Sprintf("%+v", arg))
-			}
-			if i == len(*args)-1 {
-				b.WriteString("]")
-			}
-		}
-		b.WriteString("\n" + str + "\n")
-		os.Stderr.WriteString(b.String())
+		logQuery(query.Dialect, buf.String(), args)
 	}
-
 	cursor.row.sqlRows, err = db.QueryContext(ctx, buf.String(), *args...)
 	if err != nil {
 		return nil, err
@@ -250,6 +222,9 @@ func Exec(ctx context.Context, db DB, query Query) (Result, error) {
 	if err != nil {
 		return result, err
 	}
+	if query.Debug {
+		logQuery(query.Dialect, buf.String(), args)
+	}
 	sqlResult, err := db.ExecContext(ctx, buf.String(), *args...)
 	if err != nil {
 		return result, err
@@ -269,10 +244,12 @@ func Exec(ctx context.Context, db DB, query Query) (Result, error) {
 
 type PreparedFetch[T any] struct {
 	dialect   string
+	query     string
 	args      *[]any
 	params    map[string][]int
 	rowmapper func(*Row) T
 	stmt      *sql.Stmt
+	debug     bool
 }
 
 func PrepareFetch[T any](ctx context.Context, db DB, query Query, rowmapper func(*Row) T) (preparedFetch *PreparedFetch[T], err error) {
@@ -281,6 +258,7 @@ func PrepareFetch[T any](ctx context.Context, db DB, query Query, rowmapper func
 		args:      argsPool.Get().(*[]any),
 		params:    paramsPool.Get().(map[string][]int),
 		rowmapper: rowmapper,
+		debug:     query.Debug,
 	}
 	*preparedFetch.args = (*preparedFetch.args)[:0]
 	clear(preparedFetch.params)
@@ -338,7 +316,11 @@ func PrepareFetch[T any](ctx context.Context, db DB, query Query, rowmapper func
 	if err != nil {
 		return nil, err
 	}
-	preparedFetch.stmt, err = db.PrepareContext(ctx, buf.String())
+	preparedFetch.query = buf.String()
+	if preparedFetch.debug {
+		logQuery(preparedFetch.dialect, preparedFetch.query, preparedFetch.args)
+	}
+	preparedFetch.stmt, err = db.PrepareContext(ctx, preparedFetch.query)
 	if err != nil {
 		return nil, err
 	}
@@ -391,6 +373,9 @@ func (preparedFetch *PreparedFetch[T]) FetchCursor(ctx context.Context, params .
 		return nil, err
 	}
 
+	if preparedFetch.debug {
+		logQuery(preparedFetch.dialect, preparedFetch.query, newArgs)
+	}
 	cursor.row.sqlRows, err = preparedFetch.stmt.QueryContext(ctx, *newArgs...)
 	if err != nil {
 		return nil, err
@@ -437,9 +422,11 @@ func (preparedFetch *PreparedFetch[T]) FetchAll(ctx context.Context, params ...P
 
 type PreparedExec struct {
 	dialect string
+	query   string
 	oldArgs *[]any
 	params  map[string][]int
 	stmt    *sql.Stmt
+	debug   bool
 }
 
 func PrepareExec(ctx context.Context, db DB, query Query) (*PreparedExec, error) {
@@ -447,6 +434,7 @@ func PrepareExec(ctx context.Context, db DB, query Query) (*PreparedExec, error)
 		dialect: query.Dialect,
 		oldArgs: argsPool.Get().(*[]any),
 		params:  paramsPool.Get().(map[string][]int),
+		debug:   query.Debug,
 	}
 	*preparedExec.oldArgs = (*preparedExec.oldArgs)[:0]
 	clear(preparedExec.params)
@@ -457,7 +445,11 @@ func PrepareExec(ctx context.Context, db DB, query Query) (*PreparedExec, error)
 	if err != nil {
 		return nil, err
 	}
-	preparedExec.stmt, err = db.PrepareContext(ctx, buf.String())
+	preparedExec.query = buf.String()
+	if preparedExec.debug {
+		logQuery(preparedExec.dialect, preparedExec.query, preparedExec.oldArgs)
+	}
+	preparedExec.stmt, err = db.PrepareContext(ctx, preparedExec.query)
 	if err != nil {
 		return nil, err
 	}
@@ -473,6 +465,9 @@ func (preparedExec *PreparedExec) Exec(ctx context.Context, params ...Parameter)
 	err := substituteParams(preparedExec.dialect, preparedExec.oldArgs, newArgs, preparedExec.params, params)
 	if err != nil {
 		return result, err
+	}
+	if preparedExec.debug {
+		logQuery(preparedExec.dialect, preparedExec.query, newArgs)
 	}
 	sqlResult, err := preparedExec.stmt.ExecContext(ctx, *newArgs...)
 	if err != nil {
@@ -524,6 +519,9 @@ func FetchExists(ctx context.Context, db DB, query Query) (exists bool, err erro
 		return false, err
 	}
 	buf.WriteString(")")
+	if query.Debug {
+		logQuery(query.Dialect, buf.String(), args)
+	}
 	sqlRows, err := db.QueryContext(ctx, buf.String(), *args...)
 	if !sqlRows.Next() {
 		return false, sql.ErrNoRows
@@ -572,4 +570,34 @@ func substituteParams(dialect string, oldArgs, newArgs *[]any, paramIndexes map[
 		}
 	}
 	return nil
+}
+
+func logQuery(dialect, query string, args *[]any) {
+	var b strings.Builder
+	b.Grow(len(query) * 3)
+	b.WriteString(query)
+	b.WriteString(";")
+	str, _ := Sprintf(dialect, b.String(), *args)
+	for i, arg := range *args {
+		if i == 0 {
+			b.WriteString(" [")
+		} else {
+			b.WriteString(", ")
+		}
+		if namedArg, ok := arg.(sql.NamedArg); ok {
+			b.WriteString(namedArg.Name + "=")
+			arg = namedArg.Value
+		}
+		switch arg := arg.(type) {
+		case string:
+			b.WriteString(arg)
+		default:
+			b.WriteString(fmt.Sprintf("%+v", arg))
+		}
+		if i == len(*args)-1 {
+			b.WriteString("]")
+		}
+	}
+	b.WriteString("\n" + str + "\n")
+	os.Stderr.WriteString(b.String())
 }
