@@ -52,7 +52,6 @@
   {{- $error := index $.PostRedirectGet "error" }}
   {{- if $error }}
     <div>{{ $error }}</div>
-    {{- end }}
   {{- else }}
     {{- $srcSitePrefix := index $.PostRedirectGet "srcSitePrefix" }}
     {{- $srcParent := index $.PostRedirectGet "srcParent" }}
