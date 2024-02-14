@@ -705,7 +705,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 		if err != nil {
 			return err
 		}
-		relPath := strings.TrimPrefix(strings.TrimSuffix(filePath, srcDirPath), "/")
+		relPath := strings.TrimPrefix(strings.TrimPrefix(filePath, srcDirPath), "/")
 		if dirEntry.IsDir() {
 			err := fsys.WithContext(groupctx).MkdirAll(path.Join(destDirPath, relPath), 0755)
 			if err != nil {
