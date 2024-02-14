@@ -136,6 +136,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// If the users database is present, check if the user is authorized to
 		// access the files for this site.
 		var username string
+		var isAuthorizedForSite bool
 		if nbrew.UsersDB != nil {
 			authenticationTokenHash := getAuthenticationTokenHash(r)
 			if authenticationTokenHash == nil {
@@ -153,20 +154,21 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					" JOIN users ON users.user_id = authentication.user_id" +
 					" WHERE authentication.authentication_token_hash = {authenticationTokenHash}",
 				Values: []any{
-					sq.StringParam("siteName", strings.TrimPrefix(sitePrefix, "@")),
 					sq.BytesParam("authenticationTokenHash", authenticationTokenHash),
 				},
 			}, func(row *sq.Row) (result struct {
-				Username     string
-				IsAuthorized bool
+				Username            string
+				IsAuthorizedForSite bool
 			}) {
 				result.Username = row.String("users.username")
-				result.IsAuthorized = row.Bool("EXISTS (SELECT 1" +
-					" FROM site" +
-					" JOIN site_user ON site_user.site_id = site.site_id" +
-					" WHERE site.site_name = {siteName}" +
-					" AND site_user.user_id = users.user_id" +
-					")")
+				result.IsAuthorizedForSite = row.Bool("EXISTS (SELECT 1"+
+					" FROM site"+
+					" JOIN site_user ON site_user.site_id = site.site_id"+
+					" WHERE site.site_name = {siteName}"+
+					" AND site_user.user_id = users.user_id"+
+					")",
+					sq.StringParam("siteName", strings.TrimPrefix(sitePrefix, "@")),
+				)
 				return result
 			})
 			if err != nil {
@@ -189,58 +191,79 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			username = result.Username
+			isAuthorizedForSite = result.IsAuthorizedForSite
 			logger := logger.With(slog.String("username", username))
 			r = r.WithContext(context.WithValue(r.Context(), loggerKey, logger))
-			if !result.IsAuthorized {
-				if sitePrefix != "" {
-					notAuthorized(w, r)
-					return
-				}
-				// If the current sitePrefix is empty, the user needs access to
-				// the following file paths unconditionally:
-				//
-				// 1. <empty> (needed to switch between their sites)
-				//
-				// 2. createsite (needed to create a new site)
-				//
-				// 3. deletesite (needed to delete their sites)
-				//
-				// If not any of the three, then notAuthorized.
-				if urlPath != "" && urlPath != "createsite" && urlPath != "deletesite" {
-					notAuthorized(w, r)
-					return
-				}
-			}
 		}
 
-		if head == "" || head == "notes" || head == "pages" || head == "posts" || head == "output" {
+		switch head {
+		case "", "notes", "pages", "posts", "output":
+			isRoot := sitePrefix == "" && urlPath == ""
+			if !isAuthorizedForSite && !isRoot {
+				notAuthorized(w, r)
+				return
+			}
 			nbrew.files(w, r, username, sitePrefix, urlPath)
 			return
-		}
-
-		if head == "clipboard" {
-			nbrew.clipboard(w, r, username, sitePrefix, tail)
+		case "clipboard":
+			nbrew.clipboard(w, r, username, tail)
 			return
 		}
 
 		switch urlPath {
 		case "regenerate":
+			if !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
 			nbrew.regenerate(w, r, sitePrefix)
 		case "regeneratelist":
+			if !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
 			nbrew.regeneratelist(w, r, sitePrefix)
 		case "createsite":
+			if sitePrefix != "" {
+				notFound(w, r)
+				return
+			}
 			nbrew.createsite(w, r, username)
 		case "deletesite":
+			if sitePrefix != "" {
+				notFound(w, r)
+				return
+			}
 			nbrew.deletesite(w, r, username)
 		case "createfolder":
+			if !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
 			nbrew.createfolder(w, r, username, sitePrefix)
 		case "createfile":
+			if !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
 			nbrew.createfile(w, r, username, sitePrefix)
 		case "delete":
+			if !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
 			nbrew.delete(w, r, username, sitePrefix)
 		case "search":
+			if !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
 			nbrew.search(w, r, username, sitePrefix)
 		case "rename":
+			if !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
 		default:
 			notFound(w, r)
 		}

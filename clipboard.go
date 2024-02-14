@@ -20,8 +20,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
-	isValidParent := func(parent string) bool {
+func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, action string) {
+	isValidParent := func(sitePrefix, parent string) bool {
 		head, _, _ := strings.Cut(parent, "/")
 		switch head {
 		case "notes", "pages", "posts", "output":
@@ -47,7 +47,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	}
 	referer := r.Referer()
 	if referer == "" {
-		referer = "/" + path.Join("files", sitePrefix) + "/"
+		referer = "/files/"
 	}
 	switch action {
 	case "cut", "copy":

@@ -118,12 +118,13 @@
     <a href='/{{ join "files" ($clipboard.Get "sitePrefix") ($clipboard.Get "parent") }}/'>{{ len (index $clipboard "name") }} file{{ if ne (len (index $clipboard "name")) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := index $clipboard "name" }}{{ if gt $i 0 }}, {{ end }}{{ $name }}{{ end }}
   </div>
   {{- if not $readOnly }}
-  <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
-    <input type='hidden' name='parent' value='{{ $.FilePath }}'>
+  <form method='post' action='/files/clipboard/paste/' class='ml2'>
+    <input type='hidden' name='srcSitePrefix' value='{{ $.SitePrefix }}'>
+    <input type='hidden' name='srcParent' value='{{ $.FilePath }}'>
     <button type='submit' class='button ba br2 pv2 ph2'>paste</button>
   </form>
   {{- end }}
-  <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/clear" }}/' class='ml2'>
+  <form method='post' action='/files/clipboard/clear/' class='ml2'>
     <button type='submit' class='button-danger ba br2 b--dark-red pv2 ph2'>clear</button>
   </form>
 </div>
