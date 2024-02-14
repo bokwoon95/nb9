@@ -26,8 +26,6 @@ TODO: sq: change row.Bytes() to accept an optional preallocatable byte slice, ch
 TODO: create a mandatory file themes/404.html and register it everywhere where it is relevant (do a grep postlist.html).
 TODO: rework listDirectory such that fromTime is response.FromTime and always pulls from the fromtime query param instead of the from query param (same for beforeTime). Then from is always used as the tiebreaker so that even if there are millions of files with the same mod_time or creation_time, we can still paginate them chunk by chunk using the name as the tiebreaker.
 TODO: BUG: when creating a post called 情非得已.md with lyrics, the corresponding post is not generated. Why?
-TODO: modify search.go such that it always sorts by descending creation_time. We forego rank entirely because a higher bm25/tf/idf score doesn't really translate to higher relevance from a user's perspective.
-    - Also add the ability to filter by extension. This won't be possible to index, but it will allow users to stop seeing irrelevant junk if they're just interested in finding a specific variable name in a JavaScript file.
 TODO: structured template error
     We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
     ParseTemplate() error => parseTemplate() (numPrefixLines int, err error)

@@ -27,6 +27,7 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 		SitePrefix  string     `json:"sitePrefix"`
 		Parent      string     `json:"parent,omitempty"`
 		Text        string     `json:"text,omitempty"`
+		Exts        []string   `json:"exts,omitempty"`
 		Matches     []Match    `json:"matches,omitempty"`
 	}
 
@@ -86,6 +87,10 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		referer := getReferer(r)
+		extMap := make(map[string]struct{})
+		for _, ext := range response.Exts {
+			extMap[ext] = struct{}{}
+		}
 		funcMap := map[string]any{
 			"join":       path.Join,
 			"hasPrefix":  strings.HasPrefix,
@@ -94,6 +99,10 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 			"stylesCSS":  func() template.CSS { return template.CSS(stylesCSS) },
 			"baselineJS": func() template.JS { return template.JS(baselineJS) },
 			"referer":    func() string { return referer },
+			"hasExt": func(ext string) bool {
+				_, ok := extMap[ext]
+				return ok
+			},
 		}
 		tmpl, err := template.New("search.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/search.html")
 		if err != nil {
@@ -111,6 +120,14 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 	response.SitePrefix = sitePrefix
 	response.Parent = path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
 	response.Text = strings.TrimSpace(r.Form.Get("text"))
+	if r.Form.Has("ext") {
+		for _, ext := range r.Form["ext"] {
+			switch ext {
+			case ".html", ".css", ".js", ".md", ".txt":
+				response.Exts = append(response.Exts, ext)
+			}
+		}
+	}
 	if !isValidParent(response.Parent) {
 		response.Parent = "."
 	}
@@ -131,17 +148,33 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 		} else {
 			parentFilter = sq.Expr("file_path LIKE {} ESCAPE '\\'", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(parent)+"/%")
 		}
+		extensionFilter := sq.Expr("1 = 1")
+		if len(response.Exts) > 0 {
+			var b strings.Builder
+			b.WriteString("(")
+			for i, ext := range response.Exts {
+				if i > 0 {
+					b.WriteString(" OR ")
+				}
+				b.WriteString("file_path LIKE '%" + ext + "'")
+			}
+			b.WriteString(")")
+			extensionFilter = sq.Expr(b.String())
+		}
 		response.Matches, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
+			Debug:   true,
 			Dialect: remoteFS.filesDialect,
 			Format: "SELECT {*}" +
 				" FROM files" +
 				" JOIN files_fts5 ON files_fts5.rowid = files.rowid" +
 				" WHERE {parentFilter}" +
 				" AND files_fts5.text MATCH {text}" +
-				" ORDER BY files_fts5.rank",
+				" AND {extensionFilter}" +
+				" ORDER BY files_fts5.rank, files.creation_time DESC",
 			Values: []any{
 				sq.Param("parentFilter", parentFilter),
 				sq.StringParam("text", `"`+strings.ReplaceAll(response.Text, `"`, `""`)+`"`),
+				sq.Param("extensionFilter", extensionFilter),
 			},
 		}, func(row *sq.Row) Match {
 			match := Match{
