@@ -648,7 +648,7 @@ func notAuthorized(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	var byline string
-	if r.Method != "GET" {
+	if r.Method == "GET" {
 		byline = "You do not have permission to view this page (try logging in to a different account)."
 	} else {
 		byline = "You do not have permission to perform that action (try using a different account)."
