@@ -94,7 +94,7 @@
       {{- if $filesExist }}
       <br>
       <div>
-        The following files already exist:
+        The following files were not pasted because a destination file already exists:
         <ul class='list-style-disc ph3'>
           {{- range $name := $filesExist }}
           <li><a href='/{{ join "files" $srcSitePrefix $srcParent $name }}{{ if not (ext $name) }}/{{ end }}'>{{ $name }}</a></li>
@@ -106,11 +106,11 @@
       <br>
       <div>
         {{- if eq $destHead "pages" }}
-        The following files are non-html files or contain non-html files:
+        The following files were not pasted because they are non-html files or contain non-html files:
         {{- else if eq $destHead "posts" }}
-        The following files are non-markdown files or contain non-markdown files:
+        The following files were not pasted because they are non-markdown files or contain non-markdown files:
         {{- else }}
-        The following files are invalid or contain invalid files:
+        The following files were not pasted because they are invalid or contain invalid files:
         {{- end }}
         <ul class='list-style-disc ph3'>
           {{- range $name := $filesInvalid }}
