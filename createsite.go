@@ -300,103 +300,103 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		g, ctx := errgroup.WithContext(r.Context())
-		g.Go(func() error {
+		group, groupctx := errgroup.WithContext(r.Context())
+		group.Go(func() error {
 			b, err := fs.ReadFile(RuntimeFS, "embed/index.html")
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
-			writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "pages/index.html"), 0644)
+			writer, err := nbrew.FS.WithContext(groupctx).OpenWriter(path.Join(sitePrefix, "pages/index.html"), 0644)
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			defer writer.Close()
 			_, err = writer.Write(b)
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			err = writer.Close()
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
-			err = siteGen.GeneratePage(ctx, "pages/index.html", string(b))
+			err = siteGen.GeneratePage(groupctx, "pages/index.html", string(b))
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			return nil
 		})
-		g.Go(func() error {
+		group.Go(func() error {
 			b, err := fs.ReadFile(RuntimeFS, "embed/post.html")
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
-			writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "output/themes/post.html"), 0644)
+			writer, err := nbrew.FS.WithContext(groupctx).OpenWriter(path.Join(sitePrefix, "output/themes/post.html"), 0644)
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			defer writer.Close()
 			_, err = writer.Write(b)
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			err = writer.Close()
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			return nil
 		})
-		g.Go(func() error {
+		group.Go(func() error {
 			b, err := fs.ReadFile(RuntimeFS, "embed/postlist.html")
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			writer, err := nbrew.FS.OpenWriter(path.Join(sitePrefix, "output/themes/postlist.html"), 0644)
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			defer writer.Close()
 			_, err = writer.Write(b)
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			err = writer.Close()
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			tmpl, err := siteGen.PostListTemplate(context.Background(), "")
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			_, err = siteGen.GeneratePostList(context.Background(), "", tmpl)
 			if err != nil {
-				getLogger(ctx).Error(err.Error())
+				getLogger(groupctx).Error(err.Error())
 				return nil
 			}
 			return nil
 		})
 		if nbrew.UsersDB != nil {
-			g.Go(func() error {
+			group.Go(func() error {
 				tx, err := nbrew.UsersDB.Begin()
 				if err != nil {
 					return err
 				}
 				defer tx.Rollback()
 				siteID := NewID()
-				_, err = sq.Exec(ctx, tx, sq.Query{
+				_, err = sq.Exec(groupctx, tx, sq.Query{
 					Dialect: nbrew.UsersDialect,
 					Format:  "INSERT INTO site (site_id, site_name) VALUES ({siteID}, {siteName})",
 					Values: []any{
@@ -407,7 +407,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				if err != nil {
 					return err
 				}
-				_, err = sq.Exec(ctx, tx, sq.Query{
+				_, err = sq.Exec(groupctx, tx, sq.Query{
 					Dialect: nbrew.UsersDialect,
 					Format: "INSERT INTO site_user (site_id, user_id)" +
 						" VALUES ((SELECT site_id FROM site WHERE site_name = {siteName}), (SELECT user_id FROM users WHERE username = {username}))",
@@ -426,7 +426,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 				return nil
 			})
 		}
-		err = g.Wait()
+		err = group.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)

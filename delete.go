@@ -118,7 +118,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		seen := make(map[string]bool)
-		g, ctx := errgroup.WithContext(r.Context())
+		group, groupctx := errgroup.WithContext(r.Context())
 		names := r.Form["name"]
 		response.Files = make([]File, len(names))
 		for i, name := range names {
@@ -130,8 +130,8 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				continue
 			}
 			seen[name] = true
-			g.Go(func() error {
-				fileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), path.Join(sitePrefix, response.Parent, name))
+			group.Go(func() error {
+				fileInfo, err := fs.Stat(nbrew.FS.WithContext(groupctx), path.Join(sitePrefix, response.Parent, name))
 				if err != nil {
 					if errors.Is(err, fs.ErrNotExist) {
 						return nil
@@ -147,7 +147,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				return nil
 			})
 		}
-		err = g.Wait()
+		err = group.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -239,7 +239,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		seen := make(map[string]bool)
-		g, ctx := errgroup.WithContext(r.Context())
+		group, groupctx := errgroup.WithContext(r.Context())
 		response.DeleteErrors = make([]string, len(request.Names))
 		response.Files = make([]File, len(request.Names))
 		for i, name := range request.Names {
@@ -251,8 +251,8 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				continue
 			}
 			seen[name] = true
-			g.Go(func() error {
-				err := nbrew.FS.WithContext(ctx).RemoveAll(path.Join(sitePrefix, response.Parent, name))
+			group.Go(func() error {
+				err := nbrew.FS.WithContext(groupctx).RemoveAll(path.Join(sitePrefix, response.Parent, name))
 				if err != nil {
 					response.DeleteErrors[i] = fmt.Sprintf("%s: %v", name, err)
 				} else {
@@ -262,55 +262,55 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				switch head {
 				case "pages":
 					if tail != "" || name != "index.html" {
-						err := nbrew.FS.WithContext(ctx).RemoveAll(path.Join(sitePrefix, "output", tail, strings.TrimSuffix(name, path.Ext(name))))
+						err := nbrew.FS.WithContext(groupctx).RemoveAll(path.Join(sitePrefix, "output", tail, strings.TrimSuffix(name, path.Ext(name))))
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 					}
 					file, err := RuntimeFS.Open("embed/index.html")
 					if err != nil {
-						getLogger(ctx).Error(err.Error())
+						getLogger(groupctx).Error(err.Error())
 						return nil
 					}
 					defer file.Close()
-					writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "pages/index.html"), 0644)
+					writer, err := nbrew.FS.WithContext(groupctx).OpenWriter(path.Join(sitePrefix, "pages/index.html"), 0644)
 					if err != nil {
-						getLogger(ctx).Error(err.Error())
+						getLogger(groupctx).Error(err.Error())
 						return nil
 					}
 					defer writer.Close()
 					_, err = io.Copy(writer, file)
 					if err != nil {
-						getLogger(ctx).Error(err.Error())
+						getLogger(groupctx).Error(err.Error())
 						return nil
 					}
 					err = writer.Close()
 					if err != nil {
-						getLogger(ctx).Error(err.Error())
+						getLogger(groupctx).Error(err.Error())
 						return nil
 					}
 				case "posts":
-					err := nbrew.FS.WithContext(ctx).RemoveAll(path.Join(sitePrefix, "output", response.Parent, strings.TrimSuffix(name, path.Ext(name))))
+					err := nbrew.FS.WithContext(groupctx).RemoveAll(path.Join(sitePrefix, "output", response.Parent, strings.TrimSuffix(name, path.Ext(name))))
 					if err != nil {
-						getLogger(ctx).Error(err.Error())
+						getLogger(groupctx).Error(err.Error())
 						return nil
 					}
 					if strings.HasSuffix(name, ".md") {
 						siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 						category := tail
 						tmpl, err := siteGen.PostListTemplate(r.Context(), category)
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 						_, err = siteGen.GeneratePostList(r.Context(), category, tmpl)
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 					}
@@ -322,47 +322,47 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 					case "post.html":
 						file, err := RuntimeFS.Open("embed/post.html")
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 						defer file.Close()
-						writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "output/themes/post.html"), 0644)
+						writer, err := nbrew.FS.WithContext(groupctx).OpenWriter(path.Join(sitePrefix, "output/themes/post.html"), 0644)
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 						defer writer.Close()
 						_, err = io.Copy(writer, file)
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 						err = writer.Close()
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 					case "postlist.html":
 						file, err := RuntimeFS.Open("embed/postlist.html")
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 						defer file.Close()
-						writer, err := nbrew.FS.WithContext(ctx).OpenWriter(path.Join(sitePrefix, "output/themes/postlist.html"), 0644)
+						writer, err := nbrew.FS.WithContext(groupctx).OpenWriter(path.Join(sitePrefix, "output/themes/postlist.html"), 0644)
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 						defer writer.Close()
 						_, err = io.Copy(writer, file)
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 						err = writer.Close()
 						if err != nil {
-							getLogger(ctx).Error(err.Error())
+							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
 					}
@@ -370,7 +370,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				return nil
 			})
 		}
-		err := g.Wait()
+		err := group.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)

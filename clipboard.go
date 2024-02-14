@@ -267,12 +267,12 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		}()
 		moveNotAllowed := (srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")
 		errInvalid := fmt.Errorf("src file is invalid or is a directory containing files that are invalid")
-		group, ctx := errgroup.WithContext(r.Context())
+		group, groupctx := errgroup.WithContext(r.Context())
 		for _, name := range names {
 			name := name
 			group.Go(func() error {
 				srcFilePath := path.Join(response.SrcSitePrefix, response.SrcParent, name)
-				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(ctx), srcFilePath)
+				srcFileInfo, err := fs.Stat(nbrew.FS.WithContext(groupctx), srcFilePath)
 				if err != nil {
 					if errors.Is(err, fs.ErrNotExist) {
 						notExistCh <- name
@@ -281,7 +281,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					return err
 				}
 				destFilePath := path.Join(response.DestSitePrefix, response.DestParent, name)
-				_, err = fs.Stat(nbrew.FS.WithContext(ctx), destFilePath)
+				_, err = fs.Stat(nbrew.FS.WithContext(groupctx), destFilePath)
 				if err != nil {
 					if !errors.Is(err, fs.ErrNotExist) {
 						return err
@@ -317,7 +317,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					} else {
 						destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, name)
 						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-							exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+							exists, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
 								Dialect: remoteFS.filesDialect,
 								Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.html'",
 								Values: []any{
@@ -332,7 +332,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 								return nil
 							}
 						} else {
-							err := fs.WalkDir(nbrew.FS.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+							err := fs.WalkDir(nbrew.FS.WithContext(groupctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
 								if err != nil {
 									return err
 								}
@@ -360,7 +360,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					} else {
 						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, name)
 						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-							exists, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+							exists, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
 								Dialect: remoteFS.filesDialect,
 								Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.md'",
 								Values: []any{
@@ -375,7 +375,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 								return nil
 							}
 						} else {
-							err := fs.WalkDir(nbrew.FS.WithContext(ctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
+							err := fs.WalkDir(nbrew.FS.WithContext(groupctx), srcFilePath, func(filePath string, dirEntry fs.DirEntry, err error) error {
 								if err != nil {
 									return err
 								}
@@ -431,12 +431,12 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					}
 				}
 				if response.IsCut && !moveNotAllowed && !isMandatoryFile {
-					err := nbrew.FS.WithContext(ctx).Rename(srcFilePath, destFilePath)
+					err := nbrew.FS.WithContext(groupctx).Rename(srcFilePath, destFilePath)
 					if err != nil {
 						return err
 					}
 					if srcOutputDir != "" && destOutputDir != "" {
-						err := nbrew.FS.WithContext(ctx).Rename(srcOutputDir, destOutputDir)
+						err := nbrew.FS.WithContext(groupctx).Rename(srcOutputDir, destOutputDir)
 						if err != nil {
 							return err
 						}
@@ -444,18 +444,18 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					return nil
 				}
 				if srcFileInfo.IsDir() {
-					err = copyDir(ctx, nbrew.FS, srcFilePath, destFilePath)
+					err = copyDir(groupctx, nbrew.FS, srcFilePath, destFilePath)
 					if err != nil {
 						return err
 					}
 				} else {
-					err := copyFile(ctx, nbrew.FS, srcFileInfo, srcFilePath, destFilePath)
+					err := copyFile(groupctx, nbrew.FS, srcFileInfo, srcFilePath, destFilePath)
 					if err != nil {
 						return err
 					}
 				}
 				if srcOutputDir != "" && destOutputDir != "" {
-					err := copyDir(ctx, nbrew.FS, srcOutputDir, destOutputDir)
+					err := copyDir(groupctx, nbrew.FS, srcOutputDir, destOutputDir)
 					if err != nil {
 						return err
 					}

@@ -803,9 +803,9 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 
 	response.From = r.FormValue("from")
 	if response.From != "" {
-		g, ctx := errgroup.WithContext(r.Context())
-		g.Go(func() error {
-			sites, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
+		group, groupctx := errgroup.WithContext(r.Context())
+		group.Go(func() error {
+			sites, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
@@ -840,8 +840,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			}
 			return nil
 		})
-		g.Go(func() error {
-			hasPreviousSite, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+		group.Go(func() error {
+			hasPreviousSite, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT 1" +
 					" FROM files" +
@@ -867,7 +867,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			}
 			return nil
 		})
-		err := g.Wait()
+		err := group.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -879,9 +879,9 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 
 	response.Before = r.FormValue("before")
 	if response.Before != "" {
-		g, ctx := errgroup.WithContext(r.Context())
-		g.Go(func() error {
-			response.Sites, err = sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
+		group, groupctx := errgroup.WithContext(r.Context())
+		group.Go(func() error {
+			response.Sites, err = sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
@@ -915,8 +915,8 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			}
 			return nil
 		})
-		g.Go(func() error {
-			nextSite, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+		group.Go(func() error {
+			nextSite, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
@@ -946,7 +946,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			response.NextURL = uri.String()
 			return nil
 		})
-		err := g.Wait()
+		err := group.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -1288,8 +1288,8 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		}
 	}
 	if sortFrom {
-		g, ctx := errgroup.WithContext(r.Context())
-		g.Go(func() error {
+		group, groupctx := errgroup.WithContext(r.Context())
+		group.Go(func() error {
 			var filter, order sq.Expression
 			if response.Sort == "name" {
 				if response.Order == "asc" {
@@ -1316,7 +1316,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					order = sq.Expr("creation_time DESC, file_path")
 				}
 			}
-			files, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
+			files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
@@ -1362,7 +1362,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			}
 			return nil
 		})
-		g.Go(func() error {
+		group.Go(func() error {
 			var filter sq.Expression
 			if response.Sort == "name" {
 				if response.Order == "asc" {
@@ -1383,7 +1383,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					filter = sq.Expr("creation_time > {}", fromTime)
 				}
 			}
-			hasPreviousFile, err := sq.FetchExists(ctx, remoteFS.filesDB, sq.Query{
+			hasPreviousFile, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT 1" +
 					" FROM files" +
@@ -1412,7 +1412,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			}
 			return nil
 		})
-		err := g.Wait()
+		err := group.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -1439,8 +1439,8 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		}
 	}
 	if sortBefore {
-		g, ctx := errgroup.WithContext(r.Context())
-		g.Go(func() error {
+		group, groupctx := errgroup.WithContext(r.Context())
+		group.Go(func() error {
 			var filter, order sq.Expression
 			if response.Sort == "name" {
 				if response.Order == "asc" {
@@ -1467,7 +1467,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					order = sq.Expr("creation_time DESC, file_path")
 				}
 			}
-			files, err := sq.FetchAll(ctx, remoteFS.filesDB, sq.Query{
+			files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
@@ -1512,7 +1512,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			}
 			return nil
 		})
-		g.Go(func() error {
+		group.Go(func() error {
 			var filter, order sq.Expression
 			if response.Sort == "name" {
 				if response.Order == "asc" {
@@ -1539,7 +1539,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					order = sq.Expr("creation_time DESC, file_path")
 				}
 			}
-			nextFile, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+			nextFile, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
@@ -1580,7 +1580,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			response.NextURL = uri.String()
 			return nil
 		})
-		err = g.Wait()
+		err = group.Wait()
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)

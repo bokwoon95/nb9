@@ -68,9 +68,9 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		var response Response
 		var count atomic.Int64
 		startedAt := time.Now()
-		g1, ctx1 := errgroup.WithContext(r.Context())
-		g1.Go(func() error {
-			cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
+		groupA, groupctxA := errgroup.WithContext(r.Context())
+		groupA.Go(func() error {
+			cursor, err := sq.FetchCursor(groupctxA, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
@@ -89,36 +89,36 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 				return err
 			}
 			defer cursor.Close()
-			g2, ctx2 := errgroup.WithContext(ctx1)
+			subgroup, subctx := errgroup.WithContext(groupctxA)
 			for cursor.Next() {
 				file, err := cursor.Result()
 				if err != nil {
 					return err
 				}
-				g2.Go(func() error {
+				subgroup.Go(func() error {
 					if sitePrefix != "" {
 						file.FilePath = strings.TrimPrefix(file.FilePath, sitePrefix+"/")
 					}
 					count.Add(1)
-					return siteGen.GeneratePage(ctx2, file.FilePath, file.Text)
+					return siteGen.GeneratePage(subctx, file.FilePath, file.Text)
 				})
 			}
 			err = cursor.Close()
 			if err != nil {
 				return err
 			}
-			err = g2.Wait()
+			err = subgroup.Wait()
 			if err != nil {
 				return err
 			}
 			return nil
 		})
-		g1.Go(func() error {
-			postTemplate, err := siteGen.PostTemplate(ctx1)
+		groupA.Go(func() error {
+			postTemplate, err := siteGen.PostTemplate(groupctxA)
 			if err != nil {
 				return err
 			}
-			cursor, err := sq.FetchCursor(ctx1, remoteFS.filesDB, sq.Query{
+			cursor, err := sq.FetchCursor(groupctxA, remoteFS.filesDB, sq.Query{
 				Dialect: remoteFS.filesDialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
@@ -139,29 +139,29 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 				return err
 			}
 			defer cursor.Close()
-			g2, ctx2 := errgroup.WithContext(ctx1)
+			subgroup, subctx := errgroup.WithContext(groupctxA)
 			for cursor.Next() {
 				file, err := cursor.Result()
 				if err != nil {
 					return err
 				}
-				g2.Go(func() error {
+				subgroup.Go(func() error {
 					if sitePrefix != "" {
 						file.FilePath = strings.TrimPrefix(file.FilePath, sitePrefix+"/")
 					}
 					if !file.IsDir {
 						count.Add(1)
-						return siteGen.GeneratePost(ctx2, file.FilePath, file.Text, postTemplate)
+						return siteGen.GeneratePost(subctx, file.FilePath, file.Text, postTemplate)
 					}
 					_, category, _ := strings.Cut(file.FilePath, "/")
 					if strings.Contains(category, "/") {
 						return nil
 					}
-					postListTemplate, err := siteGen.PostListTemplate(ctx2, category)
+					postListTemplate, err := siteGen.PostListTemplate(subctx, category)
 					if err != nil {
 						return err
 					}
-					n, err := siteGen.GeneratePostList(ctx2, category, postListTemplate)
+					n, err := siteGen.GeneratePostList(subctx, category, postListTemplate)
 					count.Add(int64(n))
 					if err != nil {
 						return err
@@ -173,13 +173,13 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 			if err != nil {
 				return err
 			}
-			err = g2.Wait()
+			err = subgroup.Wait()
 			if err != nil {
 				return err
 			}
 			return nil
 		})
-		err = g1.Wait()
+		err = groupA.Wait()
 		if err != nil {
 			var parseErr TemplateParseError
 			var executionErr *TemplateExecutionError
@@ -201,19 +201,19 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 	var response Response
 	var count atomic.Int64
 	startedAt := time.Now()
-	g1, ctx1 := errgroup.WithContext(r.Context())
-	g1.Go(func() error {
-		g2, ctx2 := errgroup.WithContext(ctx1)
+	group, groupctx := errgroup.WithContext(r.Context())
+	group.Go(func() error {
+		subgroup, subctx := errgroup.WithContext(groupctx)
 		root := path.Join(sitePrefix, "pages")
-		err := fs.WalkDir(nbrew.FS.WithContext(ctx1), root, func(filePath string, dirEntry fs.DirEntry, err error) error {
+		err := fs.WalkDir(nbrew.FS.WithContext(groupctx), root, func(filePath string, dirEntry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if filePath == root {
 				return nil
 			}
-			g2.Go(func() error {
-				file, err := nbrew.FS.WithContext(ctx2).Open(filePath)
+			subgroup.Go(func() error {
+				file, err := nbrew.FS.WithContext(subctx).Open(filePath)
 				if err != nil {
 					return err
 				}
@@ -234,11 +234,11 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 					filePath = strings.TrimPrefix(filePath, sitePrefix+"/")
 				}
 				count.Add(1)
-				return siteGen.GeneratePage(ctx2, filePath, b.String())
+				return siteGen.GeneratePage(subctx, filePath, b.String())
 			})
 			return nil
 		})
-		err = g2.Wait()
+		err = subgroup.Wait()
 		if err != nil {
 			return err
 		}
@@ -247,23 +247,23 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		}
 		return nil
 	})
-	g1.Go(func() error {
-		postTemplate, err := siteGen.PostTemplate(ctx1)
+	group.Go(func() error {
+		postTemplate, err := siteGen.PostTemplate(groupctx)
 		if err != nil {
 			return err
 		}
-		g2, ctx2 := errgroup.WithContext(ctx1)
+		subgroup, subctx := errgroup.WithContext(groupctx)
 		root := path.Join(sitePrefix, "posts")
-		err = fs.WalkDir(nbrew.FS.WithContext(ctx1), root, func(filePath string, dirEntry fs.DirEntry, err error) error {
+		err = fs.WalkDir(nbrew.FS.WithContext(groupctx), root, func(filePath string, dirEntry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			g2.Go(func() error {
+			subgroup.Go(func() error {
 				if !dirEntry.IsDir() {
 					if !strings.HasSuffix(filePath, ".md") {
 						return nil
 					}
-					file, err := nbrew.FS.WithContext(ctx2).Open(filePath)
+					file, err := nbrew.FS.WithContext(subctx).Open(filePath)
 					if err != nil {
 						return err
 					}
@@ -281,7 +281,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 						filePath = strings.TrimPrefix(filePath, sitePrefix+"/")
 					}
 					count.Add(1)
-					return siteGen.GeneratePost(ctx2, filePath, b.String(), postTemplate)
+					return siteGen.GeneratePost(subctx, filePath, b.String(), postTemplate)
 				}
 				if sitePrefix != "" {
 					filePath = strings.TrimPrefix(filePath, sitePrefix+"/")
@@ -290,11 +290,11 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 				if strings.Contains(category, "/") {
 					return nil
 				}
-				postListTemplate, err := siteGen.PostListTemplate(ctx2, category)
+				postListTemplate, err := siteGen.PostListTemplate(subctx, category)
 				if err != nil {
 					return err
 				}
-				n, err := siteGen.GeneratePostList(ctx2, category, postListTemplate)
+				n, err := siteGen.GeneratePostList(subctx, category, postListTemplate)
 				count.Add(int64(n))
 				if err != nil {
 					return err
@@ -303,7 +303,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 			})
 			return nil
 		})
-		err = g2.Wait()
+		err = subgroup.Wait()
 		if err != nil {
 			return err
 		}
@@ -312,7 +312,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		}
 		return nil
 	})
-	err = g1.Wait()
+	err = group.Wait()
 	response.Count = int(count.Load())
 	response.TimeTaken = time.Since(startedAt).String()
 	if err != nil {
