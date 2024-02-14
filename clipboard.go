@@ -20,7 +20,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, action string) {
+func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
 	isValidParent := func(sitePrefix, parent string) bool {
 		head, _, _ := strings.Cut(parent, "/")
 		switch head {
@@ -47,12 +47,12 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	}
 	referer := r.Referer()
 	if referer == "" {
-		referer = "/files/"
+		referer = "/" + path.Join("files", sitePrefix) + "/"
 	}
 	switch action {
 	case "cut", "copy":
 		parent := path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
-		if !isValidParent(parent) {
+		if !isValidParent(sitePrefix, parent) {
 			http.Redirect(w, r, referer, http.StatusFound)
 			return
 		}
@@ -195,14 +195,14 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			}
 		}
 		response.SrcParent = path.Clean(strings.Trim(clipboard.Get("parent"), "/"))
-		if !isValidParent(response.SrcParent) {
+		if !isValidParent(response.SrcSitePrefix, response.SrcParent) {
 			response.Error = "InvalidSrcParent"
 			writeResponse(w, r, response)
 			return
 		}
 		response.DestSitePrefix = sitePrefix
 		response.DestParent = path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
-		if !isValidParent(response.DestParent) {
+		if !isValidParent(response.DestSitePrefix, response.DestParent) {
 			response.Error = "InvalidDestParent"
 			writeResponse(w, r, response)
 			return
