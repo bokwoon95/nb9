@@ -46,7 +46,11 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 			internalServerError(w, r, err)
 			return
 		}
-		http.Redirect(w, r, "/"+path.Join("files", sitePrefix)+"/", http.StatusFound)
+		referer := r.Referer()
+		if referer == "" {
+			referer = "/" + path.Join("files", sitePrefix) + "/"
+		}
+		http.Redirect(w, r, referer, http.StatusFound)
 	}
 
 	if r.Method != "POST" {
@@ -372,7 +376,7 @@ func (nbrew *Notebrew) regeneratelist(w http.ResponseWriter, r *http.Request, si
 		}
 		referer := r.Referer()
 		if referer == "" {
-			referer = "/"+path.Join("files", sitePrefix, "posts", response.Category)+"/"
+			referer = "/" + path.Join("files", sitePrefix, "posts", response.Category) + "/"
 		}
 		http.Redirect(w, r, referer, http.StatusFound)
 	}

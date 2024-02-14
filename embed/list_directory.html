@@ -25,6 +25,15 @@
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
+{{- if eq (index $.PostRedirectGet "from") "regenerate" }}
+  {{- if not (index $.PostRedirectGet "templateErrors") }}
+  <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
+    <div>regenerated site ({{ index $.PostRedirectGet "count" }} file{{ if ne (index $.PostRedirectGet "count") 1.0 }}s{{ end }} in {{ index $.PostRedirectGet "timeTaken" }})</div>
+    <div class='flex-grow-1'></div>
+    <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
+  </div>
+  {{- end }}
+{{- end }}
 {{- if eq (index $.PostRedirectGet "from") "regeneratelist" }}
   {{ $count := index $.PostRedirectGet "count" }}
   {{ $timeTaken := index $.PostRedirectGet "timeTaken" }}
@@ -160,7 +169,7 @@
     </details>
   </div>
   {{- end }}
-  {{- if and (eq (head $.FilePath) "output") (eq (head (tail $.FilePath)) "posts") }}
+  {{- if eq (head $.FilePath) "output" }}
   <div class='flex items-center'>
     <details class='relative ml2' data-autoclose-details>
       <summary role='button' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
@@ -168,9 +177,8 @@
         {{ template "octicons-triangle-down" }}
       </summary>
       <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
-        <div class='ma2 tr'><a href='' class='nowrap'>list settings</a></div>
-        <form method='post' action='/{{ join "files" $.SitePrefix "regeneratelist" }}/{{ if tail $.FilePath }}?category={{ tail (tail $.FilePath) }}{{ end }}'>
-          <div class='ma2 tr'><button type='submit' class='button ba br2 pa2 nowrap'>regenerate list</button></div>
+        <form method='post' action='/{{ join "files" $.SitePrefix "regenerate" }}/'>
+          <div class='ma2 tr'><button type='submit' class='button ba br2 pa2 nowrap'>regenerate site</button></div>
         </form>
       </div>
     </details>
@@ -232,6 +240,18 @@
   </div>
   {{- end }}
 </div>
+{{- if eq (index $.PostRedirectGet "from") "regenerate" }}
+  {{- if index $.PostRedirectGet "templateErrors" }}
+  <div class='mv2'>
+    <div class='b invalid-red'>template errors:</div>
+    <ul class='list-style-disc ph3 invalid-red'>
+      {{- range $error := index $.PostRedirectGet "templateErrors" }}
+      <li>{{ $error }}</li>
+      {{- end }}
+    </ul>
+  </div>
+  {{- end }}
+{{- end }}
 <div class='bb pb2 flex'>
   <div>{{ generateBreadcrumbLinks $.SitePrefix $.FilePath }}</div>
   <div class='flex-grow-1'></div>
