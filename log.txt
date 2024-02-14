@@ -21,6 +21,7 @@ uploadfile.go
 serve_http.go
 notebrew/main.go
 
+TODO: create a mandatory file themes/404.html and register it everywhere where it is relevant (do a grep postlist.html).
 TODO: rework listDirectory such that fromTime is response.FromTime and always pulls from the fromtime query param instead of the from query param (same for beforeTime). Then from is always used as the tiebreaker so that even if there are millions of files with the same mod_time or creation_time, we can still paginate them chunk by chunk using the name as the tiebreaker.
 TODO: modify search.go such that it takes into account sort=created or sort=edited. The options: default sort | sort by creation time | sort by modification time
     - Also add the ability to filter by extension. This won't be possible to index, but it will allow users to stop seeing irrelevant junk if they're just interested in finding a specific variable name in a JavaScript file.
