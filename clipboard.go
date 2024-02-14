@@ -457,7 +457,6 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 	if remoteFS, ok := fsys.(*RemoteFS); ok {
 		srcFileID := srcFileInfo.(*RemoteFileInfo).FileID
 		destFileID := NewID()
-		modTime := time.Now().UTC()
 		_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
 			Dialect: remoteFS.filesDialect,
 			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
@@ -477,7 +476,7 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 				sq.UUIDParam("destFileID", destFileID),
 				sq.StringParam("destParent", path.Dir(destFilePath)),
 				sq.StringParam("destFilePath", destFilePath),
-				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
+				sq.TimeParam("modTime", time.Now().UTC()),
 				sq.StringParam("srcFilePath", srcFilePath),
 			},
 		})

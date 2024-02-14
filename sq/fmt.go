@@ -924,7 +924,7 @@ func StringParam(name string, s string) Parameter {
 
 // TimeParam creates a new Parameter from a time.Time value.
 func TimeParam(name string, t time.Time) Parameter {
-	return Parameter{Name: name, Value: t}
+	return Parameter{Name: name, Value: &Timestamp{Time: t, Valid: !t.IsZero()}}
 }
 
 // UUIDParam creates a new Parameter. It wraps the value with UUID().

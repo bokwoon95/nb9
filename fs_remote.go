@@ -513,7 +513,7 @@ func (file *RemoteFileWriter) Close() error {
 				Format:  "UPDATE files SET text = NULL, data = NULL, size = {size}, mod_time = {modTime} WHERE file_id = {fileID}",
 				Values: []any{
 					sq.Int64Param("size", file.size),
-					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+					sq.TimeParam("modTime", file.modTime),
 					sq.UUIDParam("fileID", file.fileID),
 				},
 			})
@@ -528,7 +528,7 @@ func (file *RemoteFileWriter) Close() error {
 					Values: []any{
 						sq.BytesParam("data", file.buf.Bytes()),
 						sq.Int64Param("size", file.size),
-						sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+						sq.TimeParam("modTime", file.modTime),
 						sq.UUIDParam("fileID", file.fileID),
 					},
 				})
@@ -542,7 +542,7 @@ func (file *RemoteFileWriter) Close() error {
 					Values: []any{
 						sq.BytesParam("text", file.buf.Bytes()),
 						sq.Int64Param("size", file.size),
-						sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+						sq.TimeParam("modTime", file.modTime),
 						sq.UUIDParam("fileID", file.fileID),
 					},
 				})
@@ -566,7 +566,7 @@ func (file *RemoteFileWriter) Close() error {
 				sq.UUIDParam("parentID", file.parentID),
 				sq.StringParam("filePath", file.filePath),
 				sq.Int64Param("size", file.size),
-				sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+				sq.TimeParam("modTime", file.modTime),
 			},
 		})
 		if err != nil {
@@ -585,7 +585,7 @@ func (file *RemoteFileWriter) Close() error {
 					sq.StringParam("filePath", file.filePath),
 					sq.Int64Param("size", file.size),
 					sq.BytesParam("data", file.buf.Bytes()),
-					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+					sq.TimeParam("modTime", file.modTime),
 				},
 			})
 			if err != nil {
@@ -602,7 +602,7 @@ func (file *RemoteFileWriter) Close() error {
 					sq.StringParam("filePath", file.filePath),
 					sq.Int64Param("size", file.size),
 					sq.BytesParam("text", file.buf.Bytes()),
-					sq.Param("modTime", sq.Timestamp{Time: file.modTime, Valid: true}),
+					sq.TimeParam("modTime", file.modTime),
 				},
 			})
 			if err != nil {
@@ -672,7 +672,7 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("filePath", name),
-				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
+				sq.TimeParam("modTime", modTime),
 			},
 		})
 		if err != nil {
@@ -694,7 +694,7 @@ func (fsys *RemoteFS) Mkdir(name string, _ fs.FileMode) error {
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("parentDir", parentDir),
 				sq.StringParam("filePath", name),
-				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
+				sq.TimeParam("modTime", modTime),
 			},
 		})
 		if err != nil {
@@ -741,7 +741,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("filePath", segments[0]),
-				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
+				sq.TimeParam("modTime", modTime),
 			},
 		})
 		if err != nil {
@@ -756,7 +756,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 			Values: []any{
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("filePath", segments[0]),
-				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
+				sq.TimeParam("modTime", modTime),
 			},
 		})
 		if err != nil {
@@ -813,7 +813,7 @@ func (fsys *RemoteFS) MkdirAll(name string, _ fs.FileMode) error {
 				sq.UUIDParam("fileID", NewID()),
 				sq.StringParam("parentDir", parentDir),
 				sq.StringParam("filePath", filePath),
-				sq.Param("modTime", sq.Timestamp{Time: modTime, Valid: true}),
+				sq.TimeParam("modTime", modTime),
 			)
 			if err != nil {
 				return err
@@ -1000,7 +1000,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime}{updateParent} WHERE file_path = {oldname} RETURNING {*}",
 			Values: []any{
 				sq.StringParam("newname", newname),
-				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
+				sq.TimeParam("modTime", time.Now().UTC()),
 				sq.Param("updateParent", updateParent),
 				sq.StringParam("oldname", oldname),
 			},
@@ -1027,7 +1027,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 				Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 				Values: []any{
 					sq.Param("filePath", sq.Expr("concat({}, substring(file_path, {}))", newname, len(oldname)+1)),
-					sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
+					sq.TimeParam("modTime", time.Now().UTC()),
 					sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldname)+"/%"),
 				},
 			})
@@ -1102,7 +1102,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime}{updateParent} WHERE file_path = {oldname}",
 			Values: []any{
 				sq.StringParam("newname", newname),
-				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
+				sq.TimeParam("modTime", time.Now().UTC()),
 				sq.Param("updateParent", updateParent),
 				sq.StringParam("oldname", oldname),
 			},
@@ -1115,7 +1115,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 			Values: []any{
 				sq.Param("filePath", sq.Expr("concat({}, substring(file_path, {}))", newname, len(oldname)+1)),
-				sq.Param("modTime", sq.Timestamp{Time: time.Now().UTC(), Valid: true}),
+				sq.TimeParam("modTime", time.Now().UTC()),
 				sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldname)+"/%"),
 			},
 		})

@@ -206,7 +206,7 @@ func (ts *Timestamp) Scan(value any) error {
 // Value implements the driver.Valuer interface. It returns an int64 unix
 // timestamp if the dialect is SQLite, otherwise it returns a time.Time
 // (similar to sql.NullTime).
-func (ts Timestamp) Value() (driver.Value, error) {
+func (ts *Timestamp) Value() (driver.Value, error) {
 	if !ts.Valid {
 		return nil, nil
 	}
@@ -217,7 +217,7 @@ func (ts Timestamp) Value() (driver.Value, error) {
 }
 
 // DialectValuer implements the DialectValuer interface.
-func (ts Timestamp) DialectValuer(dialect string) (driver.Valuer, error) {
+func (ts *Timestamp) DialectValuer(dialect string) (driver.Valuer, error) {
 	ts.dialect = dialect
 	return ts, nil
 }
