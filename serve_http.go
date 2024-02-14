@@ -198,14 +198,19 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch head {
 		case "", "notes", "pages", "posts", "output":
-			isRoot := sitePrefix == "" && urlPath == ""
-			if !isAuthorizedForSite && !isRoot {
-				notAuthorized(w, r)
-				return
+			if !isAuthorizedForSite {
+				if sitePrefix != "" || urlPath != "" {
+					notAuthorized(w, r)
+					return
+				}
 			}
 			nbrew.files(w, r, username, sitePrefix, urlPath)
 			return
 		case "clipboard":
+			if !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
 			nbrew.clipboard(w, r, username, sitePrefix, tail)
 			return
 		}
