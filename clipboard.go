@@ -112,10 +112,20 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				return
 			}
 			if response.Error != "" {
+				err := nbrew.setSession(w, r, "flash", map[string]any{
+					"postRedirectGet": map[string]any{
+						"from":  "paste",
+						"error": response.Error,
+					},
+				})
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
 				http.Redirect(w, r, referer, http.StatusFound)
 				return
 			}
-			// join srcSitePrefix srcParent name {if not (ext name)}/{end}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
 					"from":           "paste",
@@ -210,6 +220,20 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			writeResponse(w, r, response)
 			return
 		}
+		srcHead, srcTail, _ := strings.Cut(response.SrcParent, "/")
+		destHead, destTail, _ := strings.Cut(response.DestParent, "/")
+		if destHead == "posts" {
+			if srcHead != "posts" {
+				response.Error = "PostNoPaste"
+				writeResponse(w, r, response)
+				return
+			}
+			if !response.IsCut {
+				response.Error = "PostNoCopy"
+				writeResponse(w, r, response)
+				return
+			}
+		}
 
 		var wg sync.WaitGroup
 		wg.Add(4)
@@ -241,8 +265,6 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				response.FilesPasted = append(response.FilesPasted, name)
 			}
 		}()
-		srcHead, srcTail, _ := strings.Cut(response.SrcParent, "/")
-		destHead, destTail, _ := strings.Cut(response.DestParent, "/")
 		moveNotAllowed := (srcHead == "pages" && destHead != "pages") || (srcHead == "posts" && destHead != "posts")
 		errInvalid := fmt.Errorf("src file is invalid or is a directory containing files that are invalid")
 		group, ctx := errgroup.WithContext(r.Context())
