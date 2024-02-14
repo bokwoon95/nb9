@@ -162,7 +162,6 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 			extensionFilter = sq.Expr(b.String())
 		}
 		response.Matches, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-			Debug:   true,
 			Dialect: remoteFS.filesDialect,
 			Format: "SELECT {*}" +
 				" FROM files" +
