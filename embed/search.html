@@ -57,7 +57,10 @@
 <ul class='ph3 list-style-decimal'>
   {{- range $match := $.Matches }}
   <li>
-    <div><a href='/{{ join "files" $.SitePrefix $match.FilePath }}' class='b'>{{ $match.FilePath }}</a></div>
+    <div>
+      <a href='/{{ join "files" $.SitePrefix $match.FilePath }}' class='b'>{{ $match.FilePath }}</a>
+      <span class='ml1 f6 mid-gray'>{{ $match.CreationTime.Format "2006-01-02" }}</span>
+    </div>
     <pre style='white-space: pre-wrap'>{{ $match.Preview }}</pre>
   </li>
   {{- end }}

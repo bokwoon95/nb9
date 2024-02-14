@@ -7,14 +7,16 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/bokwoon95/nb9/sq"
 )
 
 func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
 	type Match struct {
-		FilePath string `json:"filePath"`
-		Preview  string `json:"preview"`
+		FilePath     string    `json:"filePath"`
+		Preview      string    `json:"preview"`
+		CreationTime time.Time `json:"creationTime"`
 	}
 	type Request struct {
 		Parent string `json:"parent"`
@@ -177,8 +179,9 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 			},
 		}, func(row *sq.Row) Match {
 			match := Match{
-				FilePath: row.String("files.file_path"),
-				Preview:  row.String("substr(files.text, 1, 500)"),
+				FilePath:     row.String("files.file_path"),
+				Preview:      row.String("substr(files.text, 1, 500)"),
+				CreationTime: row.Time("files.creation_time"),
 			}
 			if sitePrefix != "" {
 				_, match.FilePath, _ = strings.Cut(match.FilePath, "/")
