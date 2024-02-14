@@ -15,7 +15,7 @@ createfolder.go
 createfile.go
 delete.go
 search.go
-cut/copy/paste/rename
+clipboard.go
 uploadfile.go
 ...
 serve_http.go
@@ -23,15 +23,11 @@ notebrew/main.go
 
 TODO: rework listDirectory such that fromTime is response.FromTime and always pulls from the fromtime query param instead of the from query param (same for beforeTime). Then from is always used as the tiebreaker so that even if there are millions of files with the same mod_time or creation_time, we can still paginate them chunk by chunk using the name as the tiebreaker.
 TODO: modify search.go such that it takes into account sort=created or sort=edited. The options: default sort | sort by creation time | sort by modification time
-    - Also add the ability to
+    - Also add the ability to (?)
 TODO: clipboard: if a destFile exists, no matter whether it's file or folder, paste will be auto rejected.
     - 20 MB total upload limit (includes all files). When we hit the limit in the middle of a file, what happens is we get an error on Read() which should be caught and checked for ErrTooLarge or something and sent to badRequest().
-TODO: big turn: remove clipboard (cut/copy/paste). condense "site/list settings" and "regenerate site/list" back into a miscellaneous dropdown button, because we will need to accomodate an "upload file" link as well and there's no space.
-    - Uploading files only works for individual files, it doesn't work for folders. If there is a file conflict it simply backs off for that file and refuses to overwrite.
-    - Uploaded files do trigger page/post/postlist regeneration when appropriate.
-    - All files have a little "download" button in the dropdown menu. You can use checkboxes to select multiple files to download. You can only download files not folders, for feature parity with uploading files.
+TODO: all files have a little "download" button in the dropdown menu. You can use checkboxes to select multiple files to download. You can only download files not folders, for feature parity with uploading files.
 TODO: Import/Export? How to handle?
-TODO: clipboard.go get paste to work
 TODO: also add the regenerate list button to the output page of a post category
 TODO: structured template error
     We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
