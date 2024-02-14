@@ -136,7 +136,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// If the users database is present, check if the user is authorized to
 		// access the files for this site.
 		var username string
-		var isAuthorizedForSite bool
+		isAuthorizedForSite := true
 		if nbrew.UsersDB != nil {
 			authenticationTokenHash := getAuthenticationTokenHash(r)
 			if authenticationTokenHash == nil {
