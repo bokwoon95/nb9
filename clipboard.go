@@ -115,16 +115,19 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				http.Redirect(w, r, referer, http.StatusFound)
 				return
 			}
+			// join srcSitePrefix srcParent name {if not (ext name)}/{end}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
-					"from":          "paste",
-					"srcParent":     response.SrcParent,
-					"destParent":    response.DestParent,
-					"isCut":         response.IsCut,
-					"filesNotExist": response.FilesNotExist,
-					"filesExist":    response.FilesExist,
-					"filesInvalid":  response.FilesInvalid,
-					"filesPasted":   response.FilesPasted,
+					"from":           "paste",
+					"srcSitePrefix":  response.SrcSitePrefix,
+					"srcParent":      response.SrcParent,
+					"destSitePrefix": response.DestSitePrefix,
+					"destParent":     response.DestParent,
+					"isCut":          response.IsCut,
+					"filesNotExist":  response.FilesNotExist,
+					"filesExist":     response.FilesExist,
+					"filesInvalid":   response.FilesInvalid,
+					"filesPasted":    response.FilesPasted,
 				},
 			})
 			if err != nil {
@@ -369,27 +372,29 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						}
 					}
 				case "output":
-					if srcFileInfo.IsDir() {
-						invalidCh <- name
-						return nil
-					}
-					ext := path.Ext(srcFilePath)
 					next, _, _ := strings.Cut(destTail, "/")
-					if next == "posts" {
-						switch ext {
-						case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-							break
-						default:
+					if next != "themes" {
+						if srcFileInfo.IsDir() {
 							invalidCh <- name
 							return nil
 						}
-					} else if next != "themes" {
-						switch ext {
-						case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".css", ".js", ".md":
-							break
-						default:
-							invalidCh <- name
-							return nil
+						ext := path.Ext(srcFilePath)
+						if next == "posts" {
+							switch ext {
+							case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+								break
+							default:
+								invalidCh <- name
+								return nil
+							}
+						} else {
+							switch ext {
+							case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".css", ".js", ".md":
+								break
+							default:
+								invalidCh <- name
+								return nil
+							}
 						}
 					}
 				}
@@ -518,7 +523,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 	if remoteFS, ok := fsys.(*RemoteFS); ok {
 		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
 			Dialect: remoteFS.filesDialect,
-			Format:  "SELECT * FROM files WHERE file_path = {srcDirPath} OR file_path LIKE {pattern} ORDER BY file_path",
+			Format:  "SELECT {*} FROM files WHERE file_path = {srcDirPath} OR file_path LIKE {pattern} ORDER BY file_path",
 			Values: []any{
 				sq.StringParam("srcDirPath", srcDirPath),
 				sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcDirPath)+"/%"),
@@ -589,16 +594,17 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 				Dialect: remoteFS.filesDialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 					" SELECT" +
-					" unhex(items->>0, '-') AS dest_file_id" +
-					", CASE WHEN items->>1 <> '' THEN unhex(items->>1, '-') ELSE (SELECT file_id FROM files WHERE file_path = items->>2) END AS dest_parent_id" +
+					" unhex(items.value->>0, '-') AS dest_file_id" +
+					", CASE WHEN items.value->>1 <> '' THEN unhex(items.value->>1, '-') ELSE (SELECT file_id FROM files WHERE file_path = items.value->>2) END AS dest_parent_id" +
 					", concat({destDirPath}, substring(src_files.file_path, {start})) AS dest_file_path" +
 					", {modTime}" +
 					", {modTime}" +
+					", src_files.is_dir" +
 					", src_files.size" +
 					", src_files.text" +
 					", src_files.data" +
 					" FROM json_each({items}) AS items" +
-					" JOIN files AS src_files ON src_files.file_path = items->>3",
+					" JOIN files AS src_files ON src_files.file_path = items.value->>3",
 				Values: []any{
 					sq.StringParam("destDirPath", destDirPath),
 					sq.IntParam("start", len(srcDirPath)+1),
@@ -614,16 +620,17 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 				Dialect: remoteFS.filesDialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 					" SELECT" +
-					" CAST(items->>0 AS UUID) AS dest_file_id" +
-					", CASE WHEN items->>1 <> '' THEN CAST(items->>1 AS UUID) ELSE (SELECT file_id FROM files WHERE file_path = items->>2) END AS dest_parent_id" +
+					" CAST(items.value->>0 AS UUID) AS dest_file_id" +
+					", CASE WHEN items.value->>1 <> '' THEN CAST(items.value->>1 AS UUID) ELSE (SELECT file_id FROM files WHERE file_path = items.value->>2) END AS dest_parent_id" +
 					", concat({destDirPath}, substring(src_files.file_path, {start})) AS dest_file_path" +
 					", {modTime}" +
 					", {modTime}" +
+					", src_files.is_dir" +
 					", src_files.size" +
 					", src_files.text" +
 					", src_files.data" +
 					" FROM json_array_elements({items}) AS items" +
-					" JOIN files AS src_files ON src_files.file_path = items->>3",
+					" JOIN files AS src_files ON src_files.file_path = items.value->>3",
 				Values: []any{
 					sq.StringParam("destDirPath", destDirPath),
 					sq.IntParam("start", len(srcDirPath)+1),
@@ -644,6 +651,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 					", concat({destDirPath}, substring(src_files.file_path, {start})) AS dest_file_path" +
 					", {modTime}" +
 					", {modTime}" +
+					", src_files.is_dir" +
 					", src_files.size" +
 					", src_files.text" +
 					", src_files.data" +

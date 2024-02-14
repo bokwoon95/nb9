@@ -71,6 +71,8 @@
 {{- end }}
 {{- if eq (index $.PostRedirectGet "from") "paste" }}
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
+  {{- $srcSitePrefix := index $.PostRedirectGet "srcSitePrefix" }}
+  {{- $srcParent := index $.PostRedirectGet "srcParent" }}
   {{- $srcHead := head (index $.PostRedirectGet "srcParent") }}
   {{- $destHead := head (index $.PostRedirectGet "destParent") }}
   {{- $isCut := index $.PostRedirectGet "isCut" }}
@@ -85,7 +87,7 @@
       The following files already exist:
       <ul class='list-style-disc ph3'>
         {{- range $name := $filesExist }}
-        <li>{{ $name }}</li>
+        <li><a href='/{{ join "files" $srcSitePrefix $srcParent $name }}{{ if not (ext $name) }}/{{ end }}'>{{ $name }}</a></li>
         {{- end }}
       </ul>
     </div>
@@ -102,7 +104,7 @@
       {{- end }}
       <ul class='list-style-disc ph3'>
         {{- range $name := $filesInvalid }}
-        <li>{{ $name }}</li>
+        <li><a href='/{{ join "files" $srcSitePrefix $srcParent $name }}{{ if not (ext $name) }}/{{ end }}'>{{ $name }}</a></li>
         {{- end }}
       </ul>
     </div>
