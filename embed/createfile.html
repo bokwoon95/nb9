@@ -69,7 +69,7 @@
   <div class='mv3'>
     <div><label for='name' class='b'>Name:</label></div>
     <div class='flex'>
-      <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba flex-grow-1{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}'{{ if ne (head $.Parent) "posts" }} required{{ end }} autocomplete='on' autofocus>
+      <input id='name' name='name' value='{{ $.Name }}' class='pv1 ph2 br2 ba flex-grow-1{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}' autocomplete='on' autofocus>
       <select name='ext' class='br2 ml2{{ if index $.FormErrors "name" }} b--invalid-red{{ end }}'>
         {{- if eq (head $.Parent) "notes" }}
         <option{{ if eq $.Ext ".html" }} selected{{ end }}>.html</option>

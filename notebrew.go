@@ -283,7 +283,7 @@ func stripMarkdownStyles(markdown goldmark.Markdown, src []byte) string {
 	return b.String()
 }
 
-var isForbiddenChar = [...]bool{
+var isURLUnsafe = [...]bool{
 	' ': true, '!': true, '"': true, '#': true, '$': true, '%': true, '&': true, '\'': true,
 	'(': true, ')': true, '*': true, '+': true, ',': true, '/': true, ':': true, ';': true,
 	'<': true, '>': true, '=': true, '?': true, '[': true, ']': true, '\\': true, '^': true,
@@ -315,13 +315,36 @@ func urlSafe(s string) string {
 			continue
 		}
 		n := int(char)
-		if n < len(isForbiddenChar) && isForbiddenChar[n] {
+		if n < len(isURLUnsafe) && isURLUnsafe[n] {
 			continue
 		}
 		b.WriteRune(char)
 		count++
 	}
 	return strings.Trim(b.String(), ".")
+}
+
+// https://stackoverflow.com/a/31976060
+var isFilenameUnsafe = [...]bool{
+	'<': true, '>': true, ':': true, '"': true, '/': true,
+	'\\': true, '|': true, '?': true, '*': true,
+}
+
+func filenameSafe(s string) string {
+	s = strings.TrimSpace(s)
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, char := range s {
+		if char >= 0 && char <= 31 {
+			continue
+		}
+		n := int(char)
+		if n < len(isURLUnsafe) && isURLUnsafe[n] {
+			continue
+		}
+		b.WriteRune(char)
+	}
+	return b.String()
 }
 
 func IsCommonPassword(password []byte) bool {
