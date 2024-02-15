@@ -855,6 +855,12 @@ func Expr(format string, values ...any) Expression {
 	return Expression{Format: format, Values: values}
 }
 
+func (expr Expression) Append(format string, values ...any) Expression {
+	expr.Format += format
+	expr.Values = append(expr.Values, values...)
+	return expr
+}
+
 // WriteSQL implements the SQLWriter interface.
 func (expr Expression) WriteSQL(ctx context.Context, dialect string, buf *bytes.Buffer, args *[]any, params map[string][]int) error {
 	err := Writef(ctx, dialect, buf, args, params, expr.Format, expr.Values)

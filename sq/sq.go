@@ -103,6 +103,10 @@ type Timestamp struct {
 	dialect string
 }
 
+func NewTimestamp(t time.Time) *Timestamp {
+	return &Timestamp{Time: t, Valid: true}
+}
+
 // copied from https://pkg.go.dev/github.com/mattn/go-sqlite3#pkg-variables
 var timestampFormats = []string{
 	"2006-01-02 15:04:05.999999999-07:00",
