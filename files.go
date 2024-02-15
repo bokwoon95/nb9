@@ -1619,18 +1619,18 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				var filter, order sq.Expression
 				if response.Sort == "edited" {
 					if response.Order == "asc" {
-						filter = sq.Expr("mod_time < {timeParam} AND file_path < {pathParam}", timeParam, pathParam)
+						filter = sq.Expr("(mod_time < {timeParam} OR (mod_time = {timeParam} AND file_path < {pathParam}))", timeParam, pathParam)
 						order = sq.Expr("mod_time ASC, file_path ASC")
 					} else {
-						filter = sq.Expr("mod_time > {timeParam} AND file_path > {pathParam}", timeParam, pathParam)
+						filter = sq.Expr("(mod_time > {timeParam} OR (mod_time = {timeParam} AND file_path > {pathParam}))", timeParam, pathParam)
 						order = sq.Expr("mod_time DESC, file_path DESC")
 					}
 				} else if response.Sort == "created" {
 					if response.Order == "asc" {
-						filter = sq.Expr("creation_time < {timeParam} AND file_path < {pathParam}", timeParam, pathParam)
+						filter = sq.Expr("(creation_time < {timeParam} OR (creation_time = {timeParam} AND file_path < {pathParam}))", timeParam, pathParam)
 						order = sq.Expr("creation_time ASC, file_path ASC")
 					} else {
-						filter = sq.Expr("creation_time > {timeParam} AND file_path > {pathParam}", timeParam, pathParam)
+						filter = sq.Expr("(creation_time > {timeParam} OR (creation_time = {timeParam} AND file_path > {pathParam}))", timeParam, pathParam)
 						order = sq.Expr("creation_time DESC, file_path DESC")
 					}
 				}
@@ -1682,19 +1682,19 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				var filter, order sq.Expression
 				if response.Sort == "edited" {
 					if response.Order == "asc" {
-						filter = sq.Expr("mod_time >= {timeParam}", timeParam, pathParam)
-						order = sq.Expr("mod_time DESC, file_path DESC")
-					} else {
-						filter = sq.Expr("mod_time <= {timeParam}", timeParam, pathParam)
+						filter = sq.Expr("mod_time >= {timeParam} AND file_path >= {pathParam}", timeParam, pathParam)
 						order = sq.Expr("mod_time ASC, file_path ASC")
+					} else {
+						filter = sq.Expr("mod_time <= {timeParam} AND file_path <= {pathParam}", timeParam, pathParam)
+						order = sq.Expr("mod_time DESC, file_path DESC")
 					}
 				} else if response.Sort == "created" {
 					if response.Order == "asc" {
-						filter = sq.Expr("creation_time >= {timeParam}", timeParam, pathParam)
-						order = sq.Expr("creation_time DESC, file_path DESC")
-					} else {
-						filter = sq.Expr("creation_time <= {timeParam}", timeParam, pathParam)
+						filter = sq.Expr("creation_time >= {timeParam} AND file_path >= {pathParam}", timeParam, pathParam)
 						order = sq.Expr("creation_time ASC, file_path ASC")
+					} else {
+						filter = sq.Expr("creation_time <= {timeParam} AND file_path <= {pathParam}", timeParam, pathParam)
+						order = sq.Expr("creation_time DESC, file_path DESC")
 					}
 				}
 				nextFile, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
