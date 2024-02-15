@@ -799,9 +799,9 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	if response.Limit <= 0 {
 		response.Limit = 1000
 	}
-	scheme := "https://"
+	scheme := "https"
 	if nbrew.CMSDomain == "localhost" || strings.HasPrefix(nbrew.CMSDomain, "localhost:") {
-		scheme = "http://"
+		scheme = "http"
 	}
 
 	response.From = r.Form.Get("from")
@@ -1260,9 +1260,9 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	if response.Limit <= 0 {
 		response.Limit = 1000
 	}
-	scheme := "https://"
+	scheme := "https"
 	if nbrew.CMSDomain == "localhost" || strings.HasPrefix(nbrew.CMSDomain, "localhost:") {
-		scheme = "http://"
+		scheme = "http"
 	}
 
 	if response.Sort == "name" {
