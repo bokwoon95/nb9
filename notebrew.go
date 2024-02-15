@@ -165,7 +165,7 @@ func (nbrew *Notebrew) getSession(r *http.Request, name string, valuePtr any) (o
 				sq.BytesParam("sessionTokenHash", sessionTokenHash[:]),
 			},
 		}, func(row *sq.Row) []byte {
-			return row.Bytes("data")
+			return row.Bytes(nil, "data")
 		})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {

@@ -482,8 +482,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 					info: &RemoteFileInfo{},
 				}
 				file.info.FilePath = row.String("file_path")
-				b := bufPool.Get().(*bytes.Buffer).Bytes()
-				row.Scan(&b, "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
+				b := row.Bytes(bufPool.Get().(*bytes.Buffer).Bytes(), "CASE WHEN file_path LIKE '%.md' THEN text ELSE NULL END")
 				if b != nil {
 					file.buf = bytes.NewBuffer(b)
 				}
@@ -1040,8 +1039,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			name := path.Base(row.String("file_path"))
 			post.Name = strings.TrimSuffix(name, path.Ext(name))
 			post.ModificationTime = row.Time("mod_time")
-			post.text = bufPool.Get().(*bytes.Buffer).Bytes()
-			row.Scan(&post.text, "text")
+			post.text = row.Bytes(bufPool.Get().(*bytes.Buffer).Bytes(), "text")
 			return post
 		})
 		if err != nil {

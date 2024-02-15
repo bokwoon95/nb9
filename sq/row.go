@@ -1,7 +1,6 @@
 package sq
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"path/filepath"
@@ -25,93 +24,23 @@ type Row struct {
 // Scan scans the expression into destPtr.
 func (row *Row) Scan(destPtr any, format string, values ...any) {
 	if row.sqlRows == nil {
-		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
-		switch destPtr.(type) {
-		case *bool, *sql.NullBool:
-			row.scanDest = append(row.scanDest, &sql.NullBool{})
-		case *float64, *sql.NullFloat64:
-			row.scanDest = append(row.scanDest, &sql.NullFloat64{})
-		case *int32, *sql.NullInt32:
-			row.scanDest = append(row.scanDest, &sql.NullInt32{})
-		case *int, *int64, *sql.NullInt64:
-			row.scanDest = append(row.scanDest, &sql.NullInt64{})
-		case *string, *sql.NullString:
-			row.scanDest = append(row.scanDest, &sql.NullString{})
-		case *time.Time, *sql.NullTime:
-			row.scanDest = append(row.scanDest, &sql.NullTime{})
-		case *[]byte:
-			row.scanDest = append(row.scanDest, &sql.RawBytes{})
-		default:
-			if reflect.TypeOf(destPtr).Kind() != reflect.Ptr {
-				panic(fmt.Errorf(callsite(1)+"cannot pass in non pointer value (%#v) as destPtr", destPtr))
-			}
-			row.scanDest = append(row.scanDest, destPtr)
+		if reflect.TypeOf(destPtr).Kind() != reflect.Ptr {
+			panic(fmt.Errorf(callsite(1)+"cannot pass in non pointer value (%#v) as destPtr", destPtr))
 		}
+		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
+		row.scanDest = append(row.scanDest, destPtr)
 		return
 	}
 	defer func() {
 		row.index++
 	}()
-	switch destPtr := destPtr.(type) {
-	case *bool:
-		scanDest := row.scanDest[row.index].(*sql.NullBool)
-		*destPtr = scanDest.Bool
-	case *sql.NullBool:
-		scanDest := row.scanDest[row.index].(*sql.NullBool)
-		*destPtr = *scanDest
-	case *float64:
-		scanDest := row.scanDest[row.index].(*sql.NullFloat64)
-		*destPtr = scanDest.Float64
-	case *sql.NullFloat64:
-		scanDest := row.scanDest[row.index].(*sql.NullFloat64)
-		*destPtr = *scanDest
-	case *int:
-		scanDest := row.scanDest[row.index].(*sql.NullInt64)
-		*destPtr = int(scanDest.Int64)
-	case *int32:
-		scanDest := row.scanDest[row.index].(*sql.NullInt32)
-		*destPtr = scanDest.Int32
-	case *sql.NullInt32:
-		scanDest := row.scanDest[row.index].(*sql.NullInt32)
-		*destPtr = *scanDest
-	case *int64:
-		scanDest := row.scanDest[row.index].(*sql.NullInt64)
-		*destPtr = scanDest.Int64
-	case *sql.NullInt64:
-		scanDest := row.scanDest[row.index].(*sql.NullInt64)
-		*destPtr = *scanDest
-	case *string:
-		scanDest := row.scanDest[row.index].(*sql.NullString)
-		*destPtr = scanDest.String
-	case *sql.NullString:
-		scanDest := row.scanDest[row.index].(*sql.NullString)
-		*destPtr = *scanDest
-	case *time.Time:
-		scanDest := row.scanDest[row.index].(*sql.NullTime)
-		*destPtr = scanDest.Time
-	case *sql.NullTime:
-		scanDest := row.scanDest[row.index].(*sql.NullTime)
-		*destPtr = *scanDest
-	case *[]byte:
-		scanDest := row.scanDest[row.index].(*sql.RawBytes)
-		if *scanDest == nil {
-			*destPtr = nil
-		} else {
-			if cap(*destPtr) < len(*scanDest) {
-				*destPtr = make([]byte, len(*scanDest))
-			}
-			*destPtr = (*destPtr)[:len(*scanDest)]
-			copy(*destPtr, *scanDest)
-		}
-	default:
-		destValue := reflect.ValueOf(destPtr).Elem()
-		srcValue := reflect.ValueOf(row.scanDest[row.index]).Elem()
-		destValue.Set(srcValue)
-	}
+	destValue := reflect.ValueOf(destPtr).Elem()
+	srcValue := reflect.ValueOf(row.scanDest[row.index]).Elem()
+	destValue.Set(srcValue)
 }
 
 // Bytes returns the []byte value of the expression.
-func (row *Row) Bytes(format string, values ...any) []byte {
+func (row *Row) Bytes(b []byte, format string, values ...any) []byte {
 	if row.sqlRows == nil {
 		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
 		row.scanDest = append(row.scanDest, &sql.RawBytes{})
@@ -121,7 +50,15 @@ func (row *Row) Bytes(format string, values ...any) []byte {
 		row.index++
 	}()
 	scanDest := row.scanDest[row.index].(*sql.RawBytes)
-	return bytes.Clone(*scanDest)
+	if scanDest == nil {
+		return nil
+	}
+	if cap(b) < len(*scanDest) {
+		b = make([]byte, len(*scanDest))
+	}
+	b = b[:len(*scanDest)]
+	copy(b, *scanDest)
+	return b
 }
 
 // Bool returns the bool value of the expression.

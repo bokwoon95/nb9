@@ -115,8 +115,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 		file.info.CreationTime = row.Time("creation_time")
 		if !fileType.IsObject {
 			b := bufPool.Get().(*bytes.Buffer).Bytes()
-			row.Scan(&b, "COALESCE(text, data)")
-			file.buf = bytes.NewBuffer(b)
+			file.buf = bytes.NewBuffer(row.Bytes(b, "COALESCE(text, data)"))
 		}
 		return file
 	})
