@@ -379,7 +379,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func custom404(w http.ResponseWriter, r *http.Request, fsys FS, sitePrefix string) {
-	const cacheControl = "no-cache, stale-while-revalidate, max-age=120" /* 2 minutes */
 	file, err := fsys.WithContext(r.Context()).Open(path.Join(sitePrefix, "output/404/index.html"))
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
@@ -394,106 +393,13 @@ func custom404(w http.ResponseWriter, r *http.Request, fsys FS, sitePrefix strin
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
 	}
-	fileType := fileTypes[".html"]
-
-	if !fileType.IsGzippable {
-		if fileSeeker, ok := file.(io.ReadSeeker); ok {
-			hasher := hashPool.Get().(hash.Hash)
-			defer func() {
-				hasher.Reset()
-				hashPool.Put(hasher)
-			}()
-			_, err := io.Copy(hasher, file)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				http.Error(w, "404 Not Found", http.StatusNotFound)
-				return
-			}
-			_, err = fileSeeker.Seek(0, io.SeekStart)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				http.Error(w, "404 Not Found", http.StatusNotFound)
-				return
-			}
-			var b [blake2b.Size256]byte
-			w.Header().Set("Content-Type", fileType.ContentType)
-			w.Header().Set("Cache-Control", cacheControl)
-			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			w.WriteHeader(http.StatusNotFound)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), fileSeeker)
-			return
-		}
-		w.Header().Set("Content-Type", fileType.ContentType)
-		w.Header().Set("Cache-Control", cacheControl)
-		w.WriteHeader(http.StatusNotFound)
-		_, err := io.Copy(w, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-		}
-		return
-	}
-
-	// .html .css .js .md .txt .svg .ico .eot .otf .ttf .atom .webmanifest
-
 	if remoteFile, ok := file.(*RemoteFile); ok {
-		// If file is a RemoteFile is gzippable and is not fulltext indexed,
-		// its contents are already gzipped. We can reach directly into its
-		// buffer and skip the gzipping step.
-		if remoteFile.fileType.IsGzippable && !remoteFile.isFulltextIndexed {
-			hasher := hashPool.Get().(hash.Hash)
-			defer func() {
-				hasher.Reset()
-				hashPool.Put(hasher)
-			}()
-			_, err := hasher.Write(remoteFile.buf.Bytes())
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				http.Error(w, "404 Not Found", http.StatusNotFound)
-				return
-			}
-			var b [blake2b.Size256]byte
-			w.Header().Set("Content-Encoding", "gzip")
-			w.Header().Set("Content-Type", fileType.ContentType)
-			w.Header().Set("Cache-Control", cacheControl)
-			w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
-			w.WriteHeader(http.StatusNotFound)
-			http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(remoteFile.buf.Bytes()))
-			return
-		}
-	}
-
-	if fileInfo.Size() <= 1<<20 /* 1 MB */ {
 		hasher := hashPool.Get().(hash.Hash)
 		defer func() {
 			hasher.Reset()
 			hashPool.Put(hasher)
 		}()
-		var buf *bytes.Buffer
-		// gzip will at least halve the size of what needs to be buffered
-		gzippedSize := fileInfo.Size() >> 1
-		if gzippedSize > maxPoolableBufferCapacity {
-			buf = bytes.NewBuffer(make([]byte, 0, fileInfo.Size()))
-		} else {
-			buf = bufPool.Get().(*bytes.Buffer)
-			defer func() {
-				buf.Reset()
-				bufPool.Put(buf)
-			}()
-		}
-		multiWriter := io.MultiWriter(buf, hasher)
-		gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
-		gzipWriter.Reset(multiWriter)
-		defer func() {
-			gzipWriter.Reset(io.Discard)
-			gzipWriterPool.Put(gzipWriter)
-		}()
-		_, err := io.Copy(gzipWriter, file)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			http.Error(w, "404 Not Found", http.StatusNotFound)
-			return
-		}
-		err = gzipWriter.Close()
+		_, err := hasher.Write(remoteFile.buf.Bytes())
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			http.Error(w, "404 Not Found", http.StatusNotFound)
@@ -501,17 +407,16 @@ func custom404(w http.ResponseWriter, r *http.Request, fsys FS, sitePrefix strin
 		}
 		var b [blake2b.Size256]byte
 		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Set("Content-Type", fileType.ContentType)
-		w.Header().Set("Cache-Control", cacheControl)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache, stale-while-revalidate, max-age=120" /* 2 minutes */)
 		w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
 		w.WriteHeader(http.StatusNotFound)
-		http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(buf.Bytes()))
+		http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(remoteFile.buf.Bytes()))
 		return
 	}
-
 	w.Header().Set("Content-Encoding", "gzip")
-	w.Header().Set("Content-Type", fileType.ContentType)
-	w.Header().Set("Cache-Control", cacheControl)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
 	gzipWriter.Reset(w)
 	defer func() {
