@@ -136,7 +136,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// If the users database is present, check if the user is authorized to
 		// access the files for this site.
 		var username string
-		isAuthorizedForSite := true
+		var isAuthorizedForSite bool
 		if nbrew.UsersDB != nil {
 			authenticationTokenHash := getAuthenticationTokenHash(r)
 			if authenticationTokenHash == nil {
@@ -198,7 +198,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch head {
 		case "", "notes", "pages", "posts", "output":
-			if !isAuthorizedForSite {
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				if sitePrefix != "" || urlPath != "" {
 					notAuthorized(w, r)
 					return
@@ -207,7 +207,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			nbrew.files(w, r, username, sitePrefix, urlPath)
 			return
 		case "clipboard":
-			if !isAuthorizedForSite {
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
@@ -217,13 +217,13 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch urlPath {
 		case "regenerate":
-			if !isAuthorizedForSite {
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.regenerate(w, r, sitePrefix)
 		case "regeneratelist":
-			if !isAuthorizedForSite {
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
@@ -241,34 +241,35 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			nbrew.deletesite(w, r, username)
 		case "createfolder":
-			if !isAuthorizedForSite {
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.createfolder(w, r, username, sitePrefix)
 		case "createfile":
-			if !isAuthorizedForSite {
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.createfile(w, r, username, sitePrefix)
 		case "delete":
-			if !isAuthorizedForSite {
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.delete(w, r, username, sitePrefix)
 		case "search":
-			if !isAuthorizedForSite {
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.search(w, r, username, sitePrefix)
 		case "rename":
-			if !isAuthorizedForSite {
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
+			// TODO: nbrew.rename()
 		default:
 			notFound(w, r)
 		}
