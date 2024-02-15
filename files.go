@@ -1279,7 +1279,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					order = sq.Expr("file_path DESC")
 				}
 				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1329,7 +1328,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					order = sq.Expr("file_path ASC")
 				}
 				hasPreviousFile, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
-					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT 1" +
 						" FROM files" +
@@ -1378,7 +1376,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					order = sq.Expr("file_path DESC")
 				}
 				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1427,7 +1424,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					order = sq.Expr("file_path ASC")
 				}
 				nextFile, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
-					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1503,7 +1499,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					}
 				}
 				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1567,7 +1562,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					}
 				}
 				hasPreviousFile, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
-					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT 1" +
 						" FROM files" +
@@ -1635,7 +1629,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					}
 				}
 				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1698,7 +1691,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					}
 				}
 				nextFile, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
-					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1769,7 +1761,6 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		}
 	}
 	files, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-		Debug:   true,
 		Dialect: remoteFS.filesDialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
