@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bokwoon95/nb9/sq"
 	"golang.org/x/sync/errgroup"
@@ -485,6 +486,7 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 		srcFileID := srcFileInfo.(*RemoteFileInfo).FileID
 		destFileID := NewID()
 		_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
+			Debug:   true,
 			Dialect: remoteFS.filesDialect,
 			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 				" SELECT" +
@@ -544,6 +546,7 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error {
 	if remoteFS, ok := fsys.(*RemoteFS); ok {
 		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
+			Debug:   true,
 			Dialect: remoteFS.filesDialect,
 			Format:  "SELECT {*} FROM files WHERE file_path = {srcDirPath} OR file_path LIKE {pattern} ORDER BY file_path",
 			Values: []any{
@@ -613,6 +616,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 		switch remoteFS.filesDialect {
 		case "sqlite":
 			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
+				Debug:   true,
 				Dialect: remoteFS.filesDialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 					" SELECT" +
@@ -629,7 +633,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 					" JOIN files AS src_files ON src_files.file_path = items.value->>3",
 				Values: []any{
 					sq.StringParam("destDirPath", destDirPath),
-					sq.IntParam("start", len(srcDirPath)+1),
+					sq.IntParam("start", utf8.RuneCountInString(srcDirPath)+1),
 					sq.TimeParam("modTime", time.Now().UTC()),
 					sq.StringParam("items", b.String()),
 				},
@@ -655,7 +659,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 					" JOIN files AS src_files ON src_files.file_path = items.value->>3",
 				Values: []any{
 					sq.StringParam("destDirPath", destDirPath),
-					sq.IntParam("start", len(srcDirPath)+1),
+					sq.IntParam("start", utf8.RuneCountInString(srcDirPath)+1),
 					sq.TimeParam("modTime", time.Now().UTC()),
 					sq.StringParam("items", b.String()),
 				},
@@ -686,7 +690,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 					" JOIN files AS src_files ON src_files.file_path = items.src_file_path",
 				Values: []any{
 					sq.StringParam("destDirPath", destDirPath),
-					sq.IntParam("start", len(srcDirPath)+1),
+					sq.IntParam("start", utf8.RuneCountInString(srcDirPath)+1),
 					sq.TimeParam("modTime", time.Now().UTC()),
 					sq.StringParam("items", b.String()),
 				},

@@ -523,6 +523,9 @@ func FetchExists(ctx context.Context, db DB, query Query) (exists bool, err erro
 		logQuery(query.Dialect, buf.String(), args)
 	}
 	sqlRows, err := db.QueryContext(ctx, buf.String(), *args...)
+	if err != nil {
+		return false, err
+	}
 	if !sqlRows.Next() {
 		return false, sql.ErrNoRows
 	}

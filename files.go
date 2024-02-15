@@ -1900,10 +1900,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 	// .html .css .js .md .txt .svg .ico .eot .otf .ttf .atom .webmanifest
 
 	if remoteFile, ok := file.(*RemoteFile); ok {
-		// If file is a RemoteFile and is not fulltext indexed, its contents
-		// are already gzipped. We can reach directly into its buffer and skip
-		// the gzipping step.
-		if !remoteFile.isFulltextIndexed {
+		// If file is a RemoteFile is gzippable and is not fulltext indexed,
+		// its contents are already gzipped. We can reach directly into its
+		// buffer and skip the gzipping step.
+		if remoteFile.fileType.IsGzippable && !remoteFile.isFulltextIndexed {
 			hasher := hashPool.Get().(hash.Hash)
 			defer func() {
 				hasher.Reset()

@@ -222,8 +222,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			if request.Name != "" {
 				response.Name = filenameSafe(request.Name)
 			} else {
-				var timestamp [8]byte
-				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
 				if response.Ext == ".md" || response.Ext == ".txt" {
 					var line string
 					remainder := response.Content
@@ -241,9 +239,11 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 						break
 					}
 				}
-				if response.Name == "" {
-					response.Name = strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
-				}
+			}
+			if response.Name == "" {
+				var timestamp [8]byte
+				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
+				response.Name = strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
 			}
 			if response.Ext != ".html" && response.Ext != ".css" && response.Ext != ".js" && response.Ext != ".md" && response.Ext != ".txt" {
 				response.Ext = ".txt"
@@ -251,7 +251,8 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		case "pages":
 			if request.Name != "" {
 				response.Name = urlSafe(request.Name)
-			} else {
+			}
+			if response.Name == "" {
 				var timestamp [8]byte
 				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
 				response.Name = strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
@@ -266,24 +267,27 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 		case "posts":
+			var timestamp [8]byte
+			binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
+			prefix := strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
 			if request.Name != "" {
 				response.Name = urlSafe(request.Name)
 			} else {
-				var timestamp [8]byte
-				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
-				prefix := strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
-				var suffix string
 				remainder := response.Content
 				for remainder != "" {
-					suffix, remainder, _ = strings.Cut(remainder, "\n")
-					suffix = strings.TrimSpace(suffix)
-					if suffix == "" {
+					response.Name, remainder, _ = strings.Cut(remainder, "\n")
+					response.Name = strings.TrimSpace(response.Name)
+					if response.Name == "" {
 						continue
 					}
-					suffix = "-" + urlSafe(stripMarkdownStyles(goldmark.New(), []byte(suffix)))
+					response.Name = urlSafe(stripMarkdownStyles(goldmark.New(), []byte(response.Name)))
 					break
 				}
-				response.Name = prefix + suffix
+			}
+			if response.Name != "" {
+				response.Name = prefix + "-" + response.Name
+			} else {
+				response.Name = prefix
 			}
 			if response.Ext != ".md" {
 				response.Ext = ".md"
@@ -291,7 +295,8 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		default:
 			if request.Name != "" {
 				response.Name = urlSafe(request.Name)
-			} else {
+			}
+			if response.Name == "" {
 				var timestamp [8]byte
 				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
 				response.Name = strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
