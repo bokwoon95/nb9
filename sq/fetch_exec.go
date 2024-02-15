@@ -578,7 +578,7 @@ func substituteParams(dialect string, oldArgs, newArgs *[]any, paramIndexes map[
 func logQuery(dialect, query string, args *[]any) {
 	if true {
 		str, _ := Sprintf(dialect, query, *args)
-		os.Stderr.WriteString("\n" + str)
+		os.Stderr.WriteString(str + "\n")
 		return
 	}
 	var b strings.Builder
