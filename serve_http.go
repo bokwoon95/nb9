@@ -4,23 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"path"
-	"runtime/debug"
 	"strings"
 
 	"github.com/bokwoon95/nb9/sq"
 )
 
 func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println(string(debug.Stack()))
-		}
-	}()
 	scheme := "https://"
 	if nbrew.CMSDomain == "localhost" || strings.HasPrefix(nbrew.CMSDomain, "localhost:") {
 		scheme = "http://"

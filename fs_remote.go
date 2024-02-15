@@ -977,7 +977,6 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	switch fsys.filesDialect {
 	case "sqlite", "postgres":
 		deletedFileID, err = sq.FetchOne(fsys.ctx, tx, sq.Query{
-			Debug:   true,
 			Dialect: fsys.filesDialect,
 			Format:  "DELETE FROM files WHERE file_path = {newname} AND NOT is_dir RETURNING {*}",
 			Values: []any{
@@ -995,7 +994,6 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			updateParent = sq.Expr(", parent_id = (SELECT file_id FROM files WHERE file_path = {})", path.Dir(newname))
 		}
 		oldnameIsDir, err := sq.FetchOne(fsys.ctx, tx, sq.Query{
-			Debug:   true,
 			Dialect: fsys.filesDialect,
 			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime}{updateParent} WHERE file_path = {oldname} RETURNING {*}",
 			Values: []any{
@@ -1023,7 +1021,6 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		}
 		if oldnameIsDir {
 			_, err := sq.Exec(fsys.ctx, tx, sq.Query{
-				Debug:   true,
 				Dialect: fsys.filesDialect,
 				Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 				Values: []any{

@@ -486,7 +486,6 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 		srcFileID := srcFileInfo.(*RemoteFileInfo).FileID
 		destFileID := NewID()
 		_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
-			Debug:   true,
 			Dialect: remoteFS.filesDialect,
 			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 				" SELECT" +
@@ -546,7 +545,6 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error {
 	if remoteFS, ok := fsys.(*RemoteFS); ok {
 		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
-			Debug:   true,
 			Dialect: remoteFS.filesDialect,
 			Format:  "SELECT {*} FROM files WHERE file_path = {srcDirPath} OR file_path LIKE {pattern} ORDER BY file_path",
 			Values: []any{
@@ -616,7 +614,6 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 		switch remoteFS.filesDialect {
 		case "sqlite":
 			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
-				Debug:   true,
 				Dialect: remoteFS.filesDialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 					" SELECT" +
