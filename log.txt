@@ -21,9 +21,7 @@ uploadfile.go
 serve_http.go
 notebrew/main.go
 
-TODO: rework listDirectory such that fromTime is response.FromTime and always pulls from the fromtime query param instead of the from query param (same for beforeTime). Then from is always used as the tiebreaker so that even if there are millions of files with the same mod_time or creation_time, we can still paginate them chunk by chunk using the name as the tiebreaker.
-    TODO: listDirectory: change fromTime to fromDate, we only accept dates from now (because we have the name as the tiebreaker).
-    TODO: oh my gosh this is so hard to debug.
+TODO: rewrite the cookie handling portion of directory.js to mirror the sort/order logic on the server.
 TODO: structured template error
     We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
     ParseTemplate() error => parseTemplate() (numPrefixLines int, err error)
@@ -44,16 +42,19 @@ TODO: structured template error
     Given the massive number of error types with no line number, maybe it is better to just not highlight line numbers?
 TODO: uploadfile.go. Images are always resized to max 1080p for any dimension.
     - 25 MB upload limit.
+TODO: once you can upload images with uploadfile, make it so that any image uploaded but is not mentioned in the markdown content (use goldmark's markdown parser for this) is added to the Images field in PostData. Then in the default post.html, loop over the images and display them in a nice grid or something. No image viewer, pure HTML for this. The easiest dumbest way would be to put some kind of overlay <a href> that links directly to the image (so the browser is the image viewer).
+    - This way you achieve the ability to upload images easily! No user intervention is needed for manually embedding the images, they can upload images in a dumb and straightforward way akin to facebook.
 TODO: rename.go
-TODO: download.go
-    - "download" becomes a new contextual button users can use on selected files, just like cut/copy/delete.
-    - a new "download site" button becomes added to a site, which people can use to export their site folders (and upload it back using plain old uploadfile).
-    - a corresponding "upload files" option becomes available in the plus icon dropdown menu (separated from create file/create folder by a <hr>).
-TODO: rewrite the cookie handling portion of directory.js to mirror the sort/order logic on the server.
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
     NOTE: for languages don't parse all the language json files and keep them in memory, instead implement a TTL using timers and timer.Reset everytime someone requests for that language file. Once the timer expires, delete it from the map.
     BEFORE YOU DO THIS: look at how big the language files are. If it's an acceptable cost to keep them all in memory then just keep it in memory and reads will be much faster since you don't have to guard reads behind a mutex.
 TODO: a little "view data" link on file.html that simply the href "?data". When clicked, it generates live data of the page in real time if we're on a page.html, or the latest post/last page data if we're on post.html/postlist.html.
+TODO: download.go
+    - "download" becomes a new contextual button users can use on selected files, just like cut/copy/delete.
+    - a new "download site" button becomes added to a site, which people can use to export their site folders (and upload it back using plain old uploadfile).
+    - a corresponding "upload files" option becomes available in the plus icon dropdown menu (separated from create file/create folder by a <hr>).
+
+God the biggest benefit would be me finally having a personal online vault of my own to store fleeting notes and everything I read on the internet everyday.
 
 -- sqlite
 select unhex(items.value->>0, '-') as file_id, items.value->>1 as file_path
