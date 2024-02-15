@@ -1,0 +1,12 @@
+<style>
+html { max-width: 70ch; padding: 3em 1em; margin: auto; line-height: 1.75; font-size: 1.25em; background-color: #fafafa; }
+p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
+</style>
+<title>{{ if $.Site.Title }}{{ $.Site.Title }}{{ else }}My Blog{{ end }}</title>
+<div>
+  <a href='/'>{{ if $.Site.Title }}{{ $.Site.Title }}{{ else }}home{{ end }}</a>
+  &boxv; <a href='/posts/'>posts</a>
+</div>
+<hr>
+<h1>404 Not Found</h1>
+<p>The page you are looking for could not be found.</p>

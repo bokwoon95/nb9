@@ -331,6 +331,35 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			return nil
 		})
 		group.Go(func() error {
+			b, err := fs.ReadFile(RuntimeFS, "embed/404.html")
+			if err != nil {
+				getLogger(groupctx).Error(err.Error())
+				return nil
+			}
+			writer, err := nbrew.FS.WithContext(groupctx).OpenWriter(path.Join(sitePrefix, "pages/404.html"), 0644)
+			if err != nil {
+				getLogger(groupctx).Error(err.Error())
+				return nil
+			}
+			defer writer.Close()
+			_, err = writer.Write(b)
+			if err != nil {
+				getLogger(groupctx).Error(err.Error())
+				return nil
+			}
+			err = writer.Close()
+			if err != nil {
+				getLogger(groupctx).Error(err.Error())
+				return nil
+			}
+			err = siteGen.GeneratePage(groupctx, "pages/404.html", string(b))
+			if err != nil {
+				getLogger(groupctx).Error(err.Error())
+				return nil
+			}
+			return nil
+		})
+		group.Go(func() error {
 			b, err := fs.ReadFile(RuntimeFS, "embed/post.html")
 			if err != nil {
 				getLogger(groupctx).Error(err.Error())

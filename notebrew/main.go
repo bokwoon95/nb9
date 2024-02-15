@@ -665,6 +665,33 @@ func main() {
 				return err
 			}
 		}
+		_, err = fs.Stat(nbrew.FS, "pages/404.html")
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			b, err := fs.ReadFile(nb9.RuntimeFS, "embed/404.html")
+			if err != nil {
+				return err
+			}
+			writer, err := nbrew.FS.OpenWriter("pages/404.html", 0644)
+			if err != nil {
+				return err
+			}
+			defer writer.Close()
+			_, err = writer.Write(b)
+			if err != nil {
+				return err
+			}
+			err = writer.Close()
+			if err != nil {
+				return err
+			}
+			err = siteGen.GeneratePage(context.Background(), "pages/404.html", string(b))
+			if err != nil {
+				return err
+			}
+		}
 		_, err = fs.Stat(nbrew.FS, "output/themes/post.html")
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {

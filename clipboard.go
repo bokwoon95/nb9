@@ -425,7 +425,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				if !srcFileInfo.IsDir() {
 					switch response.SrcParent {
 					case "pages":
-						isMandatoryFile = name == "index.html"
+						isMandatoryFile = name == "index.html" || name == "404.html"
 					case "output/themes":
 						isMandatoryFile = name == "post.html" || name == "postlist.html"
 					}

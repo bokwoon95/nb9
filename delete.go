@@ -1,6 +1,7 @@
 package nb9
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -261,31 +262,41 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				head, tail, _ := strings.Cut(response.Parent, "/")
 				switch head {
 				case "pages":
-					if tail != "" || name != "index.html" {
+					if tail != "" || (name != "index.html" && name != "404.html") {
 						err := nbrew.FS.WithContext(groupctx).RemoveAll(path.Join(sitePrefix, "output", tail, strings.TrimSuffix(name, path.Ext(name))))
 						if err != nil {
 							getLogger(groupctx).Error(err.Error())
 							return nil
 						}
+						return nil
 					}
-					file, err := RuntimeFS.Open("embed/index.html")
+					b, err := fs.ReadFile(RuntimeFS, path.Join("embed", name))
 					if err != nil {
 						getLogger(groupctx).Error(err.Error())
 						return nil
 					}
-					defer file.Close()
-					writer, err := nbrew.FS.WithContext(groupctx).OpenWriter(path.Join(sitePrefix, "pages/index.html"), 0644)
+					writer, err := nbrew.FS.WithContext(groupctx).OpenWriter(path.Join(sitePrefix, "pages", name), 0644)
 					if err != nil {
 						getLogger(groupctx).Error(err.Error())
 						return nil
 					}
 					defer writer.Close()
-					_, err = io.Copy(writer, file)
+					_, err = io.Copy(writer, bytes.NewReader(b))
 					if err != nil {
 						getLogger(groupctx).Error(err.Error())
 						return nil
 					}
 					err = writer.Close()
+					if err != nil {
+						getLogger(groupctx).Error(err.Error())
+						return nil
+					}
+					siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
+					if err != nil {
+						getLogger(groupctx).Error(err.Error())
+						return nil
+					}
+					err = siteGen.GeneratePage(groupctx, path.Join("pages", name), string(b))
 					if err != nil {
 						getLogger(groupctx).Error(err.Error())
 						return nil
