@@ -576,10 +576,15 @@ func substituteParams(dialect string, oldArgs, newArgs *[]any, paramIndexes map[
 }
 
 func logQuery(dialect, query string, args *[]any) {
+	if true {
+		str, _ := Sprintf(dialect, query, *args)
+		os.Stderr.WriteString("\n" + str)
+		return
+	}
 	var b strings.Builder
 	b.Grow(len(query) * 3)
-	// b.WriteString(query)
-	// b.WriteString(";")
+	b.WriteString(query)
+	b.WriteString(";")
 	str, _ := Sprintf(dialect, b.String(), *args)
 	for i, arg := range *args {
 		if i == 0 {
