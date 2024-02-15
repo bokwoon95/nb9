@@ -928,7 +928,7 @@ func TimeParam(name string, t time.Time) Parameter {
 }
 
 // UUIDParam creates a new Parameter. It wraps the value with UUID().
-func UUIDParam(name string, value any) Parameter {
+func UUIDParam(name string, value [16]byte) Parameter {
 	return Parameter{Name: name, Value: UUID(value)}
 }
 

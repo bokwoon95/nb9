@@ -165,20 +165,11 @@ func (row *Row) NullTime(format string, values ...any) sql.NullTime {
 }
 
 // UUID scans the UUID expression into destPtr.
-func (row *Row) UUID(destPtr any, format string, values ...any) {
+func (row *Row) UUID(format string, values ...any) [16]byte {
 	if row.sqlRows == nil {
-		if _, ok := destPtr.(*[16]byte); !ok {
-			if reflect.TypeOf(destPtr).Kind() != reflect.Ptr {
-				panic(fmt.Errorf(callsite(1)+"cannot pass in non pointer value (%#v) as destPtr", destPtr))
-			}
-			destValue := reflect.ValueOf(destPtr).Elem()
-			if destValue.Kind() != reflect.Array || destValue.Len() != 16 || destValue.Type().Elem().Kind() != reflect.Uint8 {
-				panic(fmt.Errorf(callsite(1)+"%T is not a pointer to a [16]byte", destPtr))
-			}
-		}
 		row.fetchExprs = append(row.fetchExprs, Expression{Format: format, Values: values})
 		row.scanDest = append(row.scanDest, &sql.RawBytes{})
-		return
+		return [16]byte{}
 	}
 	defer func() {
 		row.index++
@@ -196,14 +187,7 @@ func (row *Row) UUID(destPtr any, format string, values ...any) {
 			}
 		}
 	}
-	if destArrayPtr, ok := destPtr.(*[16]byte); ok {
-		copy((*destArrayPtr)[:], uuid[:])
-		return
-	}
-	destValue := reflect.ValueOf(destPtr).Elem()
-	for i := 0; i < 16; i++ {
-		destValue.Index(i).Set(reflect.ValueOf(uuid[i]))
-	}
+	return uuid
 }
 
 func callsite(skip int) string {

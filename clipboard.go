@@ -555,7 +555,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 			FilePath string
 			IsDir    bool
 		}) {
-			row.UUID(&srcFile.FileID, "file_id")
+			srcFile.FileID = row.UUID("file_id")
 			srcFile.FilePath = row.String("file_path")
 			srcFile.IsDir = row.Bool("is_dir")
 			return srcFile

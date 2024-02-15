@@ -147,7 +147,7 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 		FileID   [16]byte
 		FilePath string
 	}) {
-		row.UUID(&result.FileID, "file_id")
+		result.FileID = row.UUID("file_id")
 		result.FilePath = row.String("file_path")
 		return result
 	})

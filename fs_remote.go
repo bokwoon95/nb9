@@ -107,7 +107,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 			storage:  fsys.storage,
 			info:     &RemoteFileInfo{},
 		}
-		row.UUID(&file.info.FileID, "file_id")
+		file.info.FileID = row.UUID("file_id")
 		file.info.FilePath = row.String("file_path")
 		file.info.isDir = row.Bool("is_dir")
 		file.info.size = row.Int64("size")
@@ -176,7 +176,7 @@ func (fsys *RemoteFS) Stat(name string) (fs.FileInfo, error) {
 		},
 	}, func(row *sq.Row) *RemoteFileInfo {
 		fileInfo := &RemoteFileInfo{}
-		row.UUID(&fileInfo.FileID, "file_id")
+		fileInfo.FileID = row.UUID("file_id")
 		fileInfo.FilePath = row.String("file_path")
 		fileInfo.isDir = row.Bool("is_dir")
 		fileInfo.size = row.Int64("size")
@@ -342,7 +342,7 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 			fileID [16]byte
 			isDir  bool
 		}) {
-			row.UUID(&result.fileID, "file_id")
+			result.fileID = row.UUID("file_id")
 			result.isDir = row.Bool("is_dir")
 			return result
 		})
@@ -369,7 +369,7 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 			filePath string
 			isDir    bool
 		}) {
-			row.UUID(&result.fileID, "file_id")
+			result.fileID = row.UUID("file_id")
 			result.filePath = row.String("file_path")
 			result.isDir = row.Bool("is_dir")
 			return result
@@ -391,7 +391,7 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 				file.parentID = result.fileID
 			}
 		}
-		if file.parentID == nil {
+		if file.parentID == [16]byte{} {
 			return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrNotExist}
 		}
 	}
@@ -423,7 +423,7 @@ type RemoteFileWriter struct {
 	dialect           string
 	storage           Storage
 	fileID            [16]byte
-	parentID          any // either nil or [16]byte
+	parentID          [16]byte
 	filePath          string
 	size              int64
 	buf               *bytes.Buffer
@@ -635,7 +635,7 @@ func (fsys *RemoteFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		},
 	}, func(row *sq.Row) fs.DirEntry {
 		file := &RemoteFileInfo{}
-		row.UUID(&file.FileID, "file_id")
+		file.FileID = row.UUID("file_id")
 		file.FilePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
 		file.size = row.Int64("size")
@@ -849,7 +849,7 @@ func (fsys *RemoteFS) Remove(name string) error {
 		isDir       bool
 		hasChildren bool
 	}) {
-		row.UUID(&file.fileID, "file_id")
+		file.fileID = row.UUID("file_id")
 		file.filePath = row.String("file_path")
 		file.isDir = row.Bool("is_dir")
 		file.hasChildren = row.Bool("EXISTS (SELECT 1 FROM files WHERE file_path LIKE {pattern} ESCAPE '\\')", sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(name)+"/%"))
@@ -914,7 +914,7 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 		fileID   [16]byte
 		filePath string
 	}) {
-		row.UUID(&file.fileID, "file_id")
+		file.fileID = row.UUID("file_id")
 		file.filePath = row.String("file_path")
 		return file
 	})
@@ -982,8 +982,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 				sq.StringParam("newname", newname),
 			},
 		}, func(row *sq.Row) (fileID [16]byte) {
-			row.UUID(&fileID, "file_id")
-			return fileID
+			return row.UUID("file_id")
 		})
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
@@ -1048,7 +1047,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			FileID [16]byte
 			IsDir  bool
 		}) {
-			row.UUID(&result.FileID, "file_id")
+			result.FileID = row.UUID("file_id")
 			result.IsDir = row.Bool("is_dir")
 			return result
 		})

@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
@@ -49,36 +48,25 @@ type DialectValuer interface {
 
 // UUIDValue takes in a type whose underlying type must be a [16]byte and
 // returns a driver.Valuer.
-func UUID(value any) driver.Valuer {
+func UUID(value [16]byte) driver.Valuer {
 	return &uuidValue{value: value}
 }
 
 type uuidValue struct {
 	dialect string
-	value   any
+	value   [16]byte
 }
 
 // Value implements the driver.Valuer interface.
 func (v *uuidValue) Value() (driver.Value, error) {
-	if v.value == nil {
+	if v.value == [16]byte{} {
 		return nil, nil
 	}
-	uuid, ok := v.value.([16]byte)
-	if !ok {
-		value := reflect.ValueOf(v.value)
-		typ := value.Type()
-		if value.Kind() != reflect.Array || value.Len() != 16 || typ.Elem().Kind() != reflect.Uint8 {
-			return nil, fmt.Errorf("%[1]v %[1]T is not [16]byte", v.value)
-		}
-		for i := 0; i < value.Len(); i++ {
-			uuid[i] = value.Index(i).Interface().(byte)
-		}
-	}
 	if v.dialect != DialectPostgres {
-		return uuid[:], nil
+		return v.value[:], nil
 	}
 	var buf [36]byte
-	googleuuid.EncodeHex(buf[:], uuid)
+	googleuuid.EncodeHex(buf[:], v.value)
 	return string(buf[:]), nil
 }
 
