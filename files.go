@@ -830,7 +830,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			if len(response.Sites) > response.Limit {
 				uri := &url.URL{
 					Scheme:   r.URL.Scheme,
-					Host:     r.URL.Host,
+					Host:     r.Host,
 					Path:     r.URL.Path,
 					RawQuery: "from=" + url.QueryEscape(response.Sites[response.Limit].Name) + "&limit=" + strconv.Itoa(response.Limit),
 				}
@@ -858,7 +858,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			if hasPreviousSite {
 				uri := &url.URL{
 					Scheme:   r.URL.Scheme,
-					Host:     r.URL.Host,
+					Host:     r.Host,
 					Path:     r.URL.Path,
 					RawQuery: "before=" + url.QueryEscape(response.From) + "&limit=" + strconv.Itoa(response.Limit),
 				}
@@ -906,7 +906,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				response.Sites = response.Sites[1:]
 				uri := &url.URL{
 					Scheme:   r.URL.Scheme,
-					Host:     r.URL.Host,
+					Host:     r.Host,
 					Path:     r.URL.Path,
 					RawQuery: "before=" + url.QueryEscape(response.Sites[0].Name) + "&limit=" + strconv.Itoa(response.Limit),
 				}
@@ -938,7 +938,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			}
 			uri := &url.URL{
 				Scheme:   r.URL.Scheme,
-				Host:     r.URL.Host,
+				Host:     r.Host,
 				Path:     r.URL.Path,
 				RawQuery: "from=" + url.QueryEscape(nextSite) + "&limit=" + strconv.Itoa(response.Limit),
 			}
@@ -981,7 +981,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	if len(response.Sites) > response.Limit {
 		uri := &url.URL{
 			Scheme:   r.URL.Scheme,
-			Host:     r.URL.Host,
+			Host:     r.Host,
 			Path:     r.URL.Path,
 			RawQuery: "from=" + url.QueryEscape(response.Sites[response.Limit].Name) + "&limit=" + strconv.Itoa(response.Limit),
 		}
@@ -990,19 +990,6 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	}
 	writeResponse(w, r, response)
 	return
-}
-
-// copied from https://pkg.go.dev/github.com/mattn/go-sqlite3#pkg-variables
-var timestampFormats = []string{
-	"2006-01-02 15:04:05.999999999-07:00",
-	"2006-01-02T15:04:05.999999999-07:00",
-	"2006-01-02 15:04:05.999999999",
-	"2006-01-02T15:04:05.999999999",
-	"2006-01-02 15:04:05",
-	"2006-01-02T15:04:05",
-	"2006-01-02 15:04",
-	"2006-01-02T15:04",
-	"2006-01-02",
 }
 
 func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
@@ -1022,16 +1009,16 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		IsDir           bool           `json:"isDir"`
 		SearchSupported bool           `json:"searchSupported"`
 
-		Sort        string    `json:"sort,omitempty"`
-		Order       string    `json:"order,omitempty"`
-		From        string    `json:"from,omitempty"`
-		FromTime    time.Time `json:"fromTime,omitempty"` // TODO: make use of response.FromTime
-		Before      string    `json:"before,omitempty"`
-		BeforeTime  time.Time `json:"beforeTime,omitempty"` // TODO: make use of response.BeforeTime
-		Limit       int       `json:"limit,omitempty"`
-		Files       []File    `json:"files"`
-		PreviousURL string    `json:"previousURL,omitempty"`
-		NextURL     string    `json:"nextURL,omitempty"`
+		Sort        string `json:"sort,omitempty"`
+		Order       string `json:"order,omitempty"`
+		From        string `json:"from,omitempty"`
+		FromTime    string `json:"fromTime,omitempty"`
+		Before      string `json:"before,omitempty"`
+		BeforeTime  string `json:"beforeTime,omitempty"`
+		Limit       int    `json:"limit,omitempty"`
+		Files       []File `json:"files"`
+		PreviousURL string `json:"previousURL,omitempty"`
+		NextURL     string `json:"nextURL,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if response.Files == nil {
@@ -1270,20 +1257,40 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		response.Limit = 1000
 	}
 
+	var order sq.Expression
+	if response.Sort == "name" {
+		if response.Order == "asc" {
+			order = sq.Expr("file_path ASC")
+		} else {
+			order = sq.Expr("file_path DESC")
+		}
+	} else if response.Sort == "edited" {
+		if response.Order == "asc" {
+			order = sq.Expr("mod_time ASC, file_path ASC")
+		} else {
+			order = sq.Expr("mod_time DESC, file_path DESC")
+		}
+	} else if response.Sort == "created" {
+		if response.Order == "asc" {
+			order = sq.Expr("creation_time ASC, file_path ASC")
+		} else {
+			order = sq.Expr("creation_time DESC, file_path DESC")
+		}
+	}
+
 	if response.Sort == "name" {
 		response.From = r.Form.Get("from")
 		if response.From != "" {
 			group, groupctx := errgroup.WithContext(r.Context())
 			group.Go(func() error {
-				var filter, order sq.Expression
+				var filter sq.Expression
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path >= {}", path.Join(sitePrefix, filePath, response.From))
-					order = sq.Expr("file_path ASC")
 				} else {
 					filter = sq.Expr("file_path <= {}", path.Join(sitePrefix, filePath, response.From))
-					order = sq.Expr("file_path DESC")
 				}
 				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
+					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1315,7 +1322,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					response.Files = response.Files[:response.Limit]
 					uri := &url.URL{
 						Scheme:   r.URL.Scheme,
-						Host:     r.URL.Host,
+						Host:     r.Host,
 						Path:     r.URL.Path,
 						RawQuery: "from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit),
 					}
@@ -1331,14 +1338,17 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					filter = sq.Expr("file_path > {}", path.Join(sitePrefix, filePath, response.From))
 				}
 				hasPreviousFile, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
+					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT 1" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
-						" AND {filter}",
+						" AND {filter}" +
+						" ORDER BY {order}",
 					Values: []any{
 						sq.StringParam("filePath", path.Join(sitePrefix, filePath)),
 						sq.Param("filter", filter),
+						sq.Param("order", order),
 					},
 				})
 				if err != nil {
@@ -1347,7 +1357,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				if hasPreviousFile {
 					uri := &url.URL{
 						Scheme:   r.URL.Scheme,
-						Host:     r.URL.Host,
+						Host:     r.Host,
 						Path:     r.URL.Path,
 						RawQuery: "before=" + url.QueryEscape(response.From) + "&limit=" + strconv.Itoa(response.Limit),
 					}
@@ -1364,20 +1374,18 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			writeResponse(w, r, response)
 			return
 		}
-
 		response.Before = r.Form.Get("before")
 		if response.Before != "" {
 			group, groupctx := errgroup.WithContext(r.Context())
 			group.Go(func() error {
-				var filter, order sq.Expression
+				var filter sq.Expression
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path < {}", path.Join(sitePrefix, filePath, response.Before))
-					order = sq.Expr("file_path ASC")
 				} else {
 					filter = sq.Expr("file_path > {}", path.Join(sitePrefix, filePath, response.Before))
-					order = sq.Expr("file_path DESC")
 				}
 				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
+					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1408,7 +1416,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					response.Files = response.Files[1:]
 					uri := &url.URL{
 						Scheme:   r.URL.Scheme,
-						Host:     r.URL.Host,
+						Host:     r.Host,
 						Path:     r.URL.Path,
 						RawQuery: "before=" + url.QueryEscape(response.Files[0].Name) + "&limit=" + strconv.Itoa(response.Limit),
 					}
@@ -1417,15 +1425,14 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				return nil
 			})
 			group.Go(func() error {
-				var filter, order sq.Expression
+				var filter sq.Expression
 				if response.Order == "asc" {
 					filter = sq.Expr("file_path >= {}", path.Join(sitePrefix, filePath, response.Before))
-					order = sq.Expr("file_path ASC")
 				} else {
 					filter = sq.Expr("file_path <= {}", path.Join(sitePrefix, filePath, response.Before))
-					order = sq.Expr("file_path DESC")
 				}
 				nextFile, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
+					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1453,7 +1460,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 				uri := &url.URL{
 					Scheme:   r.URL.Scheme,
-					Host:     r.URL.Host,
+					Host:     r.Host,
 					Path:     r.URL.Path,
 					RawQuery: "from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit),
 				}
@@ -1471,51 +1478,42 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		}
 	}
 
+	const timeFormat = "2006-01-02T150405.999999999Z"
 	if response.Sort == "edited" || response.Sort == "created" {
-		str := r.Form.Get("fromTime")
-		if str != "" {
-			str = strings.TrimSuffix(str, "Z")
-			for _, format := range timestampFormats {
-				timeVal, err := time.ParseInLocation(format, str, time.UTC)
-				if err == nil {
-					response.FromTime = timeVal
-					break
-				}
-			}
+		fromTime, err := time.ParseInLocation(timeFormat, r.Form.Get("fromTime"), time.UTC)
+		if err == nil {
+			response.FromTime = r.Form.Get("fromTime")
 			response.From = r.Form.Get("from")
 			group, groupctx := errgroup.WithContext(r.Context())
 			group.Go(func() error {
-				var filter, order sq.Expression
+				var filter sq.Expression
 				if response.Sort == "edited" {
 					if response.Order == "asc" {
-						filter = sq.Expr("mod_time >= {}", sq.NewTimestamp(response.FromTime))
+						filter = sq.Expr("mod_time >= {}", sq.NewTimestamp(fromTime))
 						if response.From != "" {
-							filter = filter.Append(", file_path >= {}", path.Join(response.SitePrefix, response.FilePath, response.From))
+							filter = filter.Append("AND file_path >= {}", path.Join(response.SitePrefix, response.FilePath, response.From))
 						}
-						order = sq.Expr("mod_time ASC, file_path ASC")
 					} else {
-						filter = sq.Expr("mod_time <= {}", sq.NewTimestamp(response.FromTime))
+						filter = sq.Expr("mod_time <= {}", sq.NewTimestamp(fromTime))
 						if response.From != "" {
-							filter = filter.Append(", file_path <= {}", path.Join(response.SitePrefix, response.FilePath, response.From))
+							filter = filter.Append("AND file_path <= {}", path.Join(response.SitePrefix, response.FilePath, response.From))
 						}
-						order = sq.Expr("mod_time DESC, file_path DESC")
 					}
 				} else if response.Sort == "created" {
 					if response.Order == "asc" {
-						filter = sq.Expr("creation_time >= {}", sq.NewTimestamp(response.FromTime))
+						filter = sq.Expr("creation_time >= {}", sq.NewTimestamp(fromTime))
 						if response.From != "" {
-							filter = filter.Append(", file_path >= {}", path.Join(response.SitePrefix, response.FilePath, response.From))
+							filter = filter.Append("AND file_path >= {}", path.Join(response.SitePrefix, response.FilePath, response.From))
 						}
-						order = sq.Expr("creation_time ASC, file_path ASC")
 					} else {
-						filter = sq.Expr("creation_time <= {}", sq.NewTimestamp(response.FromTime))
+						filter = sq.Expr("creation_time <= {}", sq.NewTimestamp(fromTime))
 						if response.From != "" {
-							filter = filter.Append(", file_path <= {}", path.Join(response.SitePrefix, response.FilePath, response.From))
+							filter = filter.Append("AND file_path <= {}", path.Join(response.SitePrefix, response.FilePath, response.From))
 						}
-						order = sq.Expr("creation_time DESC, file_path DESC")
 					}
 				}
 				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
+					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1547,13 +1545,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					response.Files = response.Files[:response.Limit]
 					uri := &url.URL{
 						Scheme: r.URL.Scheme,
-						Host:   r.URL.Host,
+						Host:   r.Host,
 						Path:   r.URL.Path,
 					}
 					if response.Sort == "edited" {
-						uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
+						uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.ModTime.UTC().Format(timeFormat)) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
 					} else if response.Sort == "created" {
-						uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.CreationTime.UTC().Format("2006-01-02T15:04:05Z")) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
+						uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.CreationTime.UTC().Format(timeFormat)) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
 					}
 					response.NextURL = uri.String()
 				}
@@ -1563,38 +1561,41 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				var filter sq.Expression
 				if response.Sort == "edited" {
 					if response.Order == "asc" {
-						filter = sq.Expr("mod_time < {}", str)
+						filter = sq.Expr("mod_time < {}", sq.NewTimestamp(fromTime))
 						if response.From != "" {
-							filter = filter.Append(", file_path < {}", path.Join(response.SitePrefix, response.FilePath, response.From))
+							filter = filter.Append("AND file_path < {}", path.Join(response.SitePrefix, response.FilePath, response.From))
 						}
 					} else {
-						filter = sq.Expr("mod_time > {}", str)
+						filter = sq.Expr("mod_time > {}", sq.NewTimestamp(fromTime))
 						if response.From != "" {
-							filter = filter.Append(", file_path > {}", path.Join(response.SitePrefix, response.FilePath, response.From))
+							filter = filter.Append("AND file_path > {}", path.Join(response.SitePrefix, response.FilePath, response.From))
 						}
 					}
 				} else if response.Sort == "created" {
 					if response.Order == "asc" {
-						filter = sq.Expr("creation_time < {}", str)
+						filter = sq.Expr("creation_time < {}", sq.NewTimestamp(fromTime))
 						if response.From != "" {
-							filter = filter.Append(", file_path < {}", path.Join(response.SitePrefix, response.FilePath, response.From))
+							filter = filter.Append("AND file_path < {}", path.Join(response.SitePrefix, response.FilePath, response.From))
 						}
 					} else {
-						filter = sq.Expr("creation_time > {}", str)
+						filter = sq.Expr("creation_time > {}", sq.NewTimestamp(fromTime))
 						if response.From != "" {
-							filter = filter.Append(", file_path > {}", path.Join(response.SitePrefix, response.FilePath, response.From))
+							filter = filter.Append("AND file_path > {}", path.Join(response.SitePrefix, response.FilePath, response.From))
 						}
 					}
 				}
 				hasPreviousFile, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
+					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT 1" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
-						" AND {filter}",
+						" AND {filter}" +
+						" ORDER BY {order}",
 					Values: []any{
 						sq.StringParam("filePath", path.Join(sitePrefix, filePath)),
 						sq.Param("filter", filter),
+						sq.Param("order", order),
 					},
 				})
 				if err != nil {
@@ -1603,13 +1604,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				if hasPreviousFile {
 					uri := &url.URL{
 						Scheme: r.URL.Scheme,
-						Host:   r.URL.Host,
+						Host:   r.Host,
 						Path:   r.URL.Path,
 					}
 					if response.From != "" {
-						uri.RawQuery = "beforeTime=" + url.QueryEscape(response.FromTime.UTC().Format("2006-01-02T15:04:05Z")) + "&before=" + url.QueryEscape(response.From) + "&limit=" + strconv.Itoa(response.Limit)
+						uri.RawQuery = "beforeTime=" + url.QueryEscape(response.FromTime) + "&before=" + url.QueryEscape(response.From) + "&limit=" + strconv.Itoa(response.Limit)
 					} else {
-						uri.RawQuery = "beforeTime=" + url.QueryEscape(response.FromTime.UTC().Format("2006-01-02T15:04:05Z")) + "&limit=" + strconv.Itoa(response.Limit)
+						uri.RawQuery = "beforeTime=" + url.QueryEscape(response.FromTime) + "&limit=" + strconv.Itoa(response.Limit)
 					}
 					response.PreviousURL = uri.String()
 				}
@@ -1624,51 +1625,40 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			writeResponse(w, r, response)
 			return
 		}
-
-		str = r.Form.Get("beforeTime")
-		if str != "" {
-			str = strings.TrimSuffix(str, "Z")
-			for _, format := range timestampFormats {
-				timeVal, err := time.ParseInLocation(format, str, time.UTC)
-				if err == nil {
-					response.BeforeTime = timeVal
-					break
-				}
-			}
+		beforeTime, err := time.ParseInLocation(timeFormat, r.Form.Get("beforeTime"), time.UTC)
+		if err == nil {
+			response.BeforeTime = r.Form.Get("beforeTime")
 			response.Before = r.Form.Get("before")
 			group, groupctx := errgroup.WithContext(r.Context())
 			group.Go(func() error {
-				var filter, order sq.Expression
+				var filter sq.Expression
 				if response.Sort == "edited" {
 					if response.Order == "asc" {
-						filter = sq.Expr("mod_time < {}", sq.NewTimestamp(response.BeforeTime))
+						filter = sq.Expr("mod_time < {}", sq.NewTimestamp(beforeTime))
 						if response.Before != "" {
-							filter = filter.Append(", file_path < {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
+							filter = filter.Append("AND file_path < {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
 						}
-						order = sq.Expr("mod_time ASC, file_path ASC")
 					} else {
-						filter = sq.Expr("mod_time > {}", sq.NewTimestamp(response.BeforeTime))
+						filter = sq.Expr("mod_time > {}", sq.NewTimestamp(beforeTime))
 						if response.Before != "" {
-							filter = filter.Append(", file_path > {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
+							filter = filter.Append("AND file_path > {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
 						}
-						order = sq.Expr("mod_time DESC, file_path DESC")
 					}
 				} else if response.Sort == "created" {
 					if response.Order == "asc" {
-						filter = sq.Expr("creation_time < {}", sq.NewTimestamp(response.BeforeTime))
+						filter = sq.Expr("creation_time < {}", sq.NewTimestamp(beforeTime))
 						if response.Before != "" {
-							filter = filter.Append(", file_path < {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
+							filter = filter.Append("AND file_path < {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
 						}
-						order = sq.Expr("creation_time ASC, file_path ASC")
 					} else {
-						filter = sq.Expr("creation_time > {}", sq.NewTimestamp(response.BeforeTime))
+						filter = sq.Expr("creation_time > {}", sq.NewTimestamp(beforeTime))
 						if response.Before != "" {
-							filter = filter.Append(", file_path > {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
+							filter = filter.Append("AND file_path > {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
 						}
-						order = sq.Expr("creation_time DESC, file_path DESC")
 					}
 				}
 				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
+					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1699,50 +1689,47 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 					response.Files = response.Files[1:]
 					uri := &url.URL{
 						Scheme: r.URL.Scheme,
-						Host:   r.URL.Host,
+						Host:   r.Host,
 						Path:   r.URL.Path,
 					}
 					if response.Sort == "edited" {
-						uri.RawQuery = "beforeTime=" + url.QueryEscape(response.Files[0].ModTime.UTC().Format("2006-01-02T15:04:05Z")) + "&before=" + url.QueryEscape(response.Files[0].Name) + "&limit=" + strconv.Itoa(response.Limit)
+						uri.RawQuery = "beforeTime=" + url.QueryEscape(response.Files[0].ModTime.UTC().Format(timeFormat)) + "&before=" + url.QueryEscape(response.Files[0].Name) + "&limit=" + strconv.Itoa(response.Limit)
 					} else if response.Sort == "created" {
-						uri.RawQuery = "beforeTime=" + url.QueryEscape(response.Files[0].CreationTime.UTC().Format("2006-01-02T15:04:05Z")) + "&before=" + url.QueryEscape(response.Files[0].Name) + "&limit=" + strconv.Itoa(response.Limit)
+						uri.RawQuery = "beforeTime=" + url.QueryEscape(response.Files[0].CreationTime.UTC().Format(timeFormat)) + "&before=" + url.QueryEscape(response.Files[0].Name) + "&limit=" + strconv.Itoa(response.Limit)
 					}
 					response.PreviousURL = uri.String()
 				}
 				return nil
 			})
 			group.Go(func() error {
-				var filter, order sq.Expression
+				var filter sq.Expression
 				if response.Sort == "edited" {
 					if response.Order == "asc" {
-						filter = sq.Expr("mod_time >= {}", sq.NewTimestamp(response.BeforeTime))
+						filter = sq.Expr("mod_time >= {}", sq.NewTimestamp(beforeTime))
 						if response.Before != "" {
-							filter = filter.Append(", file_path >= {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
+							filter = filter.Append("AND file_path >= {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
 						}
-						order = sq.Expr("mod_time ASC, file_path ASC")
 					} else {
-						filter = sq.Expr("mod_time <= {}", sq.NewTimestamp(response.BeforeTime))
+						filter = sq.Expr("mod_time <= {}", sq.NewTimestamp(beforeTime))
 						if response.Before != "" {
-							filter = filter.Append(", file_path <= {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
+							filter = filter.Append("AND file_path <= {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
 						}
-						order = sq.Expr("mod_time DESC, file_path DESC")
 					}
 				} else if response.Sort == "created" {
 					if response.Order == "asc" {
-						filter = sq.Expr("creation_time >= {}", sq.NewTimestamp(response.BeforeTime))
+						filter = sq.Expr("creation_time >= {}", sq.NewTimestamp(beforeTime))
 						if response.Before != "" {
-							filter = filter.Append(", file_path >= {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
+							filter = filter.Append("AND file_path >= {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
 						}
-						order = sq.Expr("creation_time ASC, file_path ASC")
 					} else {
-						filter = sq.Expr("creation_time <= {}", sq.NewTimestamp(response.BeforeTime))
+						filter = sq.Expr("creation_time <= {}", sq.NewTimestamp(beforeTime))
 						if response.Before != "" {
-							filter = filter.Append(", file_path <= {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
+							filter = filter.Append("AND file_path <= {}", path.Join(response.SitePrefix, response.FilePath, response.Before))
 						}
-						order = sq.Expr("creation_time DESC, file_path DESC")
 					}
 				}
 				nextFile, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
+					Debug:   true,
 					Dialect: remoteFS.filesDialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
@@ -1770,13 +1757,13 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				}
 				uri := &url.URL{
 					Scheme: r.URL.Scheme,
-					Host:   r.URL.Host,
+					Host:   r.Host,
 					Path:   r.URL.Path,
 				}
 				if response.Sort == "edited" {
-					uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
+					uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.ModTime.UTC().Format(timeFormat)) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
 				} else if response.Sort == "created" {
-					uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.CreationTime.UTC().Format("2006-01-02T15:04:05Z")) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
+					uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.CreationTime.UTC().Format(timeFormat)) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
 				}
 				response.NextURL = uri.String()
 				return nil
@@ -1792,27 +1779,8 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		}
 	}
 
-	var order sq.Expression
-	if response.Sort == "name" {
-		if response.Order == "asc" {
-			order = sq.Expr("file_path ASC")
-		} else {
-			order = sq.Expr("file_path DESC")
-		}
-	} else if response.Sort == "edited" {
-		if response.Order == "asc" {
-			order = sq.Expr("mod_time ASC, file_path ASC")
-		} else {
-			order = sq.Expr("mod_time DESC, file_path DESC")
-		}
-	} else if response.Sort == "created" {
-		if response.Order == "asc" {
-			order = sq.Expr("creation_time ASC, file_path ASC")
-		} else {
-			order = sq.Expr("creation_time DESC, file_path DESC")
-		}
-	}
 	files, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
+		Debug:   true,
 		Dialect: remoteFS.filesDialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
@@ -1844,15 +1812,15 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 		response.Files = response.Files[:response.Limit]
 		uri := &url.URL{
 			Scheme: r.URL.Scheme,
-			Host:   r.URL.Host,
+			Host:   r.Host,
 			Path:   r.URL.Path,
 		}
 		if response.Sort == "name" {
 			uri.RawQuery = "from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
 		} else if response.Sort == "edited" {
-			uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.ModTime.UTC().Format("2006-01-02T15:04:05Z")) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
+			uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.ModTime.UTC().Format(timeFormat)) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
 		} else if response.Sort == "created" {
-			uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.CreationTime.UTC().Format("2006-01-02T15:04:05Z")) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
+			uri.RawQuery = "fromTime=" + url.QueryEscape(nextFile.CreationTime.UTC().Format(timeFormat)) + "&from=" + url.QueryEscape(nextFile.Name) + "&limit=" + strconv.Itoa(response.Limit)
 		}
 		response.NextURL = uri.String()
 	}

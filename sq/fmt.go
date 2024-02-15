@@ -856,7 +856,7 @@ func Expr(format string, values ...any) Expression {
 }
 
 func (expr Expression) Append(format string, values ...any) Expression {
-	expr.Format += format
+	expr.Format += " " + format
 	expr.Values = append(expr.Values, values...)
 	return expr
 }
