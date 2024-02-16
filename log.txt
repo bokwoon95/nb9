@@ -34,6 +34,7 @@ TODO: structured template error
             {"line": 10, "msg": "executing \"abcd.html\" at <throw>: wrong number of args for throw: want 1 got 0"},
         ]
     }
+    TODO: maybe, maybe make all template errors fail at the first sign of trouble (so using errgroup's early cancellation no matter the error).
     - parse and execution errors always contain only one line number, because html/template stops at the first error
     - internal templates ending in html can be multiple errors. these have no line number.
     - external templates not starting with /themes/ can be multiple errors. these have no line number.
