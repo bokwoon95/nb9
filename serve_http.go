@@ -5,9 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"errors"
-	"hash"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -16,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/bokwoon95/nb9/sq"
-	"golang.org/x/crypto/blake2b"
 )
 
 func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -388,42 +385,26 @@ func custom404(w http.ResponseWriter, r *http.Request, fsys FS, sitePrefix strin
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
 	}
-	fileInfo, err := file.Stat()
-	if err != nil {
-		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, "404 Not Found", http.StatusNotFound)
-		return
-	}
 	if remoteFile, ok := file.(*RemoteFile); ok {
-		hasher := hashPool.Get().(hash.Hash)
-		defer func() {
-			hasher.Reset()
-			hashPool.Put(hasher)
-		}()
-		_, err := hasher.Write(remoteFile.buf.Bytes())
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			http.Error(w, "404 Not Found", http.StatusNotFound)
-			return
-		}
-		var b [blake2b.Size256]byte
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache, stale-while-revalidate, max-age=120" /* 2 minutes */)
-		w.Header().Set("ETag", `"`+hex.EncodeToString(hasher.Sum(b[:0]))+`"`)
+		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusNotFound)
-		http.ServeContent(w, r, "", fileInfo.ModTime(), bytes.NewReader(remoteFile.buf.Bytes()))
+		_, err := io.Copy(w, bytes.NewReader(remoteFile.buf.Bytes()))
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+		}
 		return
 	}
-	w.Header().Set("Content-Encoding", "gzip")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
 	gzipWriter := gzipWriterPool.Get().(*gzip.Writer)
 	gzipWriter.Reset(w)
 	defer func() {
 		gzipWriter.Reset(io.Discard)
 		gzipWriterPool.Put(gzipWriter)
 	}()
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusNotFound)
 	_, err = io.Copy(gzipWriter, file)
 	if err != nil {
@@ -474,141 +455,3 @@ func MatchWildcard(subject, wildcard string) bool {
 	}
 	return false
 }
-
-// TODO: sigh we have to rewrite our own serveContent which doesn't always serve status 200.
-// TODO: wait... if we are reimplementing serveContent we could make it so it doesn't need readseeker?
-// func serveContent(w http.ResponseWriter, r *http.Request, name string, modtime time.Time, sizeFunc func() (int64, error), content io.ReadSeeker) {
-// 	if !modtime.IsZero() && !modtime.Equal(time.Unix(0, 0)) {
-// 		w.Header().Set("Last-Modified", modtime.UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT"))
-// 	}
-// 	done, rangeReq := checkPreconditions(w, r, modtime)
-// 	if done {
-// 		return
-// 	}
-
-// 	code := http.StatusOK
-
-// 	// If Content-Type isn't set, use the file's extension to find it, but
-// 	// if the Content-Type is unset explicitly, do not sniff the type.
-// 	ctypes, haveType := w.Header()["Content-Type"]
-// 	var ctype string
-// 	if !haveType {
-// 		ctype = mime.TypeByExtension(filepath.Ext(name))
-// 		if ctype == "" {
-// 			// read a chunk to decide between utf-8 text and binary
-// 			var buf [512]byte
-// 			n, _ := io.ReadFull(content, buf[:])
-// 			ctype = http.DetectContentType(buf[:n])
-// 			_, err := content.Seek(0, io.SeekStart) // rewind to output whole file
-// 			if err != nil {
-// 				http.Error(w, "seeker can't seek", http.StatusInternalServerError)
-// 				return
-// 			}
-// 		}
-// 		w.Header().Set("Content-Type", ctype)
-// 	} else if len(ctypes) > 0 {
-// 		ctype = ctypes[0]
-// 	}
-
-// 	size, err := sizeFunc()
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusInternalServerError)
-// 		return
-// 	}
-// 	if size < 0 {
-// 		// Should never happen but just to be sure
-// 		http.Error(w, "negative content size computed", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	// handle Content-Range header.
-// 	sendSize := size
-// 	var sendContent io.Reader = content
-// 	ranges, err := parseRange(rangeReq, size)
-// 	switch err {
-// 	case nil:
-// 	case errNoOverlap:
-// 		if size == 0 {
-// 			// Some clients add a Range header to all requests to
-// 			// limit the size of the response. If the file is empty,
-// 			// ignore the range header and respond with a 200 rather
-// 			// than a 416.
-// 			ranges = nil
-// 			break
-// 		}
-// 		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
-// 		fallthrough
-// 	default:
-// 		http.Error(w, err.Error(), http.StatusRequestedRangeNotSatisfiable)
-// 		return
-// 	}
-
-// 	if sumRangesSize(ranges) > size {
-// 		// The total number of bytes in all the ranges
-// 		// is larger than the size of the file by
-// 		// itself, so this is probably an attack, or a
-// 		// dumb client. Ignore the range request.
-// 		ranges = nil
-// 	}
-// 	switch {
-// 	case len(ranges) == 1:
-// 		// RFC 7233, Section 4.1:
-// 		// "If a single part is being transferred, the server
-// 		// generating the 206 response MUST generate a
-// 		// Content-Range header field, describing what range
-// 		// of the selected representation is enclosed, and a
-// 		// payload consisting of the range.
-// 		// ...
-// 		// A server MUST NOT generate a multipart response to
-// 		// a request for a single range, since a client that
-// 		// does not request multiple parts might not support
-// 		// multipart responses."
-// 		ra := ranges[0]
-// 		if _, err := content.Seek(ra.start, io.SeekStart); err != nil {
-// 			http.Error(w, err.Error(), http.StatusRequestedRangeNotSatisfiable)
-// 			return
-// 		}
-// 		sendSize = ra.length
-// 		code = http.StatusPartialContent
-// 		w.Header().Set("Content-Range", ra.contentRange(size))
-// 	case len(ranges) > 1:
-// 		sendSize = rangesMIMESize(ranges, ctype, size)
-// 		code = http.StatusPartialContent
-
-// 		pr, pw := io.Pipe()
-// 		mw := multipart.NewWriter(pw)
-// 		w.Header().Set("Content-Type", "multipart/byteranges; boundary="+mw.Boundary())
-// 		sendContent = pr
-// 		defer pr.Close() // cause writing goroutine to fail and exit if CopyN doesn't finish.
-// 		go func() {
-// 			for _, ra := range ranges {
-// 				part, err := mw.CreatePart(ra.mimeHeader(ctype, size))
-// 				if err != nil {
-// 					pw.CloseWithError(err)
-// 					return
-// 				}
-// 				if _, err := content.Seek(ra.start, io.SeekStart); err != nil {
-// 					pw.CloseWithError(err)
-// 					return
-// 				}
-// 				if _, err := io.CopyN(part, content, ra.length); err != nil {
-// 					pw.CloseWithError(err)
-// 					return
-// 				}
-// 			}
-// 			mw.Close()
-// 			pw.Close()
-// 		}()
-// 	}
-
-// 	w.Header().Set("Accept-Ranges", "bytes")
-// 	if w.Header().Get("Content-Encoding") == "" {
-// 		w.Header().Set("Content-Length", strconv.FormatInt(sendSize, 10))
-// 	}
-
-// 	w.WriteHeader(code)
-
-// 	if r.Method != "HEAD" {
-// 		io.CopyN(w, sendContent, sendSize)
-// 	}
-// }
