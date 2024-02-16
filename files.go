@@ -630,7 +630,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 			"trimPrefix":       strings.TrimPrefix,
 			"fileSizeToString": fileSizeToString,
 			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
-			"directoryJS":      func() template.JS { return template.JS(directoryJS) },
+			"baselineJS":       func() template.JS { return template.JS(baselineJS) },
 			"referer":          func() string { return referer },
 			"clipboard":        func() url.Values { return clipboard },
 			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
@@ -1069,7 +1069,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			"trimPrefix":       strings.TrimPrefix,
 			"fileSizeToString": fileSizeToString,
 			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
-			"directoryJS":      func() template.JS { return template.JS(directoryJS) },
+			"baselineJS":       func() template.JS { return template.JS(baselineJS) },
 			"referer":          func() string { return referer },
 			"clipboard":        func() url.Values { return clipboard },
 			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
@@ -1153,6 +1153,27 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			response.Sort = "name"
 		}
 	}
+	if r.Form.Has("sort") {
+		if (head == "posts" && response.Sort == "created") || response.Sort == "name" {
+			http.SetCookie(w, &http.Cookie{
+				Path:     r.URL.Path,
+				Name:     "sort",
+				Value:    "0",
+				MaxAge:   -1,
+				Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
+				HttpOnly: true,
+			})
+		} else {
+			http.SetCookie(w, &http.Cookie{
+				Path:     r.URL.Path,
+				Name:     "sort",
+				Value:    response.Sort,
+				MaxAge:   int((time.Hour * 24 * 365).Seconds()),
+				Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
+				HttpOnly: true,
+			})
+		}
+	}
 	response.Order = strings.ToLower(strings.TrimSpace(r.Form.Get("order")))
 	if response.Order == "" {
 		cookie, _ := r.Cookie("order")
@@ -1168,6 +1189,27 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 			response.Order = "desc"
 		} else {
 			response.Order = "asc"
+		}
+	}
+	if r.Form.Has("order") {
+		if ((response.Sort == "created" || response.Sort == "edited") && response.Order == "desc") || response.Order == "asc" {
+			http.SetCookie(w, &http.Cookie{
+				Path:     r.URL.Path,
+				Name:     "order",
+				Value:    "0",
+				MaxAge:   -1,
+				Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
+				HttpOnly: true,
+			})
+		} else {
+			http.SetCookie(w, &http.Cookie{
+				Path:     r.URL.Path,
+				Name:     "order",
+				Value:    response.Order,
+				MaxAge:   int((time.Hour * 24 * 365).Seconds()),
+				Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
+				HttpOnly: true,
+			})
 		}
 	}
 
