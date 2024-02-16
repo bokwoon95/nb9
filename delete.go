@@ -41,21 +41,9 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 	}
 
 	isValidParent := func(parent string) bool {
-		head, tail, _ := strings.Cut(parent, "/")
+		head, _, _ := strings.Cut(parent, "/")
 		switch head {
-		case "notes", "pages", "posts":
-			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, parent))
-			if err != nil {
-				return false
-			}
-			if fileInfo.IsDir() {
-				return true
-			}
-		case "output":
-			next, _, _ := strings.Cut(tail, "/")
-			if next != "themes" {
-				return false
-			}
+		case "notes", "pages", "posts", "output":
 			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, parent))
 			if err != nil {
 				return false
@@ -183,7 +171,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 					internalServerError(w, r, err)
 					return
 				}
-				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "createfile")+"/?parent="+url.QueryEscape(response.Parent), http.StatusFound)
+				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "delete")+"/?parent="+url.QueryEscape(response.Parent), http.StatusFound)
 				return
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
@@ -198,7 +186,17 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				internalServerError(w, r, err)
 				return
 			}
-			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
+			head, tail, _ := strings.Cut(response.Parent, "/")
+			next, _, _ := strings.Cut(tail, "/")
+			if head != "output" || next == "themes" {
+				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
+				return
+			}
+			if next == "posts" {
+				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "posts", response.Parent+".md"), http.StatusFound)
+				return
+			}
+			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages", response.Parent+".html"), http.StatusFound)
 		}
 
 		var request Request

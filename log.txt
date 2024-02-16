@@ -21,7 +21,6 @@ uploadfile.go
 serve_http.go
 notebrew/main.go
 
-TODO: expand delete to handle deleting other assets in a page/post, and also make it redirect to the page/post source editor directly if parent is the output directory of a page/post.
 TODO: structured template error
     We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
     ParseTemplate() error => parseTemplate() (numPrefixLines int, err error)
