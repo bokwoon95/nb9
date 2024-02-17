@@ -170,7 +170,7 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 	return siteGen, nil
 }
 
-func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text string, callers []string) (*template.Template, error) {
+func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text string, lineOffset int, callers []string) (*template.Template, error) {
 	currentTemplate, err := template.New(name).Funcs(funcMap).Parse(text)
 	if err != nil {
 		errmsg := err.Error()
@@ -184,7 +184,7 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 		if err != nil {
 			return nil, TemplateParseError{name: {errmsg}}
 		}
-		return nil, TemplateParseError{name: {filePath + ":" + strconv.Itoa(lineNo) + ": " + msg}}
+		return nil, TemplateParseError{name: {filePath + ":" + strconv.Itoa(lineNo+lineOffset) + ": " + msg}}
 	}
 	var errmsgs []string
 	internalTemplates := currentTemplate.Templates()
@@ -337,7 +337,7 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				return nil
 			}
 			newCallers := append(append(make([]string, 0, len(callers)+1), callers...), externalName)
-			externalTemplate, err := siteGen.ParseTemplate(groupctx, externalName, b.String(), newCallers)
+			externalTemplate, err := siteGen.ParseTemplate(groupctx, externalName, b.String(), 0, newCallers)
 			if err != nil {
 				externalTemplateErrs[i] = err
 				return nil
@@ -454,6 +454,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 	group.Go(func() error {
 		const doctype = "<!DOCTYPE html>"
 		text := strings.TrimSpace(text)
+		lineOffset := 0
 		if len(text) < len(doctype) || !strings.EqualFold(text[:len(doctype)], doctype) {
 			text = "<!DOCTYPE html>" +
 				"\n<html lang='{{ $.Site.Lang }}'>" +
@@ -461,8 +462,9 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 				"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
 				"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
 				"\n" + text
+			lineOffset = 5
 		}
-		tmpl, err = siteGen.ParseTemplate(groupctx, filePath, text, nil)
+		tmpl, err = siteGen.ParseTemplate(groupctx, filePath, text, lineOffset, nil)
 		if err != nil {
 			return err
 		}
@@ -1971,6 +1973,7 @@ func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Templ
 	}
 	const doctype = "<!DOCTYPE html>"
 	text.String = strings.TrimSpace(text.String)
+	lineOffset := 0
 	if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
 		text.String = "<!DOCTYPE html>" +
 			"\n<html lang='{{ $.Site.Lang }}'>" +
@@ -1978,8 +1981,9 @@ func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Templ
 			"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
 			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
 			"\n" + text.String
+		lineOffset = 5
 	}
-	tmpl, err := siteGen.ParseTemplate(ctx, "/themes/post.html", text.String, []string{"/themes/post.html"})
+	tmpl, err := siteGen.ParseTemplate(ctx, "/themes/post.html", text.String, lineOffset, []string{"/themes/post.html"})
 	if err != nil {
 		return nil, err
 	}
@@ -2059,6 +2063,7 @@ func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category str
 	}
 	const doctype = "<!DOCTYPE html>"
 	text.String = strings.TrimSpace(text.String)
+	lineOffset := 0
 	if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
 		text.String = "<!DOCTYPE html>" +
 			"\n<html lang='{{ $.Site.Lang }}'>" +
@@ -2067,8 +2072,9 @@ func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category str
 			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
 			"\n<link rel='alternate' href='/" + path.Join("posts", category) + "/index.atom' type='application/atom+xml'>" +
 			"\n" + text.String
+		lineOffset = 6
 	}
-	tmpl, err := siteGen.ParseTemplate(ctx, "/themes/postlist.html", text.String, []string{"/themes/postlist.html"})
+	tmpl, err := siteGen.ParseTemplate(ctx, "/themes/postlist.html", text.String, lineOffset, []string{"/themes/postlist.html"})
 	if err != nil {
 		return nil, err
 	}
