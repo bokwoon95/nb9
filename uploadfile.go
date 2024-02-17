@@ -120,8 +120,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			return nil
 		}()
 		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
+			response.Error = err.Error()
 			return
 		}
 	}
