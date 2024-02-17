@@ -1690,43 +1690,6 @@ func NewTemplateError(err error) error {
 	}
 }
 
-func wrapExecutionError(err error) error {
-	sections := strings.SplitN(err.Error(), ":", 5)
-	if len(sections) < 5 || strings.TrimSpace(sections[0]) != "template" {
-		return TemplateError{
-			Description: err.Error(),
-		}
-	}
-	templateName := strings.TrimSpace(sections[1])
-	lineNo, _ := strconv.Atoi(strings.TrimSpace(sections[2]))
-	description := strings.TrimSpace(sections[4])
-	if lineNo == 0 {
-		return TemplateError{
-			Name:        templateName,
-			Description: description,
-		}
-	}
-	if templateName == "/themes/postlist.html" {
-		return TemplateError{
-			Name:        templateName,
-			Line:        lineNo - 6,
-			Description: strings.ReplaceAll(description, templateName+":"+strconv.Itoa(lineNo), templateName+":"+strconv.Itoa(lineNo-6)),
-		}
-	}
-	if templateName == "/themes/post.html" || strings.HasPrefix(templateName, "/pages/") {
-		return TemplateError{
-			Name:        templateName,
-			Line:        lineNo - 5,
-			Description: strings.ReplaceAll(description, templateName+":"+strconv.Itoa(lineNo), templateName+":"+strconv.Itoa(lineNo-5)),
-		}
-	}
-	return TemplateError{
-		Name:        templateName,
-		Line:        lineNo,
-		Description: description,
-	}
-}
-
 func (templateErr TemplateError) Error() string {
 	if templateErr.Name == "" {
 		return templateErr.Description
