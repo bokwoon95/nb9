@@ -100,6 +100,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		}
 		fileName := part.FileName()
 		// TODO: check if the file extension is valid.
+		// TODO: if extension is an image, stream the part into memory then use golang's stdlib to resize it (consult ChatGPT and Google).
 		err = func() error {
 			writer, err := nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(sitePrefix, response.Parent, fileName), 0644)
 			if err != nil {
