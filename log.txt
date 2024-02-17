@@ -21,27 +21,6 @@ uploadfile.go
 serve_http.go
 notebrew/main.go
 
-lineOffset only applies to /pages/*, /themes/post.html and /themes/postlist.html
-What is the implication of always inserting a content prefix for pages and post.html / postlist.html?
-TODO: structured template error
-    We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
-    ParseTemplate() error => parseTemplate() (numPrefixLines int, err error)
-    If we assume template errors follow this format: "template: {filePath}:{lineNr}: {errmsg}", we can parse template errors accordingly and send it out as structured JSON objects instead of plain strings, which would allow us to highlight the problematic lines in the codemirror editor.
-    {
-        "abcd.html": [
-            {"line": 3, "msg": "unclosed action"},
-            {"line": 5, "msg": "unterminated quoted string"},
-            {"line": 10, "msg": "executing \"abcd.html\" at <throw>: wrong number of args for throw: want 1 got 0"},
-        ]
-    }
-    TODO: maybe, maybe make all template errors fail at the first sign of trouble (so using errgroup's early cancellation no matter the error).
-    - parse and execution errors always contain only one line number, because html/template stops at the first error
-    - internal templates ending in html can be multiple errors. these have no line number.
-    - external templates not starting with /themes/ can be multiple errors. these have no line number.
-    - external templates ending in a circular reference can be multiple errors. these have no line number.
-    - external templates that don't exist can only be one error. these have no line number.
-    - external templates being a dir instead of a file can only be one error. these have no line number.
-    Given the massive number of error types with no line number, maybe it is better to just not highlight line numbers?
 TODO: uploadfile.go.
     - 25 MB upload limit.
     - When uploaded to output (i.e. pages/posts/themes), images are always resized to max 1080p. Images in notes are kept untouched. If someone wants to upload a full size image, they can upload it to notes then move it over i to pages/posts/themes, which doesn't incur an additional cost because it's just rewriting metadata.
