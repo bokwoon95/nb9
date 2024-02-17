@@ -437,7 +437,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 				"\n" + text
 			lineOffset = 5
 		}
-		tmpl, err = siteGen.ParseTemplate(groupctx, filePath, text, lineOffset, nil)
+		tmpl, err = siteGen.ParseTemplate(groupctx, "/"+filePath, text, lineOffset, nil)
 		if err != nil {
 			return err
 		}
