@@ -216,7 +216,7 @@
   <button type='submit' class='button ba br2 pa2 mv2 w-100'>save</button>
 </form>
 {{- if eq (head $.FilePath) "pages" "posts" }}
-<div class='mv2 flex items-center'>
+<div class='flex items-center'>
   {{- if eq (head $.FilePath) "posts" }}
   <span class='b'>Images</span>
   {{- else }}
@@ -229,7 +229,7 @@
     </summary>
     <div class='absolute bg-white br2' style='top: calc(2rem + 4px); left: 0px; z-index: 1000; border: 1px solid black;'>
       {{- if ne (head $.FilePath) "posts" }}
-      <div class='ma2'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>📄 create file</a></div>
+      <div class='ma2'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ join "output" (trimSuffix (tail $.FilePath) ".html") }}' class='nowrap'>📄 create file</a></div>
       <hr>
       {{- end }}
       <form method='post' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
@@ -252,20 +252,23 @@
       </div>
       {{- end }}
       {{- if eq (ext $asset.Name) ".css" ".js" ".md" }}
-      <div class='tc'><a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>edit</a></div>
+      <div class='flex items-center justify-center'>
+        <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>edit</a>
+      </div>
       {{- else }}
-      <div class='tc'><a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>view</a></div>
+      <div class='tc'>
+        <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>view</a>
+      </div>
       {{- end }}
       <div class='flex items-center'>
-        <span class='b'>{{ $asset.Name }}</span>
+        <div class='mr2'><input id='{{ $asset.Name }}' type='checkbox' class='pointer'></div>
+        <label for='{{ $asset.Name }}' class='b'>{{ $asset.Name }}</label>
         <span class='ml1 f6 mid-gray nowrap'>{{ fileSizeToString $asset.Size }}</span>
-        <span class='flex-grow-1'></span>
-        <details class='ml1 relative' data-autoclose-details>
-          <summary role='button' class='flex items-center button ba br2 b--black h2 hide-marker ph2 pointer' data-disable-click-selection>
-            {{ template "heroicons-ellipsis-horizontal" }}
+        <details class='ml2 relative' data-autoclose-details>
+          <summary role='button' class='flex items-center button ba br2 b--black hide-marker ph1 pointer' data-disable-click-selection>
             {{ template "octicons-triangle-down" }}
           </summary>
-          <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+          <div class='absolute bg-white br2' style='top: calc(1rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
             <div class='ma2 tr'><a href=''>rename</a></div>
             <div class='ma2'><button type='submit' formmethod='post' formaction='' name='name' value='' class='button ba br2 pa2 w-100'>insert</button></div>
             <div class='ma2'><button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/cut" }}/' name='name' value='{{ $asset.Name }}' class='button ba br2 pa2 w-100'>cut</button></div>
