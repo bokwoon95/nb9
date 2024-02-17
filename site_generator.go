@@ -173,12 +173,24 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text string, callers []string) (*template.Template, error) {
 	currentTemplate, err := template.New(name).Funcs(funcMap).Parse(text)
 	if err != nil {
-		return nil, TemplateParseError{name: {err.Error()}}
+		errmsg := err.Error()
+		sections := strings.SplitN(errmsg, ":", 4)
+		if len(sections) < 4 {
+			return nil, TemplateParseError{name: {errmsg}}
+		}
+		filePath := strings.TrimSpace(sections[1])
+		lineNo, err := strconv.Atoi(strings.TrimSpace(sections[2]))
+		msg := strings.TrimSpace(sections[3])
+		if err != nil {
+			return nil, TemplateParseError{name: {errmsg}}
+		}
+		return nil, TemplateParseError{name: {filePath + ":" + strconv.Itoa(lineNo) + ": " + msg}}
 	}
 	var errmsgs []string
 	internalTemplates := currentTemplate.Templates()
 	for _, tmpl := range internalTemplates {
 		internalName := tmpl.Name()
+		// TODO: stop at the first internal template error.
 		if strings.HasSuffix(internalName, ".html") && internalName != name {
 			errmsgs = append(errmsgs, fmt.Sprintf("%s: define %q: internal template name cannot end with .html", name, internalName))
 		}
@@ -211,6 +223,7 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 			case *parse.TemplateNode:
 				if strings.HasSuffix(node.Name, ".html") {
 					if !strings.HasPrefix(node.Name, "/themes/") {
+						// TODO: stop at the first /themes/ error.
 						errmsgs = append(errmsgs, fmt.Sprintf("%s: template %q: external template name must start with /themes/", name, node.Name))
 						continue
 					}
