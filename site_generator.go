@@ -411,6 +411,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 		Site:             siteGen.Site,
 		Parent:           path.Dir(urlPath),
 		Name:             path.Base(urlPath),
+		Markdown:         make(map[string]template.HTML),
 		ModificationTime: time.Now().UTC(),
 	}
 	if pageData.Parent == "." {
