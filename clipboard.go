@@ -102,34 +102,34 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			FilesPasted    []string `json:"filesPasted,omitmepty"`
 		}
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
-			var names []string
-			names = append(names, response.FilesExist...)
-			names = append(names, response.FilesInvalid...)
-			if len(names) > 0 {
-				clipboard := make(url.Values)
-				if action == "cut" {
-					clipboard.Set("cut", "")
+			if response.Error == "" {
+				if len(response.FilesExist) > 0 || len(response.FilesInvalid) > 0 {
+					clipboard := make(url.Values)
+					if action == "cut" {
+						clipboard.Set("cut", "")
+					}
+					clipboard.Set("sitePrefix", response.SrcSitePrefix)
+					clipboard.Set("parent", response.SrcParent)
+					clipboard["name"] = append(clipboard["name"], response.FilesExist...)
+					clipboard["name"] = append(clipboard["name"], response.FilesInvalid...)
+					http.SetCookie(w, &http.Cookie{
+						Path:     "/",
+						Name:     "clipboard",
+						Value:    clipboard.Encode(),
+						MaxAge:   int(time.Hour.Seconds()),
+						Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
+						HttpOnly: true,
+					})
+				} else {
+					http.SetCookie(w, &http.Cookie{
+						Path:     "/",
+						Name:     "clipboard",
+						Value:    "0",
+						MaxAge:   -1,
+						Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
+						HttpOnly: true,
+					})
 				}
-				clipboard.Set("sitePrefix", response.SrcSitePrefix)
-				clipboard.Set("parent", response.SrcParent)
-				clipboard["name"] = names
-				http.SetCookie(w, &http.Cookie{
-					Path:     "/",
-					Name:     "clipboard",
-					Value:    clipboard.Encode(),
-					MaxAge:   int(time.Hour.Seconds()),
-					Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
-					HttpOnly: true,
-				})
-			} else {
-				http.SetCookie(w, &http.Cookie{
-					Path:     "/",
-					Name:     "clipboard",
-					Value:    "0",
-					MaxAge:   -1,
-					Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
-					HttpOnly: true,
-				})
 			}
 			if r.Form.Has("api") {
 				w.Header().Set("Content-Type", "application/json")
