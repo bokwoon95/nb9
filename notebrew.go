@@ -193,6 +193,7 @@ func (nbrew *Notebrew) clearSession(w http.ResponseWriter, r *http.Request, name
 		MaxAge:   -1,
 		Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	})
 	if nbrew.UsersDB == nil {
 		return

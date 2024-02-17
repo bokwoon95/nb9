@@ -1148,6 +1148,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				MaxAge:   -1,
 				Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
 			})
 		} else {
 			http.SetCookie(w, &http.Cookie{
@@ -1157,6 +1158,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				MaxAge:   int((time.Hour * 24 * 365).Seconds()),
 				Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
 			})
 		}
 	}
@@ -1186,6 +1188,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				MaxAge:   -1,
 				Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
 			})
 		} else {
 			http.SetCookie(w, &http.Cookie{
@@ -1195,6 +1198,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				MaxAge:   int((time.Hour * 24 * 365).Seconds()),
 				Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
 			})
 		}
 	}

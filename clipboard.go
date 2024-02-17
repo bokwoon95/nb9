@@ -76,6 +76,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			MaxAge:   int(time.Hour.Seconds()),
 			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
 		})
 		http.Redirect(w, r, referer, http.StatusFound)
 	case "clear":
@@ -86,6 +87,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			MaxAge:   -1,
 			Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
 		})
 		http.Redirect(w, r, referer, http.StatusFound)
 	case "paste":
@@ -119,6 +121,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						MaxAge:   int(time.Hour.Seconds()),
 						Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 						HttpOnly: true,
+						SameSite: http.SameSiteLaxMode,
 					})
 				} else {
 					http.SetCookie(w, &http.Cookie{
@@ -128,6 +131,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						MaxAge:   -1,
 						Secure:   nbrew.CMSDomain != "localhost" && !strings.HasPrefix(nbrew.CMSDomain, "localhost:"),
 						HttpOnly: true,
+						SameSite: http.SameSiteLaxMode,
 					})
 				}
 			}
