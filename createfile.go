@@ -25,16 +25,16 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		Content string
 	}
 	type Response struct {
-		Error         string     `json:"error,omitempty"`
-		FormErrors    url.Values `json:"formErrors,omitempty"`
-		TemplateError string     `json:"templateError,omitempty"`
-		ContentSite   string     `json:"contentSite"`
-		Username      NullString `json:"username"`
-		SitePrefix    string     `json:"sitePrefix"`
-		Parent        string     `json:"parent,omitempty"`
-		Name          string     `json:"name,omitempty"`
-		Ext           string     `json:"ext,omitempty"`
-		Content       string     `json:"content,omitempty"`
+		Error         string        `json:"error,omitempty"`
+		FormErrors    url.Values    `json:"formErrors,omitempty"`
+		TemplateError TemplateError `json:"templateError,omitempty"`
+		ContentSite   string        `json:"contentSite"`
+		Username      NullString    `json:"username"`
+		SitePrefix    string        `json:"sitePrefix"`
+		Parent        string        `json:"parent,omitempty"`
+		Name          string        `json:"name,omitempty"`
+		Ext           string        `json:"ext,omitempty"`
+		Content       string        `json:"content,omitempty"`
 	}
 
 	isValidParent := func(parent string) bool {
@@ -355,59 +355,34 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			case "pages":
 				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content)
 				if err != nil {
-					var templateErr *TemplateError
-					if errors.As(err, &templateErr) {
-						response.TemplateError = templateErr.Err.Error()
-					} else {
+					if !errors.As(err, &response.TemplateError) {
 						getLogger(r.Context()).Error(err.Error())
-						internalServerError(w, r, err)
-						return
 					}
 				}
 			case "posts":
 				tmpl, err := siteGen.PostTemplate(r.Context())
 				if err != nil {
-					var templateErr *TemplateError
-					if errors.As(err, &templateErr) {
-						response.TemplateError = templateErr.Err.Error()
-					} else {
+					if !errors.Is(err, &response.TemplateError) {
 						getLogger(r.Context()).Error(err.Error())
-						internalServerError(w, r, err)
-						return
 					}
 				} else {
 					err := siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content, tmpl)
 					if err != nil {
-						var templateErr *TemplateError
-						if errors.As(err, &templateErr) {
-							response.TemplateError = templateErr.Err.Error()
-						} else {
+						if !errors.Is(err, &response.TemplateError) {
 							getLogger(r.Context()).Error(err.Error())
-							internalServerError(w, r, err)
-							return
 						}
 					} else {
 						category := tail
 						tmpl, err := siteGen.PostListTemplate(r.Context(), category)
 						if err != nil {
-							var templateErr *TemplateError
-							if errors.As(err, &templateErr) {
-								response.TemplateError = templateErr.Err.Error()
-							} else {
+							if !errors.Is(err, &response.TemplateError) {
 								getLogger(r.Context()).Error(err.Error())
-								internalServerError(w, r, err)
-								return
 							}
 						} else {
 							_, err := siteGen.GeneratePostList(r.Context(), category, tmpl)
 							if err != nil {
-								var templateErr *TemplateError
-								if errors.As(err, &templateErr) {
-									response.TemplateError = templateErr.Err.Error()
-								} else {
+								if !errors.Is(err, &response.TemplateError) {
 									getLogger(r.Context()).Error(err.Error())
-									internalServerError(w, r, err)
-									return
 								}
 							}
 						}

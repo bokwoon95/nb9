@@ -34,7 +34,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 	}
 	type Response struct {
 		PostRedirectGet map[string]any `json:"postRedirectGet,omitempty"`
-		TemplateError   string         `json:"templateError,omitempty"`
+		TemplateError   TemplateError  `json:"templateError,omitempty"`
 		ContentSite     string         `json:"contentSite"`
 		Username        NullString     `json:"username"`
 		SitePrefix      string         `json:"sitePrefix"`
@@ -516,31 +516,22 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		case "pages":
 			err := siteGen.GeneratePage(r.Context(), filePath, response.Content)
 			if err != nil {
-				var templateErr *TemplateError
-				if errors.As(err, &templateErr) {
-					response.TemplateError = templateErr.Err.Error()
-				} else {
+				if !errors.As(err, &response.TemplateError) {
 					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
 				}
 			}
 		case "posts":
 			tmpl, err := siteGen.PostTemplate(r.Context())
 			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			err = siteGen.GeneratePost(r.Context(), filePath, response.Content, tmpl)
-			if err != nil {
-				var templateErr *TemplateError
-				if errors.As(err, &templateErr) {
-					response.TemplateError = templateErr.Err.Error()
-				} else {
+				if !errors.As(err, &response.TemplateError) {
 					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
+				}
+			} else {
+				err := siteGen.GeneratePost(r.Context(), filePath, response.Content, tmpl)
+				if err != nil {
+					if !errors.As(err, &response.TemplateError) {
+						getLogger(r.Context()).Error(err.Error())
+					}
 				}
 			}
 		}

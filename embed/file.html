@@ -180,9 +180,22 @@
   {{- end }}
 </div>
 <form method='post' enctype='multipart/form-data' class='mv2'>
-  {{- if $.TemplateError }}
+  {{- if $.TemplateError.Description }}
   <div class='mv2 invalid-red'>
-    <span class='b'>template error: </span>{{ $.TemplateError }}
+    <span class='b'>template error: </span>
+    {{- $path := "" }}
+    {{- if $.TemplateError.Name }}
+      {{- if hasPrefix $.TemplateError.Name "/themes/" }}
+      {{- $path = join "files" $.SitePrefix "output" $.TemplateError.Name }}
+      {{- else }}
+      {{- $path = join "files" $.SitePrefix $.TemplateError.Name }}
+      {{- end }}
+    {{- end }}
+    {{- if $path }}
+    <a href='/{{ $path }}{{ if $.TemplateError.Line }}#L{{ $.TemplateError.Line }}{{ end }}'>{{ $.TemplateError.Name }}{{ if $.TemplateError.Line }}:{{ $.TemplateError.Line }}{{ end }}</a>: {{ $.TemplateError.Description }}
+    {{- else }}
+    {{ $.TemplateError.Description }}
+    {{- end }}
   </div>
   {{- end }}
   <div class='flex mv2'>

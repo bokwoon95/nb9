@@ -25,25 +25,13 @@
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
-{{- if eq (index $.PostRedirectGet "from") "regenerate" }}
-  {{- if not (index $.PostRedirectGet "templateError") }}
+{{- if eq (index $.PostRedirectGet "from") "regenerate" "regeneratelist" }}
+  {{- $count := index $.PostRedirectGet "count" }}
+  {{- $timeTaken := index $.PostRedirectGet "timeTaken" }}
+  {{- $templateError := index $.PostRedirectGet "templateError" }}
+  {{- if not $templateError.Description }}
   <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
-    <div>regenerated site ({{ index $.PostRedirectGet "count" }} file{{ if ne (index $.PostRedirectGet "count") 1.0 }}s{{ end }} in {{ index $.PostRedirectGet "timeTaken" }})</div>
-    <div class='flex-grow-1'></div>
-    <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
-  </div>
-  {{- end }}
-{{- end }}
-{{- if eq (index $.PostRedirectGet "from") "regeneratelist" }}
-  {{ $count := index $.PostRedirectGet "count" }}
-  {{ $timeTaken := index $.PostRedirectGet "timeTaken" }}
-  {{- if index $.PostRedirectGet "templateError" }}
-  <div class='mv2 invalid-red'>
-    <span class='b'>template error: </span>{{ index $.PostRedirectGet "templateError" }}
-  </div>
-  {{- else }}
-  <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
-    <div>regenerated list ({{ $count }} file{{ if ne $count 1.0 }}s{{ end }} in {{ $timeTaken }})</div>
+    <div>regenerated {{ if eq (index $.PostRedirectGet "from") "regeneratelist" }}list{{ else }}site{{ end }} ({{ $count }} file{{ if ne $count 1.0 }}s{{ end }} in {{ $timeTaken }})</div>
     <div class='flex-grow-1'></div>
     <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
   </div>
@@ -236,10 +224,24 @@
   </div>
   {{- end }}
 </div>
-{{- if eq (index $.PostRedirectGet "from") "regenerate" }}
-  {{- if index $.PostRedirectGet "templateError" }}
+{{- if eq (index $.PostRedirectGet "from") "regenerate" "regeneratelist" }}
+  {{- $templateError := index $.PostRedirectGet "templateError" }}
+  {{- if $templateError.Description }}
   <div class='mv2 invalid-red'>
-    <span class='b'>template error: </span>{{ index $.PostRedirectGet "templateError" }}
+    <span class='b'>template error: </span>
+    {{- $path := "" }}
+    {{- if $templateError.Name }}
+      {{- if hasPrefix $templateError.Name "/themes/" }}
+      {{- $path = join "files" $.SitePrefix "output" $templateError.Name }}
+      {{- else }}
+      {{- $path = join "files" $.SitePrefix $templateError.Name }}
+      {{- end }}
+    {{- end }}
+    {{- if $path }}
+    <a href='/{{ $path }}{{ if $templateError.Line }}#L{{ $templateError.Line }}{{ end }}'>{{ $templateError.Name }}{{ if $templateError.Line }}:{{ $templateError.Line }}{{ end }}</a>: {{ $templateError.Description }}
+    {{- else }}
+    {{ $templateError.Description }}
+    {{- end }}
   </div>
   {{- end }}
 {{- end }}

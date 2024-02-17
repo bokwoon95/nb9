@@ -175,20 +175,22 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 	if err != nil {
 		sections := strings.SplitN(err.Error(), ":", 4)
 		if len(sections) < 4 || strings.TrimSpace(sections[0]) != "template" {
-			return nil, &TemplateError{
-				Err: err,
+			return nil, TemplateError{
+				Description: err.Error(),
 			}
 		}
-		filePath := strings.TrimSpace(sections[1])
+		templateName := strings.TrimSpace(sections[1])
 		lineNo, err := strconv.Atoi(strings.TrimSpace(sections[2]))
-		msg := strings.TrimSpace(sections[3])
+		description := strings.TrimSpace(sections[3])
 		if err != nil {
-			return nil, &TemplateError{
-				Err: err,
+			return nil, TemplateError{
+				Description: err.Error(),
 			}
 		}
-		return nil, &TemplateError{
-			Err: fmt.Errorf(filePath + ":" + strconv.Itoa(lineNo-lineOffset) + ": " + msg),
+		return nil, TemplateError{
+			Name:        templateName,
+			Line:        lineNo - lineOffset,
+			Description: description,
 		}
 	}
 	internalTemplates := currentTemplate.Templates()
@@ -198,8 +200,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 	for _, tmpl := range internalTemplates {
 		internalName := tmpl.Name()
 		if strings.HasSuffix(internalName, ".html") && internalName != name {
-			return nil, &TemplateError{
-				Err: fmt.Errorf("%s: define %q: internal template name cannot end with .html", name, internalName),
+			return nil, TemplateError{
+				Name:        name,
+				Description: "define " + strconv.Quote(internalName) + ": internal template name cannot end with .html",
 			}
 		}
 	}
@@ -228,8 +231,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 			case *parse.TemplateNode:
 				if strings.HasSuffix(node.Name, ".html") {
 					if !strings.HasPrefix(node.Name, "/themes/") {
-						return nil, &TemplateError{
-							Err: fmt.Errorf("%s: template %q: external template name must start with /themes/", name, node.Name),
+						return nil, TemplateError{
+							Name:        name,
+							Description: "template " + strconv.Quote(node.Name) + ": external template name must start with /themes/",
 						}
 					}
 					externalNames = append(externalNames, node.Name)
@@ -248,8 +252,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 		group.Go(func() error {
 			n := slices.Index(callers, externalName)
 			if n > 0 {
-				return &TemplateError{
-					Err: fmt.Errorf("%s has a circular reference: %s", externalName, strings.Join(callers[n:], "=>")+" => "+externalName),
+				return TemplateError{
+					Name:        externalName,
+					Description: "circular template reference: " + strings.Join(callers[n:], "=>") + " => " + externalName,
 				}
 			}
 
@@ -307,8 +312,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				// current template) instead of adding it to the
 				// externalTemplateErrs list.
 				if errors.Is(err, fs.ErrNotExist) {
-					return &TemplateError{
-						Err: fmt.Errorf("%s: template %q does not exist", name, externalName),
+					return TemplateError{
+						Name:        name,
+						Description: "template " + strconv.Quote(externalName) + " does not exist",
 					}
 				}
 				return err
@@ -324,8 +330,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				// instead of a file. Therefore we return the error
 				// (associating it with the current template) instead of adding
 				// it to the externalTemplateErrs list.
-				return &TemplateError{
-					Err: fmt.Errorf("%s: %q is a folder", name, externalName),
+				return TemplateError{
+					Name:        name,
+					Description: strconv.Quote(externalName) + " is a folder",
 				}
 			}
 			var b strings.Builder
@@ -366,8 +373,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 		for _, tmpl := range tmpl.Templates() {
 			_, err = finalTemplate.AddParseTree(tmpl.Name(), tmpl.Tree)
 			if err != nil {
-				return nil, &TemplateError{
-					Err: fmt.Errorf("%s: %s: add %s: %w", name, externalNames[i], tmpl.Name(), err),
+				return nil, TemplateError{
+					Name:        name,
+					Description: fmt.Sprintf("%s: add %s: %s", externalNames[i], tmpl.Name(), err),
 				}
 			}
 		}
@@ -375,8 +383,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 	for _, tmpl := range internalTemplates {
 		_, err = finalTemplate.AddParseTree(tmpl.Name(), tmpl.Tree)
 		if err != nil {
-			return nil, &TemplateError{
-				Err: fmt.Errorf("%s: add %s: %w", name, tmpl.Name(), err),
+			return nil, TemplateError{
+				Name:        name,
+				Description: fmt.Sprintf("add %s: %s", tmpl.Name(), err),
 			}
 		}
 	}
@@ -709,7 +718,9 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 	if siteGen.imgDomain == "" {
 		err = tmpl.Execute(writer, &pageData)
 		if err != nil {
-			return &TemplateError{Err: err}
+			return TemplateError{
+				Description: err.Error(),
+			}
 		}
 	} else {
 		pipeReader, pipeWriter := io.Pipe()
@@ -719,7 +730,9 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 		}()
 		err = tmpl.Execute(pipeWriter, &pageData)
 		if err != nil {
-			return &TemplateError{Err: err}
+			return TemplateError{
+				Description: err.Error(),
+			}
 		}
 		pipeWriter.Close()
 		err = <-result
@@ -880,7 +893,9 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 	if siteGen.imgDomain == "" {
 		err = tmpl.Execute(writer, &postData)
 		if err != nil {
-			return &TemplateError{Err: err}
+			return TemplateError{
+				Description: err.Error(),
+			}
 		}
 	} else {
 		pipeReader, pipeWriter := io.Pipe()
@@ -890,7 +905,9 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		}()
 		err = tmpl.Execute(pipeWriter, &postData)
 		if err != nil {
-			return &TemplateError{Err: err}
+			return TemplateError{
+				Description: err.Error(),
+			}
 		}
 		pipeWriter.Close()
 		err = <-result
@@ -1278,7 +1295,9 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 		if siteGen.imgDomain == "" {
 			err = tmpl.Execute(writer, &postListData)
 			if err != nil {
-				return &TemplateError{Err: err}
+				return TemplateError{
+					Description: err.Error(),
+				}
 			}
 		} else {
 			pipeReader, pipeWriter := io.Pipe()
@@ -1288,7 +1307,9 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
-				return &TemplateError{Err: err}
+				return TemplateError{
+					Description: err.Error(),
+				}
 			}
 			pipeWriter.Close()
 			err = <-result
@@ -1322,7 +1343,9 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 		if siteGen.imgDomain == "" {
 			err = tmpl.Execute(writer, &postListData)
 			if err != nil {
-				return &TemplateError{Err: err}
+				return TemplateError{
+					Description: err.Error(),
+				}
 			}
 		} else {
 			pipeReader, pipeWriter := io.Pipe()
@@ -1332,7 +1355,9 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
-				return &TemplateError{Err: err}
+				return TemplateError{
+					Description: err.Error(),
+				}
 			}
 			pipeWriter.Close()
 			err = <-result
@@ -1630,14 +1655,20 @@ var funcMap = map[string]any{
 	},
 }
 
-type TemplateError struct{ Err error }
-
-func (executionErr *TemplateError) Error() string {
-	return executionErr.Err.Error()
+type TemplateError struct {
+	Name        string
+	Line        int
+	Description string
 }
 
-func (executionErr *TemplateError) Unwrap() error {
-	return executionErr.Err
+func (templateErr TemplateError) Error() string {
+	if templateErr.Name == "" {
+		return templateErr.Description
+	}
+	if templateErr.Line == 0 {
+		return templateErr.Name + ": " + templateErr.Description
+	}
+	return templateErr.Name + ":" + strconv.Itoa(templateErr.Line) + ": " + templateErr.Description
 }
 
 type Pagination struct {

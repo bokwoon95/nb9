@@ -93,9 +93,23 @@
   {{- end }}
 </div>
 {{- if eq (index $.PostRedirectGet "from") "regenerate" }}
-  {{- if index $.PostRedirectGet "templateError" }}
+  {{- $templateError := index $.PostRedirectGet "templateError" }}
+  {{- if $templateError.Description }}
   <div class='mv2 invalid-red'>
-    <span class='b'>template error: </span>{{ index $.PostRedirectGet "templateError" }}
+    <span class='b'>template error: </span>
+    {{- $path := "" }}
+    {{- if $templateError.Name }}
+      {{- if hasPrefix $templateError.Name "/themes/" }}
+      {{- $path = join "files" $.SitePrefix "output" $templateError.Name }}
+      {{- else }}
+      {{- $path = join "files" $.SitePrefix $templateError.Name }}
+      {{- end }}
+    {{- end }}
+    {{- if $path }}
+    <a href='/{{ $path }}{{ if $templateError.Line }}#L{{ $templateError.Line }}{{ end }}'>{{ $templateError.Name }}{{ if $templateError.Line }}:{{ $templateError.Line }}{{ end }}</a>: {{ $templateError.Description }}
+    {{- else }}
+    {{ $templateError.Description }}
+    {{- end }}
   </div>
   {{- end }}
 {{- end }}

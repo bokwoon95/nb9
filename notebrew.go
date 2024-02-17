@@ -551,22 +551,22 @@ func fileSizeToString(size int64) string {
 }
 
 func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
-	var msg string
+	var message string
 	var maxBytesErr *http.MaxBytesError
 	if errors.As(serverErr, &maxBytesErr) {
-		msg = "the data you are sending is too big (max " + fileSizeToString(maxBytesErr.Limit) + ")"
+		message = "the data you are sending is too big (max " + fileSizeToString(maxBytesErr.Limit) + ")"
 	} else {
 		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if contentType == "application/json" {
 			if serverErr == io.EOF {
-				msg = "missing JSON body"
+				message = "missing JSON body"
 			} else if serverErr == io.ErrUnexpectedEOF {
-				msg = "malformed JSON"
+				message = "malformed JSON"
 			} else {
-				msg = serverErr.Error()
+				message = serverErr.Error()
 			}
 		} else {
-			msg = serverErr.Error()
+			message = serverErr.Error()
 		}
 	}
 	if r.Form.Has("api") {
@@ -574,12 +574,12 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 		w.WriteHeader(http.StatusBadRequest)
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
-		serverErr = encoder.Encode(map[string]any{
-			"error": "BadRequest",
-			"msg":   msg,
+		err := encoder.Encode(map[string]any{
+			"error":   "BadRequest",
+			"message": message,
 		})
-		if serverErr != nil {
-			getLogger(r.Context()).Error(serverErr.Error())
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
 		}
 		return
 	}
@@ -593,11 +593,11 @@ func badRequest(w http.ResponseWriter, r *http.Request, serverErr error) {
 	err := errorTemplate.Execute(buf, map[string]any{
 		"Title":    `400 bad request`,
 		"Headline": "400 bad request",
-		"Byline":   msg,
+		"Byline":   message,
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, "BadRequest: "+msg, http.StatusBadRequest)
+		http.Error(w, "BadRequest: "+message, http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
@@ -768,11 +768,11 @@ func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 
 func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
-	var msg string
+	var message string
 	if contentType == "" {
-		msg = "missing Content-Type"
+		message = "missing Content-Type"
 	} else {
-		msg = "unsupported Content-Type: " + contentType
+		message = "unsupported Content-Type: " + contentType
 	}
 	if r.Form.Has("api") {
 		w.Header().Set("Content-Type", "application/json")
@@ -780,8 +780,8 @@ func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"error": "UnsupportedMediaType",
-			"msg":   msg,
+			"error":   "UnsupportedMediaType",
+			"message": message,
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
@@ -798,11 +798,11 @@ func unsupportedContentType(w http.ResponseWriter, r *http.Request) {
 	err := errorTemplate.Execute(buf, map[string]any{
 		"Referer":  getReferer(r),
 		"Title":    "415 unsupported media type",
-		"Headline": msg,
+		"Headline": message,
 	})
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
-		http.Error(w, "UnsupportedMediaType "+msg, http.StatusUnsupportedMediaType)
+		http.Error(w, "UnsupportedMediaType "+message, http.StatusUnsupportedMediaType)
 		return
 	}
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
@@ -817,8 +817,8 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 		encoder := json.NewEncoder(w)
 		encoder.SetEscapeHTML(false)
 		err := encoder.Encode(map[string]any{
-			"error": "InternalServerError",
-			"msg":   serverErr.Error(),
+			"error":   "InternalServerError",
+			"message": serverErr.Error(),
 		})
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())

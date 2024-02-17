@@ -228,18 +228,27 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 			return
 		}
 		if head == "posts" && tail == "" {
+			var templateErr TemplateError
 			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
+				if !errors.Is(err, &templateErr) {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
 			} else {
 				category := response.Name
 				tmpl, err := siteGen.PostListTemplate(r.Context(), category)
 				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
+					if !errors.Is(err, &templateErr) {
+						getLogger(r.Context()).Error(err.Error())
+					}
 				} else {
 					err = siteGen.GeneratePostListPage(r.Context(), category, tmpl, 1, 1, nil)
 					if err != nil {
-						getLogger(r.Context()).Error(err.Error())
+						if !errors.Is(err, &templateErr) {
+							getLogger(r.Context()).Error(err.Error())
+						}
 					}
 				}
 			}

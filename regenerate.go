@@ -18,9 +18,9 @@ import (
 
 func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePrefix string) {
 	type Response struct {
-		Count         int    `json:"count"`
-		TimeTaken     string `json:"timeTaken"`
-		TemplateError string `json:"templateError,omitempty"`
+		Count         int           `json:"count"`
+		TimeTaken     string        `json:"timeTaken"`
+		TemplateError TemplateError `json:"templateError,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
@@ -185,10 +185,7 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		})
 		err = groupA.Wait()
 		if err != nil {
-			var templateErr *TemplateError
-			if errors.As(err, &templateErr) {
-				response.TemplateError = templateErr.Err.Error()
-			} else {
+			if !errors.As(err, &response.TemplateError) {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
@@ -316,15 +313,10 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 	err = group.Wait()
 	response.Count = int(count.Load())
 	response.TimeTaken = time.Since(startedAt).String()
-	if err != nil {
-		var templateErr *TemplateError
-		if errors.As(err, &templateErr) {
-			response.TemplateError = templateErr.Err.Error()
-		} else {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
+	if err != nil && !errors.As(err, &response.TemplateError) {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
 	}
 	writeResponse(w, r, response)
 }
@@ -334,10 +326,10 @@ func (nbrew *Notebrew) regeneratelist(w http.ResponseWriter, r *http.Request, si
 		Category string
 	}
 	type Response struct {
-		Category      string `json:"category,omitempty"`
-		Count         int    `json:"count"`
-		TimeTaken     string `json:"timeTaken"`
-		TemplateError string `json:"templateError,omitempty"`
+		Category      string        `json:"category,omitempty"`
+		Count         int           `json:"count"`
+		TimeTaken     string        `json:"timeTaken"`
+		TemplateError TemplateError `json:"templateError,omitempty"`
 	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
@@ -424,21 +416,21 @@ func (nbrew *Notebrew) regeneratelist(w http.ResponseWriter, r *http.Request, si
 	}
 	tmpl, err := siteGen.PostListTemplate(r.Context(), response.Category)
 	if err != nil {
-		getLogger(r.Context()).Error(err.Error())
-		internalServerError(w, r, err)
-		return
-	}
-	startedAt := time.Now()
-	response.Count, err = siteGen.GeneratePostList(r.Context(), response.Category, tmpl)
-	response.TimeTaken = time.Since(startedAt).String()
-	if err != nil {
-		var templateErr *TemplateError
-		if errors.As(err, &templateErr) {
-			response.TemplateError = templateErr.Err.Error()
-		} else {
+		if !errors.As(err, &response.TemplateError) {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
+		}
+	} else {
+		startedAt := time.Now()
+		response.Count, err = siteGen.GeneratePostList(r.Context(), response.Category, tmpl)
+		response.TimeTaken = time.Since(startedAt).String()
+		if err != nil {
+			if !errors.As(err, &response.TemplateError) {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
 		}
 	}
 	writeResponse(w, r, response)
