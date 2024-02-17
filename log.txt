@@ -21,6 +21,7 @@ rename.go
 serve_http.go
 notebrew/main.go
 
+TODO: Add a "+ create note | create post" to the /files/ page because the user can always move the post to another category if he wishes.
 TODO: uploadfile.go.
     - OOOH looks like the upload works but the fileID in notebrew-objects/ is all zeroes for some reason.
     - TODO: WTF try deleting GCsDY_vXEAEqTHH.jpeg first, for some reason it's panicking.

@@ -1133,14 +1133,16 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	case "name", "edited", "created":
 		break
 	default:
-		if head == "posts" {
+		if head == "notes" {
+			response.Sort = "edited"
+		} else if head == "posts" {
 			response.Sort = "created"
 		} else {
 			response.Sort = "name"
 		}
 	}
 	if r.Form.Has("sort") {
-		if (head == "posts" && response.Sort == "created") || response.Sort == "name" {
+		if (head == "notes" && response.Sort == "edited") || (head == "posts" && response.Sort == "created") || response.Sort == "name" {
 			http.SetCookie(w, &http.Cookie{
 				Path:     r.URL.Path,
 				Name:     "sort",
