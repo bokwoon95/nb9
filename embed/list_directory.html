@@ -205,7 +205,7 @@
         <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>📂 create folder</a></div>
         {{- end }}
         <hr>
-        <form method='post' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
+        <form method='post' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' enctype='multipart/form-data' class='pa2'>
           <input type='hidden' name='parent' value='{{ $.FilePath }}'>
           {{- $accept := "" }}
           {{- if eq (head $.FilePath) "pages" }}
