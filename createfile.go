@@ -50,7 +50,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			}
 		case "output":
 			next, _, _ := strings.Cut(tail, "/")
-			if next != "themes" {
+			if next == "posts" {
 				return false
 			}
 			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, parent))
@@ -124,7 +124,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			writeResponse(w, r, response)
 			return
 		}
-		head, _, _ := strings.Cut(response.Parent, "/")
+		head, tail, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes":
 			response.Ext = ".txt"
@@ -132,8 +132,17 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			response.Ext = ".html"
 		case "posts":
 			response.Ext = ".md"
+		case "output":
+			next, _, _ := strings.Cut(tail, "/")
+			if next == "themes" {
+				response.Ext = ".html"
+			} else {
+				response.Ext = ".css"
+			}
 		default:
-			response.Ext = ".html"
+			response.Error = "InvalidParent"
+			writeResponse(w, r, response)
+			return
 		}
 		writeResponse(w, r, response)
 	case "POST":
@@ -292,7 +301,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			if response.Ext != ".md" {
 				response.Ext = ".md"
 			}
-		default:
+		case "output":
 			if request.Name != "" {
 				response.Name = urlSafe(request.Name)
 			}
@@ -301,9 +310,20 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
 				response.Name = strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
 			}
-			if response.Ext != ".html" && response.Ext != ".css" && response.Ext != ".js" && response.Ext != ".md" && response.Ext != ".txt" {
-				response.Ext = ".html"
+			next, _, _ := strings.Cut(tail, "/")
+			if next == "themes" {
+				if response.Ext != ".html" && response.Ext != ".css" && response.Ext != ".js" && response.Ext != ".md" && response.Ext != ".txt" {
+					response.Ext = ".html"
+				}
+			} else {
+				if response.Ext != ".css" && response.Ext != ".js" && response.Ext != ".md" {
+					response.Ext = ".css"
+				}
 			}
+		default:
+			response.Error = "InvalidParent"
+			writeResponse(w, r, response)
+			return
 		}
 		_, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, response.Parent, response.Name+response.Ext))
 		if err != nil {

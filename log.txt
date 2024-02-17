@@ -17,7 +17,7 @@ delete.go
 search.go
 clipboard.go
 uploadfile.go
-...
+rename.go
 serve_http.go
 notebrew/main.go
 

@@ -216,15 +216,29 @@
   <button type='submit' class='button ba br2 pa2 mv2 w-100'>save</button>
 </form>
 {{- if eq (head $.FilePath) "pages" "posts" }}
-<div class='mv2'>
+<div class='mv2 flex items-center'>
   {{- if eq (head $.FilePath) "posts" }}
   <span class='b'>Images</span>
-  <a href='' class='ml2'>upload image</a>
   {{- else }}
   <span class='b'>Assets</span>
-  <a href='' class='ml2'>Create file</a>
-  <a href='' class='ml2'>Upload file</a>
   {{- end }}
+  <details class='relative ml2' data-autoclose-details>
+    <summary role='button' title='Create' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
+      {{ template "octicons-plus" }}
+      {{ template "octicons-triangle-down" }}
+    </summary>
+    <div class='absolute bg-white br2' style='top: calc(2rem + 4px); left: 0px; z-index: 1000; border: 1px solid black;'>
+      {{- if ne (head $.FilePath) "posts" }}
+      <div class='ma2'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>📄 create file</a></div>
+      <hr>
+      {{- end }}
+      <form method='post' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
+        <input type='hidden' name='parent' value='{{ $.FilePath }}'>
+        <input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif{{ if ne (head $.FilePath) "posts" }}.css,.js,.md{{ end }}' multiple>
+        <button type='submit' class='button ba br2 pa2 w-100 mt2'>upload</button>
+      </form>
+    </div>
+  </details>
 </div>
   {{- if $.Assets }}
   <ul class='grid grid-cols-auto-150px grid-gap-3 mv2'>
@@ -233,27 +247,32 @@
       {{- if eq (ext $asset.Name) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
       <img src='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='w-100' loading='lazy'>
       {{- else }}
-      <div class='flex justify-center items-center'>
+      <div class='flex justify-center items-center pa2'>
         {{ template "octicons-file-code" }}
       </div>
       {{- end }}
-      <div class='mv2'>
+      {{- if eq (ext $asset.Name) ".css" ".js" ".md" }}
+      <div class='tc'><a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>edit</a></div>
+      {{- else }}
+      <div class='tc'><a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>view</a></div>
+      {{- end }}
+      <div class='flex items-center'>
         <span class='b'>{{ $asset.Name }}</span>
         <span class='ml1 f6 mid-gray nowrap'>{{ fileSizeToString $asset.Size }}</span>
-        {{- if eq (ext $asset.Name) ".css" ".js" }}
-        <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='ml2'>edit</a>
-        {{- else }}
-        <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='ml2'>view</a>
-        {{- end }}
-        <a href='' class='ml2'>rename</a>
-        <a href='' class='dark-red ml2'>delete</a>
-      </div>
-      <div class='mv2'>
-        {{- if eq (head $.FilePath) "posts" }}
-        <button type='button' value='{{ $asset.Name }}' class='button ba br2 pa2 w-100'>insert into post</button>
-        {{- else }}
-        <button type='button' value='{{ $asset.Name }}' class='button ba br2 pa2 w-100'>insert into page</button>
-        {{- end }}
+        <span class='flex-grow-1'></span>
+        <details class='ml1 relative' data-autoclose-details>
+          <summary role='button' class='flex items-center button ba br2 b--black h2 hide-marker ph2 pointer' data-disable-click-selection>
+            {{ template "heroicons-ellipsis-horizontal" }}
+            {{ template "octicons-triangle-down" }}
+          </summary>
+          <div class='absolute bg-white br2' style='top: calc(2rem + 4px); right: 0px; z-index: 1000; border: 1px solid black;'>
+            <div class='ma2 tr'><a href=''>rename</a></div>
+            <div class='ma2'><button type='submit' formmethod='post' formaction='' name='name' value='' class='button ba br2 pa2 w-100'>insert</button></div>
+            <div class='ma2'><button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/cut" }}/' name='name' value='{{ $asset.Name }}' class='button ba br2 pa2 w-100'>cut</button></div>
+            <div class='ma2'><button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/copy" }}/' name='name' value='{{ $asset.Name }}' class='button ba br2 pa2 w-100'>copy</button></div>
+            <div class='ma2'><button type='submit' formmethod='get' formaction='/{{ join "files" $.SitePrefix "delete" }}/' name='name' value='{{ $asset.Name }}' class='button-danger ba br2 b--dark-red pa2 w-100'>delete</button></div>
+          </div>
+        </details>
       </div>
     </li>
     {{- end }}
@@ -267,5 +286,23 @@
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'>
   <path d='M3 3a2 2 0 0 1 2-2h9.982a2 2 0 0 1 1.414.586l4.018 4.018A2 2 0 0 1 21 7.018V21a2 2 0 0 1-2 2H4.75a.75.75 0 0 1 0-1.5H19a.5.5 0 0 0 .5-.5V8.5h-4a2 2 0 0 1-2-2v-4H5a.5.5 0 0 0-.5.5v6.25a.75.75 0 0 1-1.5 0Zm12-.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 0-.146-.336l-4.018-4.018A.5.5 0 0 0 15 2.5Z'></path>
   <path d='M4.53 12.24a.75.75 0 0 1-.039 1.06l-2.639 2.45 2.64 2.45a.75.75 0 1 1-1.022 1.1l-3.23-3a.75.75 0 0 1 0-1.1l3.23-3a.75.75 0 0 1 1.06.04Zm3.979 1.06a.75.75 0 1 1 1.02-1.1l3.231 3a.75.75 0 0 1 0 1.1l-3.23 3a.75.75 0 1 1-1.021-1.1l2.639-2.45-2.64-2.45Z'></path>
+</svg>
+{{- end }}
+
+{{- define "heroicons-ellipsis-horizontal" }}
+<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' viewBox='0 0 24 24'>
+  <path d='M5 12H5.01M12 12H12.01M19 12H19.01M6 12C6 12.5523 5.55228 13 5 13C4.44772 13 4 12.5523 4 12C4 11.4477 4.44772 11 5 11C5.55228 11 6 11.4477 6 12ZM13 12C13 12.5523 12.5523 13 12 13C11.4477 13 11 12.5523 11 12C11 11.4477 11.4477 11 12 11C12.5523 11 13 11.4477 13 12ZM20 12C20 12.5523 19.5523 13 19 13C18.4477 13 18 12.5523 18 12C18 11.4477 18.4477 11 19 11C19.5523 11 20 11.4477 20 12Z' stroke='#4A5568' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'/>
+</svg>
+{{- end }}
+
+{{- define "octicons-triangle-down" }}
+<svg aria-hidden='true' height='16' viewBox='0 0 16 16' version='1.1' width='16' data-view-component='true' class='octicon octicon-triangle-down'>
+  <path d='m4.427 7.427 3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427Z'></path>
+</svg>
+{{- end }}
+
+{{- define "octicons-plus" }}
+<svg aria-hidden='true' height='16' viewBox='0 0 16 16' version='1.1' width='16' data-view-component='true' class='octicon octicon-plus'>
+  <path d='M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z'></path>
 </svg>
 {{- end }}

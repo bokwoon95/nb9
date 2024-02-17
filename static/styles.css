@@ -110,7 +110,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 /* grid */
 .grid { display: grid; }
-.grid-cols-auto-150px { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.grid-cols-auto-150px { grid-template-columns: repeat(auto-fit, minmax(150px, 0.25fr)); }
 .grid-gap-3 { grid-gap: 1rem; }
 
 /* button */

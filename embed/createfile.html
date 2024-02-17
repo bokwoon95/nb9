@@ -37,13 +37,17 @@
       {{- if eq (head $.Parent) "pages" }}
       Create a new page in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
       {{- else if eq (head $.Parent) "posts" }}
-      {{- if eq $.Parent "posts" }}
-      Create a new post
-      {{- else }}
-      Create a new post in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
-      {{- end }}
-      {{- else }}
-      Create a new file in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+        {{- if eq $.Parent "posts" }}
+        Create a new post
+        {{- else }}
+        Create a new post in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+        {{- end }}
+      {{- else if eq (head $.Parent) "output" }}
+        {{- if eq (head (tail $.Parent)) "themes" }}
+        Create a new file in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+        {{- else }}
+        Create a new file for <a href='/{{ join "files" $.SitePrefix "pages" (tail $.Parent) }}.html'>{{ base $.Parent }}.html</a>
+        {{- end }}
       {{- end }}
     </h1>
     <div class='flex-grow-1'></div>
@@ -81,12 +85,18 @@
         <option selected>.html</option>
         {{- else if eq (head $.Parent) "posts" }}
         <option selected>.md</option>
-        {{- else }}
-        <option{{ if eq $.Ext ".html" }} selected{{ end }}>.html</option>
-        <option{{ if eq $.Ext ".css" }} selected{{ end }}>.css</option>
-        <option{{ if eq $.Ext ".js" }} selected{{ end }}>.js</option>
-        <option{{ if eq $.Ext ".md" }} selected{{ end }}>.md</option>
-        <option{{ if eq $.Ext ".txt" }} selected{{ end }}>.txt</option>
+        {{- else if eq (head $.Parent) "output" }}
+          {{- if eq (head (tail $.Parent)) "themes" }}
+          <option{{ if eq $.Ext ".html" }} selected{{ end }}>.html</option>
+          <option{{ if eq $.Ext ".css" }} selected{{ end }}>.css</option>
+          <option{{ if eq $.Ext ".js" }} selected{{ end }}>.js</option>
+          <option{{ if eq $.Ext ".md" }} selected{{ end }}>.md</option>
+          <option{{ if eq $.Ext ".txt" }} selected{{ end }}>.txt</option>
+          {{- else }}
+          <option{{ if eq $.Ext ".css" }} selected{{ end }}>.css</option>
+          <option{{ if eq $.Ext ".js" }} selected{{ end }}>.js</option>
+          <option{{ if eq $.Ext ".js" }} selected{{ end }}>.md</option>
+          {{- end }}
         {{- end }}
       </select>
     </div>
