@@ -67,7 +67,7 @@
   {{- $error := index $.PostRedirectGet "error" }}
   {{- if $error }}
     {{- if eq $error "PostNoPaste" }}
-    <div>files from other folders cannot be pasted into a posts folder (create a new post and manually copy its contents over instead)</div>
+    <div>files from other folders cannot be pasted into a posts folder<br>create a new post and manually copy its contents over instead</div>
     {{- else if eq $error "PostNoCopy" }}
     <div>posts cannot be copy-pasted, only moved (use cut and paste)</div>
     {{- else }}
