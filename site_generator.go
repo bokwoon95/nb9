@@ -248,7 +248,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 		group.Go(func() error {
 			n := slices.Index(callers, externalName)
 			if n > 0 {
-				return fmt.Errorf("%s has a circular reference: %s", externalName, strings.Join(callers[n:], "=>")+" => "+externalName)
+				return &TemplateError{
+					Err: fmt.Errorf("%s has a circular reference: %s", externalName, strings.Join(callers[n:], "=>")+" => "+externalName),
+				}
 			}
 
 			// If a template is currently being parsed, wait for it to finish
@@ -305,7 +307,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				// current template) instead of adding it to the
 				// externalTemplateErrs list.
 				if errors.Is(err, fs.ErrNotExist) {
-					return fmt.Errorf("%s: template %q does not exist", name, externalName)
+					return &TemplateError{
+						Err: fmt.Errorf("%s: template %q does not exist", name, externalName),
+					}
 				}
 				return err
 			}
@@ -320,7 +324,9 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				// instead of a file. Therefore we return the error
 				// (associating it with the current template) instead of adding
 				// it to the externalTemplateErrs list.
-				return fmt.Errorf("%s: %q is a folder", name, externalName)
+				return &TemplateError{
+					Err: fmt.Errorf("%s: %q is a folder", name, externalName),
+				}
 			}
 			var b strings.Builder
 			b.Grow(int(fileInfo.Size()))
@@ -360,14 +366,18 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 		for _, tmpl := range tmpl.Templates() {
 			_, err = finalTemplate.AddParseTree(tmpl.Name(), tmpl.Tree)
 			if err != nil {
-				return nil, fmt.Errorf("%s: %s: add %s: %w", name, externalNames[i], tmpl.Name(), err)
+				return nil, &TemplateError{
+					Err: fmt.Errorf("%s: %s: add %s: %w", name, externalNames[i], tmpl.Name(), err),
+				}
 			}
 		}
 	}
 	for _, tmpl := range internalTemplates {
 		_, err = finalTemplate.AddParseTree(tmpl.Name(), tmpl.Tree)
 		if err != nil {
-			return nil, fmt.Errorf("%s: add %s: %w", name, tmpl.Name(), err)
+			return nil, &TemplateError{
+				Err: fmt.Errorf("%s: add %s: %w", name, tmpl.Name(), err),
+			}
 		}
 	}
 	return finalTemplate.Lookup(name), nil
