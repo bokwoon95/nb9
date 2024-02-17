@@ -26,7 +26,7 @@
   {{- end }}
 </nav>
 {{- if eq (index $.PostRedirectGet "from") "regenerate" }}
-  {{- if not (index $.PostRedirectGet "templateErrors") }}
+  {{- if not (index $.PostRedirectGet "templateError") }}
   <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
     <div>regenerated site ({{ index $.PostRedirectGet "count" }} file{{ if ne (index $.PostRedirectGet "count") 1.0 }}s{{ end }} in {{ index $.PostRedirectGet "timeTaken" }})</div>
     <div class='flex-grow-1'></div>
@@ -37,14 +37,10 @@
 {{- if eq (index $.PostRedirectGet "from") "regeneratelist" }}
   {{ $count := index $.PostRedirectGet "count" }}
   {{ $timeTaken := index $.PostRedirectGet "timeTaken" }}
-  {{ $templateErrors := index $.PostRedirectGet "templateErrors" }}
-  {{- if $templateErrors }}
-  <div class='b invalid-red'>template errors:</div>
-  <ul class='list-style-disc ph3 invalid-red'>
-    {{- range $error := $templateErrors }}
-    <li>{{ $error }}</li>
-    {{- end }}
-  </ul>
+  {{- if index $.PostRedirectGet "templateError" }}
+  <div class='mv2 invalid-red'>
+    <span class='b'>template error: </span>{{ index $.PostRedirectGet "templateError" }}
+  </div>
   {{- else }}
   <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
     <div>regenerated list ({{ $count }} file{{ if ne $count 1.0 }}s{{ end }} in {{ $timeTaken }})</div>
@@ -241,14 +237,9 @@
   {{- end }}
 </div>
 {{- if eq (index $.PostRedirectGet "from") "regenerate" }}
-  {{- if index $.PostRedirectGet "templateErrors" }}
-  <div class='mv2'>
-    <div class='b invalid-red'>template errors:</div>
-    <ul class='list-style-disc ph3 invalid-red'>
-      {{- range $error := index $.PostRedirectGet "templateErrors" }}
-      <li>{{ $error }}</li>
-      {{- end }}
-    </ul>
+  {{- if index $.PostRedirectGet "templateError" }}
+  <div class='mv2 invalid-red'>
+    <span class='b'>template error: </span>{{ index $.PostRedirectGet "templateError" }}
   </div>
   {{- end }}
 {{- end }}

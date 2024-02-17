@@ -34,7 +34,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 	}
 	type Response struct {
 		PostRedirectGet map[string]any `json:"postRedirectGet,omitempty"`
-		TemplateErrors  []string       `json:"templateErrors,omitempty"`
+		TemplateError   string         `json:"templateError,omitempty"`
 		ContentSite     string         `json:"contentSite"`
 		Username        NullString     `json:"username"`
 		SitePrefix      string         `json:"sitePrefix"`
@@ -411,6 +411,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				"postRedirectGet": map[string]any{
 					"from": "files",
 				},
+				"templateError": response.TemplateError,
 			})
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -515,12 +516,9 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		case "pages":
 			err := siteGen.GeneratePage(r.Context(), filePath, response.Content)
 			if err != nil {
-				var parseErr TemplateParseError
-				var executionErr *TemplateExecutionError
-				if errors.As(err, &parseErr) {
-					response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
-				} else if errors.As(err, &executionErr) {
-					response.TemplateErrors = append(response.TemplateErrors, executionErr.Err.Error())
+				var templateErr *TemplateError
+				if errors.As(err, &templateErr) {
+					response.TemplateError = templateErr.Err.Error()
 				} else {
 					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)
@@ -536,12 +534,9 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			}
 			err = siteGen.GeneratePost(r.Context(), filePath, response.Content, tmpl)
 			if err != nil {
-				var parseErr TemplateParseError
-				var executionErr *TemplateExecutionError
-				if errors.As(err, &parseErr) {
-					response.TemplateErrors = append(response.TemplateErrors, parseErr.List()...)
-				} else if errors.As(err, &executionErr) {
-					response.TemplateErrors = append(response.TemplateErrors, executionErr.Error())
+				var templateErr *TemplateError
+				if errors.As(err, &templateErr) {
+					response.TemplateError = templateErr.Err.Error()
 				} else {
 					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)

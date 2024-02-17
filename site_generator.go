@@ -173,30 +173,35 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text string, lineOffset int, callers []string) (*template.Template, error) {
 	currentTemplate, err := template.New(name).Funcs(funcMap).Parse(text)
 	if err != nil {
-		errmsg := err.Error()
-		sections := strings.SplitN(errmsg, ":", 4)
-		if len(sections) < 4 {
-			return nil, TemplateParseError{name: {errmsg}}
+		sections := strings.SplitN(err.Error(), ":", 4)
+		if len(sections) < 4 || strings.TrimSpace(sections[0]) != "template" {
+			return nil, &TemplateError{
+				Err: err,
+			}
 		}
 		filePath := strings.TrimSpace(sections[1])
 		lineNo, err := strconv.Atoi(strings.TrimSpace(sections[2]))
 		msg := strings.TrimSpace(sections[3])
 		if err != nil {
-			return nil, TemplateParseError{name: {errmsg}}
+			return nil, &TemplateError{
+				Err: err,
+			}
 		}
-		return nil, TemplateParseError{name: {filePath + ":" + strconv.Itoa(lineNo+lineOffset) + ": " + msg}}
+		return nil, &TemplateError{
+			Err: fmt.Errorf(filePath + ":" + strconv.Itoa(lineNo-lineOffset) + ": " + msg),
+		}
 	}
-	var errmsgs []string
 	internalTemplates := currentTemplate.Templates()
+	slices.SortFunc(internalTemplates, func(a, b *template.Template) int {
+		return strings.Compare(a.Name(), b.Name())
+	})
 	for _, tmpl := range internalTemplates {
 		internalName := tmpl.Name()
-		// TODO: stop at the first internal template error.
 		if strings.HasSuffix(internalName, ".html") && internalName != name {
-			errmsgs = append(errmsgs, fmt.Sprintf("%s: define %q: internal template name cannot end with .html", name, internalName))
+			return nil, &TemplateError{
+				Err: fmt.Errorf("%s: define %q: internal template name cannot end with .html", name, internalName),
+			}
 		}
-	}
-	if len(errmsgs) > 0 {
-		return nil, TemplateParseError{name: errmsgs}
 	}
 
 	// Get the list of external templates referenced by the current template.
@@ -223,17 +228,14 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 			case *parse.TemplateNode:
 				if strings.HasSuffix(node.Name, ".html") {
 					if !strings.HasPrefix(node.Name, "/themes/") {
-						// TODO: stop at the first /themes/ error.
-						errmsgs = append(errmsgs, fmt.Sprintf("%s: template %q: external template name must start with /themes/", name, node.Name))
-						continue
+						return nil, &TemplateError{
+							Err: fmt.Errorf("%s: template %q: external template name must start with /themes/", name, node.Name),
+						}
 					}
 					externalNames = append(externalNames, node.Name)
 				}
 			}
 		}
-	}
-	if len(errmsgs) > 0 {
-		return nil, TemplateParseError{name: errmsgs}
 	}
 	// sort | uniq deduplication.
 	slices.Sort(externalNames)
@@ -241,14 +243,12 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 
 	group, groupctx := errgroup.WithContext(groupctx)
 	externalTemplates := make([]*template.Template, len(externalNames))
-	externalTemplateErrs := make([]error, len(externalNames))
 	for i, externalName := range externalNames {
 		i, externalName := i, externalName
 		group.Go(func() error {
 			n := slices.Index(callers, externalName)
 			if n > 0 {
-				externalTemplateErrs[i] = fmt.Errorf("%s has a circular reference: %s", externalName, strings.Join(callers[n:], "=>")+" => "+externalName)
-				return nil
+				return fmt.Errorf("%s has a circular reference: %s", externalName, strings.Join(callers[n:], "=>")+" => "+externalName)
 			}
 
 			// If a template is currently being parsed, wait for it to finish
@@ -307,14 +307,12 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				if errors.Is(err, fs.ErrNotExist) {
 					return fmt.Errorf("%s: template %q does not exist", name, externalName)
 				}
-				externalTemplateErrs[i] = err
-				return nil
+				return err
 			}
 			defer file.Close()
 			fileInfo, err := file.Stat()
 			if err != nil {
-				externalTemplateErrs[i] = err
-				return nil
+				return err
 			}
 			if fileInfo.IsDir() {
 				// If the referenced template is not a file but a directory, it
@@ -328,19 +326,16 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 			b.Grow(int(fileInfo.Size()))
 			_, err = io.Copy(&b, file)
 			if err != nil {
-				externalTemplateErrs[i] = err
-				return nil
+				return err
 			}
 			err = file.Close()
 			if err != nil {
-				externalTemplateErrs[i] = err
-				return nil
+				return err
 			}
 			newCallers := append(append(make([]string, 0, len(callers)+1), callers...), externalName)
 			externalTemplate, err := siteGen.ParseTemplate(groupctx, externalName, b.String(), 0, newCallers)
 			if err != nil {
-				externalTemplateErrs[i] = err
-				return nil
+				return err
 			}
 			// Important! Before we execute any template, it must be cloned.
 			// This is because once a template has been executed it is no
@@ -349,8 +344,7 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 			// for its contextually auto-escaped HTML feature to work).
 			externalTemplates[i], err = externalTemplate.Clone()
 			if err != nil {
-				externalTemplateErrs[i] = err
-				return nil
+				return err
 			}
 			cachedTemplate = externalTemplate
 			return nil
@@ -358,38 +352,7 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 	}
 	err = group.Wait()
 	if err != nil {
-		return nil, TemplateParseError{name: {err.Error()}}
-	}
-
-	parseErrors := make(TemplateParseError)
-	for i, err := range externalTemplateErrs {
-		switch err := err.(type) {
-		case nil:
-			continue
-		case TemplateParseError:
-			for externalName, errmsgs := range err {
-				parseErrors[externalName] = append(parseErrors[externalName], errmsgs...)
-			}
-		default:
-			externalName := externalNames[i]
-			parseErrors[externalName] = append(parseErrors[externalName], err.Error())
-		}
-	}
-	var nilTemplateNames []string
-	for i, tmpl := range externalTemplates {
-		// A nil template means someone else attempted to parse that template
-		// but failed (meaning it has errors), which blocks us from
-		// successfully parsing the current template. Accumulate all the
-		// failing template names and report it to the user.
-		if tmpl == nil {
-			nilTemplateNames = append(nilTemplateNames, externalNames[i])
-		}
-	}
-	if len(nilTemplateNames) > 0 {
-		parseErrors[name] = append(parseErrors[name], fmt.Sprintf("the following templates have errors: %s", strings.Join(nilTemplateNames, ", ")))
-	}
-	if len(parseErrors) > 0 {
-		return nil, parseErrors
+		return nil, err
 	}
 
 	finalTemplate := template.New(name).Funcs(funcMap)
@@ -736,7 +699,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 	if siteGen.imgDomain == "" {
 		err = tmpl.Execute(writer, &pageData)
 		if err != nil {
-			return &TemplateExecutionError{Err: err}
+			return &TemplateError{Err: err}
 		}
 	} else {
 		pipeReader, pipeWriter := io.Pipe()
@@ -746,7 +709,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 		}()
 		err = tmpl.Execute(pipeWriter, &pageData)
 		if err != nil {
-			return &TemplateExecutionError{Err: err}
+			return &TemplateError{Err: err}
 		}
 		pipeWriter.Close()
 		err = <-result
@@ -907,7 +870,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 	if siteGen.imgDomain == "" {
 		err = tmpl.Execute(writer, &postData)
 		if err != nil {
-			return &TemplateExecutionError{Err: err}
+			return &TemplateError{Err: err}
 		}
 	} else {
 		pipeReader, pipeWriter := io.Pipe()
@@ -917,7 +880,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		}()
 		err = tmpl.Execute(pipeWriter, &postData)
 		if err != nil {
-			return &TemplateExecutionError{Err: err}
+			return &TemplateError{Err: err}
 		}
 		pipeWriter.Close()
 		err = <-result
@@ -1305,7 +1268,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 		if siteGen.imgDomain == "" {
 			err = tmpl.Execute(writer, &postListData)
 			if err != nil {
-				return &TemplateExecutionError{Err: err}
+				return &TemplateError{Err: err}
 			}
 		} else {
 			pipeReader, pipeWriter := io.Pipe()
@@ -1315,7 +1278,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
-				return &TemplateExecutionError{Err: err}
+				return &TemplateError{Err: err}
 			}
 			pipeWriter.Close()
 			err = <-result
@@ -1349,7 +1312,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 		if siteGen.imgDomain == "" {
 			err = tmpl.Execute(writer, &postListData)
 			if err != nil {
-				return &TemplateExecutionError{Err: err}
+				return &TemplateError{Err: err}
 			}
 		} else {
 			pipeReader, pipeWriter := io.Pipe()
@@ -1359,7 +1322,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
-				return &TemplateExecutionError{Err: err}
+				return &TemplateError{Err: err}
 			}
 			pipeWriter.Close()
 			err = <-result
@@ -1657,35 +1620,13 @@ var funcMap = map[string]any{
 	},
 }
 
-type TemplateParseError map[string][]string
+type TemplateError struct{ Err error }
 
-func (parseErrors TemplateParseError) Error() string {
-	b, _ := json.MarshalIndent(parseErrors, "", "  ")
-	return fmt.Sprintf("the following templates have errors: %s", string(b))
-}
-
-func (parseErr TemplateParseError) List() []string {
-	var n int
-	names := make([]string, 0, len(parseErr))
-	for name, errmsgs := range parseErr {
-		names = append(names, name)
-		n += len(errmsgs)
-	}
-	slices.Sort(names)
-	errmsgs := make([]string, 0, n)
-	for _, name := range names {
-		errmsgs = append(errmsgs, parseErr[name]...)
-	}
-	return errmsgs
-}
-
-type TemplateExecutionError struct{ Err error }
-
-func (executionErr *TemplateExecutionError) Error() string {
+func (executionErr *TemplateError) Error() string {
 	return executionErr.Err.Error()
 }
 
-func (executionErr *TemplateExecutionError) Unwrap() error {
+func (executionErr *TemplateError) Unwrap() error {
 	return executionErr.Err
 }
 

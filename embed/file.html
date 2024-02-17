@@ -180,13 +180,10 @@
   {{- end }}
 </div>
 <form method='post' enctype='multipart/form-data' class='mv2'>
-  {{- if $.TemplateErrors }}
-  <div class='b invalid-red'>template errors:</div>
-  <ul class='list-style-disc ph3 invalid-red'>
-    {{- range $error := $.TemplateErrors }}
-    <li>{{ $error }}</li>
-    {{- end }}
-  </ul>
+  {{- if $.TemplateError }}
+  <div class='mv2 invalid-red'>
+    <span class='b'>template error: </span>{{ $.TemplateError }}
+  </div>
   {{- end }}
   <div class='flex mv2'>
     <label for='content' class='b'>{{ base $.FilePath }}</label>
