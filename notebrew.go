@@ -340,7 +340,7 @@ func filenameSafe(s string) string {
 			continue
 		}
 		n := int(char)
-		if n < len(isURLUnsafe) && isURLUnsafe[n] {
+		if n < len(isFilenameUnsafe) && isFilenameUnsafe[n] {
 			continue
 		}
 		b.WriteRune(char)
