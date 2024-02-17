@@ -22,6 +22,11 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		TimeTaken     string        `json:"timeTaken"`
 		TemplateError TemplateError `json:"templateError,omitempty"`
 	}
+	referer := r.Referer()
+	if referer == "" {
+		http.Redirect(w, r, "/"+path.Join("files", sitePrefix)+"/", http.StatusFound)
+		return
+	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
 			w.Header().Set("Content-Type", "application/json")
@@ -45,10 +50,6 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
-		}
-		referer := r.Referer()
-		if referer == "" {
-			referer = "/" + path.Join("files", sitePrefix) + "/"
 		}
 		http.Redirect(w, r, referer, http.StatusFound)
 	}
@@ -331,6 +332,11 @@ func (nbrew *Notebrew) regeneratelist(w http.ResponseWriter, r *http.Request, si
 		TimeTaken     string        `json:"timeTaken"`
 		TemplateError TemplateError `json:"templateError,omitempty"`
 	}
+	referer := r.Referer()
+	if referer == "" {
+		http.Redirect(w, r, "/"+path.Join("files", sitePrefix)+"/", http.StatusFound)
+		return
+	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
 			w.Header().Set("Content-Type", "application/json")
@@ -359,10 +365,6 @@ func (nbrew *Notebrew) regeneratelist(w http.ResponseWriter, r *http.Request, si
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
-		}
-		referer := r.Referer()
-		if referer == "" {
-			referer = "/" + path.Join("files", sitePrefix, "posts", response.Category) + "/"
 		}
 		http.Redirect(w, r, referer, http.StatusFound)
 	}

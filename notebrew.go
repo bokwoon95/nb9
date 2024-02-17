@@ -842,7 +842,7 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 		}
 	} else {
 		data = map[string]any{
-			"Referer":  r.Referer(),
+			"Referer":  getReferer(r),
 			"Title":    "500 internal server error",
 			"Headline": "500 internal server error",
 			"Byline":   "There's a bug with notebrew.",

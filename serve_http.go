@@ -261,6 +261,12 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			nbrew.search(w, r, username, sitePrefix)
+		case "uploadfile":
+			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
+			nbrew.uploadfile(w, r, username, sitePrefix)
 		case "rename":
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)

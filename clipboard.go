@@ -48,7 +48,8 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	}
 	referer := r.Referer()
 	if referer == "" {
-		referer = "/" + path.Join("files", sitePrefix) + "/"
+		http.Redirect(w, r, "/"+path.Join("files", sitePrefix)+"/", http.StatusFound)
+		return
 	}
 	switch action {
 	case "cut", "copy":
