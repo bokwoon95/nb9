@@ -17,6 +17,7 @@ import (
 	"math"
 	"net/url"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -170,28 +171,10 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 	return siteGen, nil
 }
 
-func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text string, lineOffset int, callers []string) (*template.Template, error) {
+func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text string, callers []string) (*template.Template, error) {
 	currentTemplate, err := template.New(name).Funcs(funcMap).Parse(text)
 	if err != nil {
-		sections := strings.SplitN(err.Error(), ":", 4)
-		if len(sections) < 4 || strings.TrimSpace(sections[0]) != "template" {
-			return nil, TemplateError{
-				Description: err.Error(),
-			}
-		}
-		templateName := strings.TrimSpace(sections[1])
-		lineNo, err := strconv.Atoi(strings.TrimSpace(sections[2]))
-		description := strings.TrimSpace(sections[3])
-		if err != nil {
-			return nil, TemplateError{
-				Description: err.Error(),
-			}
-		}
-		return nil, TemplateError{
-			Name:        templateName,
-			Line:        lineNo - lineOffset,
-			Description: description,
-		}
+		return nil, NewTemplateError(err)
 	}
 	internalTemplates := currentTemplate.Templates()
 	slices.SortFunc(internalTemplates, func(a, b *template.Template) int {
@@ -346,7 +329,7 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				return err
 			}
 			newCallers := append(append(make([]string, 0, len(callers)+1), callers...), externalName)
-			externalTemplate, err := siteGen.ParseTemplate(groupctx, externalName, b.String(), 0, newCallers)
+			externalTemplate, err := siteGen.ParseTemplate(groupctx, externalName, b.String(), newCallers)
 			if err != nil {
 				return err
 			}
@@ -434,19 +417,13 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 	var tmpl *template.Template
 	group, groupctx := errgroup.WithContext(ctx)
 	group.Go(func() error {
-		const doctype = "<!DOCTYPE html>"
-		text := strings.TrimSpace(text)
-		lineOffset := 0
-		if len(text) < len(doctype) || !strings.EqualFold(text[:len(doctype)], doctype) {
-			text = "<!DOCTYPE html>" +
-				"\n<html lang='{{ $.Site.Lang }}'>" +
-				"\n<meta charset='utf-8'>" +
-				"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
-				"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
-				"\n" + text
-			lineOffset = 5
-		}
-		tmpl, err = siteGen.ParseTemplate(groupctx, "/"+filePath, text, lineOffset, nil)
+		text = "<!DOCTYPE html>" +
+			"\n<html lang='{{ $.Site.Lang }}'>" +
+			"\n<meta charset='utf-8'>" +
+			"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+			"\n" + text
+		tmpl, err = siteGen.ParseTemplate(groupctx, "/"+filePath, text, nil)
 		if err != nil {
 			return err
 		}
@@ -718,9 +695,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 	if siteGen.imgDomain == "" {
 		err = tmpl.Execute(writer, &pageData)
 		if err != nil {
-			return TemplateError{
-				Description: err.Error(),
-			}
+			return NewTemplateError(err)
 		}
 	} else {
 		pipeReader, pipeWriter := io.Pipe()
@@ -730,9 +705,7 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 		}()
 		err = tmpl.Execute(pipeWriter, &pageData)
 		if err != nil {
-			return TemplateError{
-				Description: err.Error(),
-			}
+			return NewTemplateError(err)
 		}
 		pipeWriter.Close()
 		err = <-result
@@ -893,9 +866,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 	if siteGen.imgDomain == "" {
 		err = tmpl.Execute(writer, &postData)
 		if err != nil {
-			return TemplateError{
-				Description: err.Error(),
-			}
+			return NewTemplateError(err)
 		}
 	} else {
 		pipeReader, pipeWriter := io.Pipe()
@@ -905,9 +876,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		}()
 		err = tmpl.Execute(pipeWriter, &postData)
 		if err != nil {
-			return TemplateError{
-				Description: err.Error(),
-			}
+			return NewTemplateError(err)
 		}
 		pipeWriter.Close()
 		err = <-result
@@ -1295,9 +1264,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 		if siteGen.imgDomain == "" {
 			err = tmpl.Execute(writer, &postListData)
 			if err != nil {
-				return TemplateError{
-					Description: err.Error(),
-				}
+				return NewTemplateError(err)
 			}
 		} else {
 			pipeReader, pipeWriter := io.Pipe()
@@ -1307,9 +1274,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
-				return TemplateError{
-					Description: err.Error(),
-				}
+				return NewTemplateError(err)
 			}
 			pipeWriter.Close()
 			err = <-result
@@ -1343,9 +1308,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 		if siteGen.imgDomain == "" {
 			err = tmpl.Execute(writer, &postListData)
 			if err != nil {
-				return TemplateError{
-					Description: err.Error(),
-				}
+				return NewTemplateError(err)
 			}
 		} else {
 			pipeReader, pipeWriter := io.Pipe()
@@ -1355,9 +1318,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 			}()
 			err = tmpl.Execute(pipeWriter, &postListData)
 			if err != nil {
-				return TemplateError{
-					Description: err.Error(),
-				}
+				return NewTemplateError(err)
 			}
 			pipeWriter.Close()
 			err = <-result
@@ -1661,6 +1622,111 @@ type TemplateError struct {
 	Description string
 }
 
+var (
+	postRegexp     = regexp.MustCompile(`/themes/post.html:\d+`)
+	postlistRegexp = regexp.MustCompile(`/themes/postlist.html:\d+`)
+)
+
+func NewTemplateError(err error) error {
+	sections := strings.SplitN(err.Error(), ":", 4)
+	if len(sections) < 4 || strings.TrimSpace(sections[0]) != "template" {
+		return TemplateError{
+			Description: err.Error(),
+		}
+	}
+	templateName := strings.TrimSpace(sections[1])
+	lineNo, _ := strconv.Atoi(strings.TrimSpace(sections[2]))
+	description := strings.TrimSpace(sections[3])
+	i := strings.Index(description, ":")
+	if i > 0 {
+		colNo, _ := strconv.Atoi(strings.TrimSpace(description[:i]))
+		if colNo > 0 {
+			description = strings.TrimSpace(description[i+1:])
+		}
+	}
+	var oldnew []string
+	if matches := postRegexp.FindAllString(description, -1); len(matches) > 0 {
+		slices.Sort(matches)
+		matches = slices.Compact(matches)
+		for _, match := range matches {
+			lineNo, _ := strconv.Atoi(strings.TrimPrefix(match, "/themes/post.html:"))
+			oldnew = append(oldnew, match, "/themes/post.html:"+strconv.Itoa(lineNo-5))
+		}
+	}
+	if matches := postlistRegexp.FindAllString(description, -1); len(matches) > 0 {
+		slices.Sort(matches)
+		matches = slices.Compact(matches)
+		for _, match := range matches {
+			lineNo, _ := strconv.Atoi(strings.TrimPrefix(match, "/themes/postlist.html:"))
+			oldnew = append(oldnew, match, "/themes/postlist.html:"+strconv.Itoa(lineNo-6))
+		}
+	}
+	offset := 0
+	if templateName == "post.html" {
+		offset = 5
+	} else if templateName == "postlist.html" {
+		offset = 6
+	} else if strings.HasPrefix(templateName, "/pages/") {
+		offset = 5
+		pageRegexp, err := regexp.Compile(templateName + `:\d+`)
+		if err == nil {
+			if matches := pageRegexp.FindAllString(description, -1); len(matches) > 0 {
+				slices.Sort(matches)
+				matches = slices.Compact(matches)
+				for _, match := range matches {
+					lineNo, _ := strconv.Atoi(strings.TrimPrefix(match, templateName+":"))
+					oldnew = append(oldnew, match, "/themes/post.html:"+strconv.Itoa(lineNo-5))
+				}
+			}
+		}
+	}
+	if len(oldnew) > 0 {
+		description = strings.NewReplacer(oldnew...).Replace(description)
+	}
+	return TemplateError{
+		Name:        templateName,
+		Line:        lineNo - offset,
+		Description: description,
+	}
+}
+
+func wrapExecutionError(err error) error {
+	sections := strings.SplitN(err.Error(), ":", 5)
+	if len(sections) < 5 || strings.TrimSpace(sections[0]) != "template" {
+		return TemplateError{
+			Description: err.Error(),
+		}
+	}
+	templateName := strings.TrimSpace(sections[1])
+	lineNo, _ := strconv.Atoi(strings.TrimSpace(sections[2]))
+	description := strings.TrimSpace(sections[4])
+	if lineNo == 0 {
+		return TemplateError{
+			Name:        templateName,
+			Description: description,
+		}
+	}
+	if templateName == "/themes/postlist.html" {
+		return TemplateError{
+			Name:        templateName,
+			Line:        lineNo - 6,
+			Description: strings.ReplaceAll(description, templateName+":"+strconv.Itoa(lineNo), templateName+":"+strconv.Itoa(lineNo-6)),
+		}
+	}
+	if templateName == "/themes/post.html" || strings.HasPrefix(templateName, "/pages/") {
+		return TemplateError{
+			Name:        templateName,
+			Line:        lineNo - 5,
+			Description: strings.ReplaceAll(description, templateName+":"+strconv.Itoa(lineNo), templateName+":"+strconv.Itoa(lineNo-5)),
+		}
+	}
+	return TemplateError{
+		Name:        templateName,
+		Line:        lineNo,
+		Description: description,
+	}
+}
+
 func (templateErr TemplateError) Error() string {
 	if templateErr.Name == "" {
 		return templateErr.Description
@@ -1885,11 +1951,11 @@ type AtomCDATA struct {
 	Content string `xml:",cdata"`
 }
 
-func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Template, error) {
-	var err error
-	var text sql.NullString
+func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (tmpl *template.Template, err error) {
+	var text string
+	var found bool
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		text, err = sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+		result, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
 			Dialect: remoteFS.filesDialect,
 			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
 			Values: []any{
@@ -1901,6 +1967,8 @@ func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Templ
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
+		text = result.String
+		found = result.Valid
 	} else {
 		file, err := siteGen.fsys.WithContext(ctx).Open(path.Join(siteGen.sitePrefix, "output/themes/post.html"))
 		if err != nil {
@@ -1926,10 +1994,11 @@ func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Templ
 			if err != nil {
 				return nil, err
 			}
-			text = sql.NullString{String: b.String(), Valid: true}
+			text = b.String()
+			found = true
 		}
 	}
-	if !text.Valid {
+	if !found {
 		file, err := RuntimeFS.Open("embed/post.html")
 		if err != nil {
 			return nil, err
@@ -1951,21 +2020,15 @@ func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (*template.Templ
 		if err != nil {
 			return nil, err
 		}
-		text = sql.NullString{String: b.String(), Valid: true}
+		text = b.String()
 	}
-	const doctype = "<!DOCTYPE html>"
-	text.String = strings.TrimSpace(text.String)
-	lineOffset := 0
-	if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
-		text.String = "<!DOCTYPE html>" +
-			"\n<html lang='{{ $.Site.Lang }}'>" +
-			"\n<meta charset='utf-8'>" +
-			"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
-			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
-			"\n" + text.String
-		lineOffset = 5
-	}
-	tmpl, err := siteGen.ParseTemplate(ctx, "/themes/post.html", text.String, lineOffset, []string{"/themes/post.html"})
+	text = "<!DOCTYPE html>" +
+		"\n<html lang='{{ $.Site.Lang }}'>" +
+		"\n<meta charset='utf-8'>" +
+		"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+		"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+		"\n" + text
+	tmpl, err = siteGen.ParseTemplate(ctx, "/themes/post.html", text, []string{"/themes/post.html"})
 	if err != nil {
 		return nil, err
 	}
@@ -1977,9 +2040,10 @@ func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category str
 		return nil, ErrInvalidPostCategory
 	}
 	var err error
-	var text sql.NullString
+	var text string
+	var found bool
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		text, err = sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
+		result, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
 			Dialect: remoteFS.filesDialect,
 			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
 			Values: []any{
@@ -1991,6 +2055,8 @@ func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category str
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
+		text = result.String
+		found = result.Valid
 	} else {
 		file, err := siteGen.fsys.WithContext(ctx).Open(path.Join(siteGen.sitePrefix, "output/themes/postlist.html"))
 		if err != nil {
@@ -2016,10 +2082,11 @@ func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category str
 			if err != nil {
 				return nil, err
 			}
-			text = sql.NullString{String: b.String(), Valid: true}
+			text = b.String()
+			found = true
 		}
 	}
-	if !text.Valid {
+	if !found {
 		file, err := RuntimeFS.Open("embed/postlist.html")
 		if err != nil {
 			return nil, err
@@ -2041,22 +2108,16 @@ func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category str
 		if err != nil {
 			return nil, err
 		}
-		text = sql.NullString{String: b.String(), Valid: true}
+		text = b.String()
 	}
-	const doctype = "<!DOCTYPE html>"
-	text.String = strings.TrimSpace(text.String)
-	lineOffset := 0
-	if len(text.String) < len(doctype) || !strings.EqualFold(text.String[:len(doctype)], doctype) {
-		text.String = "<!DOCTYPE html>" +
-			"\n<html lang='{{ $.Site.Lang }}'>" +
-			"\n<meta charset='utf-8'>" +
-			"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
-			"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
-			"\n<link rel='alternate' href='/" + path.Join("posts", category) + "/index.atom' type='application/atom+xml'>" +
-			"\n" + text.String
-		lineOffset = 6
-	}
-	tmpl, err := siteGen.ParseTemplate(ctx, "/themes/postlist.html", text.String, lineOffset, []string{"/themes/postlist.html"})
+	text = "<!DOCTYPE html>" +
+		"\n<html lang='{{ $.Site.Lang }}'>" +
+		"\n<meta charset='utf-8'>" +
+		"\n<meta name='viewport' content='width=device-width, initial-scale=1'>" +
+		"\n<link rel='icon' href='{{ $.Site.Favicon }}'>" +
+		"\n<link rel='alternate' href='/" + path.Join("posts", category) + "/index.atom' type='application/atom+xml'>" +
+		"\n" + text
+	tmpl, err := siteGen.ParseTemplate(ctx, "/themes/postlist.html", text, []string{"/themes/postlist.html"})
 	if err != nil {
 		return nil, err
 	}
