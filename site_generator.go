@@ -103,7 +103,10 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 			extension.Table,
 			highlighting.NewHighlighting(highlighting.WithStyle(config.CodeStyle)),
 		),
-		goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
+		goldmark.WithRendererOptions(
+			goldmarkhtml.WithHardWraps(),
+			goldmarkhtml.WithUnsafe(),
+		),
 	)
 	siteGen.Site = Site{
 		Lang:    config.Lang,
