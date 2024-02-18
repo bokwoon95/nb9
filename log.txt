@@ -21,7 +21,6 @@ rename.go
 serve_http.go
 notebrew/main.go
 
-TODO: Add a "+ create note | create post" to the /files/ page because the user can always move the post to another category if he wishes.
 TODO: Add a Choose Files file input to the createfile page, when head is posts. It will be uploaded together with the name and content. Brilliant!
 TODO: uploadfile.go.
     - OOOH looks like the upload works but the fileID in notebrew-objects/ is all zeroes for some reason.

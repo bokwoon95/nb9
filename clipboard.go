@@ -93,16 +93,17 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		http.Redirect(w, r, referer, http.StatusFound)
 	case "paste":
 		type Response struct {
-			Error          string   `json:"error,omitempty"`
-			IsCut          bool     `json:"isCut,omitempty"`
-			SrcSitePrefix  string   `json:"srcSitePrefix,omitempty"`
-			SrcParent      string   `json:"srcParent,omitempty"`
-			DestSitePrefix string   `json:"destSitePrefix,omitempty"`
-			DestParent     string   `json:"destParent,omitempty"`
-			FilesNotExist  []string `json:"filesNotExist,omitempty"`
-			FilesExist     []string `json:"filesExist,omitempty"`
-			FilesInvalid   []string `json:"filesInvalid,omitempty"`
-			FilesPasted    []string `json:"filesPasted,omitmepty"`
+			Error          string        `json:"error,omitempty"`
+			IsCut          bool          `json:"isCut,omitempty"`
+			SrcSitePrefix  string        `json:"srcSitePrefix,omitempty"`
+			SrcParent      string        `json:"srcParent,omitempty"`
+			DestSitePrefix string        `json:"destSitePrefix,omitempty"`
+			DestParent     string        `json:"destParent,omitempty"`
+			FilesNotExist  []string      `json:"filesNotExist,omitempty"`
+			FilesExist     []string      `json:"filesExist,omitempty"`
+			FilesInvalid   []string      `json:"filesInvalid,omitempty"`
+			FilesPasted    []string      `json:"filesPasted,omitmepty"`
+			TemplateError  TemplateError `json:"templateError"`
 		}
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 			if response.Error == "" {
@@ -173,6 +174,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					"filesExist":     response.FilesExist,
 					"filesInvalid":   response.FilesInvalid,
 					"filesPasted":    response.FilesPasted,
+					"templateError":  response.TemplateError,
 				},
 			})
 			if err != nil {
@@ -244,6 +246,11 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		response.DestParent = path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
 		if !isValidParent(response.DestSitePrefix, response.DestParent) {
 			response.Error = "InvalidDestParent"
+			writeResponse(w, r, response)
+			return
+		}
+		if response.SrcSitePrefix == response.DestSitePrefix && response.SrcParent == response.DestParent {
+			response.Error = "DestinationTheSame"
 			writeResponse(w, r, response)
 			return
 		}
@@ -500,6 +507,52 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		close(existCh)
 		close(invalidCh)
 		close(pastedCh)
+		if srcHead == "posts" && destHead == "posts" {
+			func() {
+				siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, response.SrcSitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					return
+				}
+				srcCategory := srcTail
+				srcTemplate, err := siteGen.PostListTemplate(r.Context(), srcCategory)
+				if err != nil {
+					if !errors.As(err, &response.TemplateError) {
+						getLogger(r.Context()).Error(err.Error())
+					}
+					return
+				}
+				_, err = siteGen.GeneratePostList(r.Context(), srcCategory, srcTemplate)
+				if err != nil {
+					if !errors.As(err, &response.TemplateError) {
+						getLogger(r.Context()).Error(err.Error())
+					}
+					return
+				}
+				if response.SrcSitePrefix != response.DestSitePrefix {
+					siteGen, err = NewSiteGenerator(r.Context(), nbrew.FS, response.SrcSitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+						return
+					}
+				}
+				destCategory := destTail
+				destTemplate, err := siteGen.PostListTemplate(r.Context(), destCategory)
+				if err != nil {
+					if !errors.As(err, &response.TemplateError) {
+						getLogger(r.Context()).Error(err.Error())
+					}
+					return
+				}
+				_, err = siteGen.GeneratePostList(r.Context(), destCategory, destTemplate)
+				if err != nil {
+					if !errors.As(err, &response.TemplateError) {
+						getLogger(r.Context()).Error(err.Error())
+					}
+					return
+				}
+			}()
+		}
 		wg.Wait()
 		writeResponse(w, r, response)
 	default:

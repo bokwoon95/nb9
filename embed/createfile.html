@@ -37,11 +37,7 @@
       {{- if eq (head $.Parent) "pages" }}
       Create a new page in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
       {{- else if eq (head $.Parent) "posts" }}
-        {{- if eq $.Parent "posts" }}
-        Create a new post
-        {{- else }}
-        Create a new post in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
-        {{- end }}
+        Create a new post in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ if eq $.Parent "posts" }}posts/{{ else }}{{ base $.Parent }}/{{ end }}</a>
       {{- else if eq (head $.Parent) "output" }}
         {{- if eq (head (tail $.Parent)) "themes" }}
         Create a new file in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
