@@ -242,7 +242,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				case "name":
 					request.Name = b.String()
 				case "ext":
-					request.Name = b.String()
+					request.Ext = b.String()
 				case "content":
 					request.Content = b.String()
 				}

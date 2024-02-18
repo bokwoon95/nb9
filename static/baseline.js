@@ -54,29 +54,29 @@ for (const element of document.querySelectorAll("[data-disable-click-selection]"
   });
 }
 
-for (const element of document.querySelectorAll("[data-paste]")) {
-  const name = element.getAttribute("data-paste");
-  if (!name) {
-    continue;
-  }
-  let form = null;
-  let parentElement = element.parentElement;
-  while (parentElement != null) {
-    if (parentElement instanceof HTMLFormElement) {
-      form = parentElement;
-      break;
-    }
-    parentElement = element.parentElement;
-  }
-  if (!form) {
-    continue;
-  }
-  const input = form.elements["file"];
-  if (!(form instanceof HTMLInputElement)) {
-    continue;
-  }
-  if (form.type != "file") {
-    continue;
-  }
-  // TODO: add event listener on element onclick to set the .files field on input.
-}
+// for (const element of document.querySelectorAll("[data-paste]")) {
+//   const name = element.getAttribute("data-paste");
+//   if (!name) {
+//     continue;
+//   }
+//   let form = null;
+//   let parentElement = element.parentElement;
+//   while (parentElement != null) {
+//     if (parentElement instanceof HTMLFormElement) {
+//       form = parentElement;
+//       break;
+//     }
+//     parentElement = element.parentElement;
+//   }
+//   if (!form) {
+//     continue;
+//   }
+//   const input = form.elements["file"];
+//   if (!(form instanceof HTMLInputElement)) {
+//     continue;
+//   }
+//   if (form.type != "file") {
+//     continue;
+//   }
+//   // TODO: add event listener on element onclick to set the .files field on input.
+// }
