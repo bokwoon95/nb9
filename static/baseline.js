@@ -78,6 +78,30 @@ for (const element of document.querySelectorAll("[data-paste]")) {
   }
   element.addEventListener("paste", function(event) {
     event.preventDefault();
-    input.files = event.clipboardData.files;
+    let invalidFilePresent = false;
+    for (let i = 0; i < event.clipboardData.files.length; i++) {
+      const file = event.clipboardData.files.item(i);
+      const i = file.name.lastIndexOf(".");
+      const ext = i < 0 ? "" : file.name.substring(i);
+      if (ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif") {
+        invalidFilePresent = true;
+        break;
+      }
+    }
+    if (!invalidFilePresent) {
+      input.files = event.clipboardData.files;
+      return;
+    }
+    let dataTransfer = new DataTransfer();
+    for (let i = 0; i < event.clipboardData.files.length; i++) {
+      const file = event.clipboardData.files.item(i);
+      const i = file.name.lastIndexOf(".");
+      const ext = i < 0 ? "" : file.name.substring(i);
+      if (ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif") {
+        continue;
+      }
+      dataTransfer.items.add(file);
+    }
+    input.files = dataTransfer.files;
   });
 }
