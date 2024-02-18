@@ -76,9 +76,6 @@ for (const element of document.querySelectorAll("[data-paste]")) {
   if (!input || !(input instanceof HTMLInputElement) || input.type != "file") {
     continue;
   }
-  input.addEventListener("keypress", function(event) {
-    event.preventDefault();
-  });
   element.addEventListener("paste", function(event) {
     event.preventDefault();
     input.files = event.clipboardData.files;
