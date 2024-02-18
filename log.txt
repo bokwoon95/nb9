@@ -21,7 +21,8 @@ rename.go
 serve_http.go
 notebrew/main.go
 
-TODO: Add a Choose Files file input to the createfile page, when head is posts. It will be uploaded together with the name and content. Brilliant!
+TODO: rig up the "paste from clipboard" button.
+    - Seems like we'll need to ask for permission as well (see https://davidwalsh.name/detect-clipboard-content)
 TODO: OH NO I can't use + to add a create file. Instead I need to let users submit images along with the content itself (i.e. multipart/formdata).
 TODO: page/post assets: for images, I need to display img.nbrew.io instead if the ImgDomain is set.
 TODO: uploadfile.go.
