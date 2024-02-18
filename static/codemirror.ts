@@ -22,13 +22,13 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
 
   // Locate the parent form that houses the textarea.
   let form: HTMLFormElement | undefined;
-  let parentElement = textarea.parentElement;
-  while (parentElement != null) {
-    if (parentElement instanceof HTMLFormElement) {
-      form = parentElement;
+  let element = textarea.parentElement;
+  while (element != null) {
+    if (element instanceof HTMLFormElement) {
+      form = element;
       break;
     }
-    parentElement = parentElement.parentElement;
+    element = element.parentElement;
   }
   if (!form) {
     continue;

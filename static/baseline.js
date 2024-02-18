@@ -9,16 +9,16 @@ document.body.parentElement.addEventListener("click", (event) => {
     activeDetails = element;
     break;
   }
-  for (const details of document.querySelectorAll("details[data-autoclose-details]")) {
-    if (details.open && details != activeDetails) {
-      details.open = false;
+  for (const dataAutocloseDetails of document.querySelectorAll("details[data-autoclose-details]")) {
+    if (dataAutocloseDetails.open && dataAutocloseDetails != activeDetails) {
+      dataAutocloseDetails.open = false;
     }
   }
 });
 
-for (const element of document.querySelectorAll("[data-dismiss-alert]")) {
-  element.addEventListener("click", function() {
-    let parentElement = element.parentElement;
+for (const dataDismissAlert of document.querySelectorAll("[data-dismiss-alert]")) {
+  dataDismissAlert.addEventListener("click", function() {
+    let parentElement = dataDismissAlert.parentElement;
     while (parentElement != null) {
       const role = parentElement.getAttribute("role");
       if (role != "alert") {
@@ -33,11 +33,11 @@ for (const element of document.querySelectorAll("[data-dismiss-alert]")) {
   });
 }
 
-for (const element of document.querySelectorAll("[data-go-back]")) {
-  if (element.tagName != "A") {
+for (const dataGoBack of document.querySelectorAll("[data-go-back]")) {
+  if (dataGoBack.tagName != "A") {
     continue;
   }
-  element.addEventListener("click", function(event) {
+  dataGoBack.addEventListener("click", function(event) {
     if (document.referrer && history.length > 2 && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       history.back();
@@ -45,8 +45,8 @@ for (const element of document.querySelectorAll("[data-go-back]")) {
   });
 }
 
-for (const element of document.querySelectorAll("[data-disable-click-selection]")) {
-  element.addEventListener("mousedown", function(event) {
+for (const dataDisableClickSelection of document.querySelectorAll("[data-disable-click-selection]")) {
+  dataDisableClickSelection.addEventListener("mousedown", function(event) {
     // https://stackoverflow.com/a/43321596
     if (event.detail > 1) {
       event.preventDefault();
@@ -54,19 +54,33 @@ for (const element of document.querySelectorAll("[data-disable-click-selection]"
   });
 }
 
-for (const element of document.querySelectorAll("[data-paste]")) {
-  const name = element.getAttribute("data-paste");
-  if (!name) {
+for (const dataPaste of document.querySelectorAll("[data-paste]")) {
+  let name = "";
+  let isValidExt = {};
+  try {
+    const obj = JSON.parse(dataPaste.getAttribute("data-paste"));
+    if (obj.name) {
+      name = obj.name;
+    }
+    if (obj.ext) {
+      for (let i = 0; i < obj.ext.length; i++) {
+        const ext = obj.ext[i]
+        isValidExt[ext] = true;
+      }
+    }
+  } catch (e) {
+    console.error(e);
     continue;
   }
+
   let form = null;
-  let parentElement = element.parentElement;
-  while (parentElement != null) {
-    if (parentElement instanceof HTMLFormElement) {
-      form = parentElement;
+  let element = dataPaste.parentElement;
+  while (element != null) {
+    if (element instanceof HTMLFormElement) {
+      form = element;
       break;
     }
-    parentElement = parentElement.parentElement;
+    element = element.parentElement;
   }
   window.form = form;
   if (!form) {
@@ -76,19 +90,20 @@ for (const element of document.querySelectorAll("[data-paste]")) {
   if (!input || !(input instanceof HTMLInputElement) || input.type != "file") {
     continue;
   }
-  element.addEventListener("paste", function(event) {
+
+  dataPaste.addEventListener("paste", function(event) {
     event.preventDefault();
-    let invalidFileExists = false;
+    let hasInvalidExt = false;
     for (let i = 0; i < event.clipboardData.files.length; i++) {
       const file = event.clipboardData.files.item(i);
       const n = file.name.lastIndexOf(".");
       const ext = n < 0 ? "" : file.name.substring(n);
-      if (ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif") {
-        invalidFileExists = true;
+      if (!isValidExt[ext]) {
+        hasInvalidExt = true;
         break;
       }
     }
-    if (!invalidFileExists) {
+    if (!hasInvalidExt) {
       input.files = event.clipboardData.files;
       return;
     }
@@ -97,7 +112,7 @@ for (const element of document.querySelectorAll("[data-paste]")) {
       const file = event.clipboardData.files.item(i);
       const n = file.name.lastIndexOf(".");
       const ext = n < 0 ? "" : file.name.substring(n);
-      if (ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif") {
+      if (!isValidExt[ext]) {
         continue;
       }
       dataTransfer.items.add(file);

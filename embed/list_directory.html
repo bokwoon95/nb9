@@ -210,16 +210,16 @@
         <hr>
         <form method='post' enctype='multipart/form-data' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
           <input type='hidden' name='parent' value='{{ $.FilePath }}'>
-          {{- $accept := "" }}
           {{- if eq (head $.FilePath) "pages" }}
-          {{- $accept = ".html" }}
+          <input type='file' name='file' style='max-width: 220px;' accept='.html' multiple>
+          <input placeholder='paste clipboard here' class='mt2' data-paste='{"name":"file","ext":[".html"]}'>
           {{- else if eq (head $.FilePath) "posts" }}
-          {{- $accept = ".md" }}
+          <input type='file' name='file' style='max-width: 220px;' accept='.md' multiple>
+          <input placeholder='paste clipboard here' class='mt2' data-paste='{"name":"file","ext":[".md"]}'>
           {{- else }}
-          {{- $accept = ".jpeg,.jpg,.png,.webp,.gif,.html,.css,.js,.md,.txt" }}
+          <input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif,.html,.css,.js,.md,.txt' multiple>
+          <input placeholder='paste clipboard here' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif",".html",".css",".js",".md",".txt"]}'>
           {{- end }}
-          <input type='file' name='file' style='max-width: 220px;' accept='{{ $accept }}' multiple>
-          <input placeholder='paste clipboard here' class='mt2' data-paste='file'>
           <button type='submit' class='button ba br2 pa2 w-100 mt2'>upload</button>
         </form>
       </div>

@@ -220,10 +220,10 @@
 </form>
 {{- if eq (head $.FilePath) "pages" "posts" }}
 <div class='flex items-center'>
-  {{- if eq (head $.FilePath) "posts" }}
-  <span class='b'>Images</span>
-  {{- else }}
+  {{- if eq (head $.FilePath) "pages" }}
   <span class='b'>Assets</span>
+  {{- else }}
+  <span class='b'>Images</span>
   {{- end }}
   <details class='relative ml2' data-autoclose-details>
     <summary role='button' title='Create' class='pointer flex items-center button ba br2 b--black ph2 h2 hide-marker' data-disable-click-selection>
@@ -231,16 +231,23 @@
       {{ template "octicons-triangle-down" }}
     </summary>
     <div class='absolute bg-white br2' style='top: calc(2rem + 4px); left: 0px; z-index: 1000; border: 1px solid black;'>
-      {{- if ne (head $.FilePath) "posts" }}
+      {{- if eq (head $.FilePath) "pages" }}
       <div class='ma2'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ join "output" (trimSuffix (tail $.FilePath) ".html") }}' class='nowrap'>📄 create file</a></div>
       <hr>
-      {{- end }}
       <form method='post' enctype='multipart/form-data' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
-        <input type='hidden' name='parent' value='{{ $.FilePath }}'>
-        <input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif{{ if ne (head $.FilePath) "posts" }}.css,.js,.md{{ end }}' multiple>
-        <input placeholder='paste clipboard here' class='mt2' data-paste='file'>
+        <input type='hidden' name='parent' value='{{ join "output" (trimSuffix (tail $.FilePath) ".html") }}'>
+        <input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif,.html,.css,.js,.md,.txt' multiple>
+        <input placeholder='paste clipboard here' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif",".html",".css",".js",".md",".txt"]}'>
         <button type='submit' class='button ba br2 pa2 w-100 mt2'>upload</button>
       </form>
+      {{- else }}
+      <form method='post' enctype='multipart/form-data' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
+        <input type='hidden' name='parent' value='{{ join "output" (trimSuffix $.FilePath ".md") }}'>
+        <input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif' multiple>
+        <input placeholder='paste clipboard here' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif"]}'>
+        <button type='submit' class='button ba br2 pa2 w-100 mt2'>upload</button>
+      </form>
+      {{- end }}
     </div>
   </details>
 </div>
