@@ -235,9 +235,10 @@
       <div class='ma2'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ join "output" (trimSuffix (tail $.FilePath) ".html") }}' class='nowrap'>📄 create file</a></div>
       <hr>
       {{- end }}
-      <form method='post' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' enctype='multipart/form-data' class='pa2'>
+      <form method='post' enctype='multipart/form-data' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
         <input type='hidden' name='parent' value='{{ $.FilePath }}'>
         <input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif{{ if ne (head $.FilePath) "posts" }}.css,.js,.md{{ end }}' multiple>
+        <button type='button' class='button ba br2 pa2 w-100 mt2' data-paste='file'>paste from clipboard</button>
         <button type='submit' class='button ba br2 pa2 w-100 mt2'>upload</button>
       </form>
     </div>

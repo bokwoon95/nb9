@@ -72,6 +72,7 @@ func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
 		storage:      fsys.storage,
 		usersDB:      fsys.usersDB,
 		usersDialect: fsys.usersDialect,
+		logger:       fsys.logger,
 	}
 }
 
@@ -396,6 +397,11 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 			return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrNotExist}
 		}
 	}
+	if file.fileID == [16]byte{} {
+		file.fileID = NewID()
+	} else {
+		file.exists = true
+	}
 	if fileType.IsObject {
 		pipeReader, pipeWriter := io.Pipe()
 		file.storageWriter = pipeWriter
@@ -423,6 +429,7 @@ type RemoteFileWriter struct {
 	db                *sql.DB
 	dialect           string
 	storage           Storage
+	exists            bool
 	fileID            [16]byte
 	parentID          [16]byte
 	filePath          string
@@ -505,7 +512,7 @@ func (file *RemoteFileWriter) Close() error {
 	}
 
 	// If file exists, just have to update the file entry in the database.
-	if file.fileID != [16]byte{} {
+	if file.exists {
 		if file.fileType.IsObject {
 			_, err := sq.Exec(file.ctx, file.db, sq.Query{
 				Dialect: file.dialect,
@@ -561,7 +568,7 @@ func (file *RemoteFileWriter) Close() error {
 			Format: "INSERT INTO files (file_id, parent_id, file_path, size, mod_time, creation_time, is_dir)" +
 				" VALUES ({fileID}, {parentID}, {filePath}, {size}, {modTime}, {modTime}, FALSE)",
 			Values: []any{
-				sq.UUIDParam("fileID", NewID()),
+				sq.UUIDParam("fileID", file.fileID),
 				sq.UUIDParam("parentID", file.parentID),
 				sq.StringParam("filePath", file.filePath),
 				sq.Int64Param("size", file.size),
@@ -579,7 +586,7 @@ func (file *RemoteFileWriter) Close() error {
 				Format: "INSERT INTO files (file_id, parent_id, file_path, size, data, mod_time, creation_time, is_dir)" +
 					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {data}, {modTime}, {modTime}, FALSE)",
 				Values: []any{
-					sq.UUIDParam("fileID", NewID()),
+					sq.UUIDParam("fileID", file.fileID),
 					sq.UUIDParam("parentID", file.parentID),
 					sq.StringParam("filePath", file.filePath),
 					sq.Int64Param("size", file.size),
@@ -596,7 +603,7 @@ func (file *RemoteFileWriter) Close() error {
 				Format: "INSERT INTO files (file_id, parent_id, file_path, size, text, mod_time, creation_time, is_dir)" +
 					" VALUES ({fileID}, {parentID}, {filePath}, {size}, {text}, {modTime}, {modTime}, FALSE)",
 				Values: []any{
-					sq.UUIDParam("fileID", NewID()),
+					sq.UUIDParam("fileID", file.fileID),
 					sq.UUIDParam("parentID", file.parentID),
 					sq.StringParam("filePath", file.filePath),
 					sq.Int64Param("size", file.size),

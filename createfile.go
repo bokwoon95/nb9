@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path"
@@ -181,34 +182,71 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent, response.Name+response.Ext), http.StatusFound)
 		}
 
+		var err error
 		var request Request
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
+		var reader *multipart.Reader
 		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		switch contentType {
 		case "application/json":
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
 			err := json.NewDecoder(r.Body).Decode(&request)
 			if err != nil {
 				badRequest(w, r, err)
 				return
 			}
-		case "application/x-www-form-urlencoded", "multipart/form-data":
-			if contentType == "multipart/form-data" {
-				err := r.ParseMultipartForm(1 << 20 /* 1 MB */)
-				if err != nil {
-					badRequest(w, r, err)
-					return
-				}
-			} else {
-				err := r.ParseForm()
-				if err != nil {
-					badRequest(w, r, err)
-					return
-				}
+		case "application/x-www-form-urlencoded":
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
+			err := r.ParseForm()
+			if err != nil {
+				badRequest(w, r, err)
+				return
 			}
 			request.Parent = r.Form.Get("parent")
 			request.Name = r.Form.Get("name")
 			request.Ext = r.Form.Get("ext")
 			request.Content = r.Form.Get("content")
+		case "multipart/form-data":
+			r.Body = http.MaxBytesReader(w, r.Body, 25<<20 /* 25 MB */)
+			reader, err = r.MultipartReader()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			var maxBytesErr *http.MaxBytesError
+			for i := 0; i < 4; i++ {
+				part, err := reader.NextPart()
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				var b strings.Builder
+				_, err = io.Copy(&b, part)
+				if err != nil {
+					if errors.As(err, &maxBytesErr) {
+						badRequest(w, r, err)
+						return
+					}
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				formName := part.FormName()
+				switch formName {
+				case "parent":
+					request.Parent = b.String()
+				case "name":
+					request.Name = b.String()
+				case "ext":
+					request.Name = b.String()
+				case "content":
+					request.Content = b.String()
+				}
+			}
 		default:
 			unsupportedContentType(w, r)
 			return
@@ -225,6 +263,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			writeResponse(w, r, response)
 			return
 		}
+		var outputDir string
 		head, tail, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes":
@@ -275,6 +314,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				writeResponse(w, r, response)
 				return
 			}
+			outputDir = path.Join(sitePrefix, "output", tail, response.Name)
 		case "posts":
 			var timestamp [8]byte
 			binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
@@ -301,6 +341,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			if response.Ext != ".md" {
 				response.Ext = ".md"
 			}
+			outputDir = path.Join(sitePrefix, "output/posts", tail, response.Name)
 		case "output":
 			if request.Name != "" {
 				response.Name = urlSafe(request.Name)
@@ -325,7 +366,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			writeResponse(w, r, response)
 			return
 		}
-		_, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, response.Parent, response.Name+response.Ext))
+		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, response.Parent, response.Name+response.Ext))
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				getLogger(r.Context()).Error(err.Error())
@@ -363,6 +404,52 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
+		}
+		if outputDir != "" {
+			err := nbrew.FS.WithContext(r.Context()).MkdirAll(outputDir, 0755)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			if reader != nil {
+				for {
+					part, err := reader.NextPart()
+					if err != nil {
+						if err == io.EOF {
+							break
+						}
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
+					if part.FormName() != "file" {
+						continue
+					}
+					fileName := part.FileName()
+					ext := path.Ext(fileName)
+					if ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif" {
+						continue
+					}
+					err = func() error {
+						writer, err := nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(outputDir, fileName), 0644)
+						if err != nil {
+							return err
+						}
+						defer writer.Close()
+						_, err = io.Copy(writer, part)
+						if err != nil {
+							return err
+						}
+						return writer.Close()
+					}()
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
+				}
+			}
 		}
 		if head == "pages" || head == "posts" {
 			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)

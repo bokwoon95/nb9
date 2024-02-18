@@ -22,11 +22,10 @@ serve_http.go
 notebrew/main.go
 
 TODO: Add a Choose Files file input to the createfile page, when head is posts. It will be uploaded together with the name and content. Brilliant!
+TODO: OH NO I can't use + to add a create file. Instead I need to let users submit images along with the content itself (i.e. multipart/formdata).
+TODO: page/post assets: for images, I need to display img.nbrew.io instead if the ImgDomain is set.
 TODO: uploadfile.go.
     - OOOH looks like the upload works but the fileID in notebrew-objects/ is all zeroes for some reason.
-    - TODO: WTF try deleting GCsDY_vXEAEqTHH.jpeg first, for some reason it's panicking.
-        - And when it panics, why does it look like the entire server is taken down? Does the server respond to any other request once it panics? Fix this.
-    - 25 MB upload limit.
     - When uploaded to output (i.e. pages/posts/themes), images are always resized to max 1080p. Images in notes are kept untouched. If someone wants to upload a full size image, they can upload it to notes then move it over i to pages/posts/themes, which doesn't incur an additional cost because it's just rewriting metadata.
 TODO: file.html: the asset list is UGLY AF, make it look reasonably good while also being accessible on an iPhone SE screen.
     - do uploadfile.go first because we need to upload some images!
