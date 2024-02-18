@@ -78,17 +78,17 @@ for (const element of document.querySelectorAll("[data-paste]")) {
   }
   element.addEventListener("paste", function(event) {
     event.preventDefault();
-    let invalidFilePresent = false;
+    let invalidFileExists = false;
     for (let i = 0; i < event.clipboardData.files.length; i++) {
       const file = event.clipboardData.files.item(i);
       const n = file.name.lastIndexOf(".");
       const ext = n < 0 ? "" : file.name.substring(n);
       if (ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif") {
-        invalidFilePresent = true;
+        invalidFileExists = true;
         break;
       }
     }
-    if (!invalidFilePresent) {
+    if (!invalidFileExists) {
       input.files = event.clipboardData.files;
       return;
     }
