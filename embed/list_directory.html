@@ -199,7 +199,7 @@
         <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>📄 create page</a></div>
         <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>📂 create folder</a></div>
         {{- else if eq (head $.FilePath) "posts" }}
-        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>📄 create post</a></div>
+        <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfile" }}/?parent={{ $.FilePath }}' class='nowrap'>📝 create post</a></div>
           {{- if eq $.FilePath "posts" }}
           <div class='ma2 tr'><a href='/{{ join "files" $.SitePrefix "createfolder" }}?parent={{ $.FilePath }}' class='nowrap'>📂 create category</a></div>
           {{- end }}
