@@ -111,11 +111,13 @@
   <div data-codemirror>
     <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code'{{ if eq (head $.Parent) "notes" "posts" }} autofocus{{ end }}>{{ $.Content }}</textarea>
   </div>
+  {{- if eq (head $.Parent) "posts" }}
   <div class='mt2'>
     <div class='b'>Images:</div>
     <div><input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif' multiple></div>
     <div><button type='button' class='button ba br2 pa2 mt2' data-paste='file'>paste from clipboard</button></div>
   </div>
+  {{- end }}
   <button type='submit' class='button ba br2 pa2 mv3 w-100'>
     {{- if eq (head $.Parent) "notes" }}
     create note
