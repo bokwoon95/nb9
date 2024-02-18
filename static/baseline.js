@@ -81,8 +81,8 @@ for (const element of document.querySelectorAll("[data-paste]")) {
     let invalidFilePresent = false;
     for (let i = 0; i < event.clipboardData.files.length; i++) {
       const file = event.clipboardData.files.item(i);
-      const i = file.name.lastIndexOf(".");
-      const ext = i < 0 ? "" : file.name.substring(i);
+      const n = file.name.lastIndexOf(".");
+      const ext = n < 0 ? "" : file.name.substring(n);
       if (ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif") {
         invalidFilePresent = true;
         break;
@@ -95,8 +95,8 @@ for (const element of document.querySelectorAll("[data-paste]")) {
     let dataTransfer = new DataTransfer();
     for (let i = 0; i < event.clipboardData.files.length; i++) {
       const file = event.clipboardData.files.item(i);
-      const i = file.name.lastIndexOf(".");
-      const ext = i < 0 ? "" : file.name.substring(i);
+      const n = file.name.lastIndexOf(".");
+      const ext = n < 0 ? "" : file.name.substring(n);
       if (ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif") {
         continue;
       }
