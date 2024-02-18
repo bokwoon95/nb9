@@ -34,7 +34,9 @@
   {{- end }}
   <div class='flex mv3'>
     <h1 class='f3 b mv0'>
-      {{- if eq (head $.Parent) "pages" }}
+      {{- if eq (head $.Parent) "notes" }}
+      Create a new note in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
+      {{- else if eq (head $.Parent) "pages" }}
       Create a new page in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ base $.Parent }}/</a>
       {{- else if eq (head $.Parent) "posts" }}
         Create a new post in <a href='/{{ join "files" $.SitePrefix $.Parent }}/'>{{ if eq $.Parent "posts" }}posts/{{ else }}{{ base $.Parent }}/{{ end }}</a>
@@ -57,7 +59,9 @@
         </label>
       </button>
       <button type='submit' class='button ba ph2 br2'>
-        {{- if eq (head $.Parent) "pages" }}
+        {{- if eq (head $.Parent) "notes" }}
+        create note
+        {{- else if eq (head $.Parent) "pages" }}
         create page
         {{- else if eq (head $.Parent) "posts" }}
         create post
@@ -113,7 +117,9 @@
     <div><button type='button' class='button ba br2 pa2 mt2' data-paste='file'>paste from clipboard</button></div>
   </div>
   <button type='submit' class='button ba br2 pa2 mv3 w-100'>
-    {{- if eq (head $.Parent) "pages" }}
+    {{- if eq (head $.Parent) "notes" }}
+    create note
+    {{- else if eq (head $.Parent) "pages" }}
     create page
     {{- else if eq (head $.Parent) "posts" }}
     create post
