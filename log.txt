@@ -22,7 +22,8 @@ serve_http.go
 notebrew/main.go
 
 TODO: rig up the "paste from clipboard" button.
-    - Seems like we'll need to ask for permission as well (see https://davidwalsh.name/detect-clipboard-content)
+    - loop over the files, select only files with image extensions and add it to a new DataTransfer() object (reference: https://stackoverflow.com/a/64019766)
+    - also do it lazily, i.e. don't append the files yet until you find a non-image file then you have to append all the files thus far and then from then onwards
 TODO: OH NO I can't use + to add a create file. Instead I need to let users submit images along with the content itself (i.e. multipart/formdata).
 TODO: page/post assets: for images, I need to display img.nbrew.io instead if the ImgDomain is set.
 TODO: uploadfile.go.

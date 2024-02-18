@@ -219,7 +219,7 @@
           {{- $accept = ".jpeg,.jpg,.png,.webp,.gif,.html,.css,.js,.md,.txt" }}
           {{- end }}
           <input type='file' name='file' style='max-width: 220px;' accept='{{ $accept }}' multiple>
-          <button type='button' class='button ba br2 pa2 w-100 mt2' data-paste='file'>paste from clipboard</button>
+          <input placeholder='paste clipboard here' class='mt2' data-paste='file'>
           <button type='submit' class='button ba br2 pa2 w-100 mt2'>upload</button>
         </form>
       </div>

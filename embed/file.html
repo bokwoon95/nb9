@@ -238,7 +238,7 @@
       <form method='post' enctype='multipart/form-data' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
         <input type='hidden' name='parent' value='{{ $.FilePath }}'>
         <input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif{{ if ne (head $.FilePath) "posts" }}.css,.js,.md{{ end }}' multiple>
-        <button type='button' class='button ba br2 pa2 w-100 mt2' data-paste='file'>paste from clipboard</button>
+        <input placeholder='paste clipboard here' class='mt2' data-paste='file'>
         <button type='submit' class='button ba br2 pa2 w-100 mt2'>upload</button>
       </form>
     </div>
