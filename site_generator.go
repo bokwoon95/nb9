@@ -429,7 +429,9 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 		Site:             siteGen.Site,
 		Parent:           path.Dir(urlPath),
 		Name:             path.Base(urlPath),
+		ChildPages:       []Page{},
 		Markdown:         make(map[string]template.HTML),
+		Images:           []Image{},
 		ModificationTime: time.Now().UTC(),
 	}
 	if pageData.Parent == "." {
@@ -760,6 +762,7 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		Site:             siteGen.Site,
 		Category:         path.Dir(strings.TrimPrefix(urlPath, "posts/")),
 		Name:             path.Base(strings.TrimPrefix(urlPath, "posts/")),
+		Images:           []Image{},
 		ModificationTime: time.Now().UTC(),
 	}
 	if strings.Contains(postData.Category, "/") {
@@ -768,21 +771,6 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 	if postData.Category == "." {
 		postData.Category = ""
 	}
-
-	contentBytes := []byte(text)
-	// Content
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer func() {
-		buf.Reset()
-		bufPool.Put(buf)
-	}()
-	err := siteGen.markdown.Convert(contentBytes, buf)
-	if err != nil {
-		return err
-	}
-	postData.Content = template.HTML(buf.String())
-
-	// Group 1: find the title.
 	prefix, _, _ := strings.Cut(path.Base(urlPath), "-")
 	if len(prefix) == 0 || len(prefix) > 8 {
 		return nil
@@ -795,22 +783,61 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 	copy(timestamp[len(timestamp)-5:], b)
 	postData.CreationTime = time.Unix(int64(binary.BigEndian.Uint64(timestamp[:])), 0)
 	// Title
-	var line []byte
-	remainder := contentBytes
+	var line string
+	remainder := text
 	for len(remainder) > 0 {
-		line, remainder, _ = bytes.Cut(remainder, []byte("\n"))
-		line = bytes.TrimSpace(line)
-		if len(line) == 0 {
+		line, remainder, _ = strings.Cut(remainder, "\n")
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-		postData.Title = stripMarkdownStyles(siteGen.markdown, line)
+		postData.Title = stripMarkdownStyles(siteGen.markdown, []byte(line))
 		break
 	}
-
-	// TODO: parse the buf.Bytes() using html.Tokenizer and grab all the image
-	// filePaths mentioned in the content and save it into a map. Then do an
-	// image query for all images and exclude the images already mentioned in
-	// the body, and add it to the []Image list.
+	// Content
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		bufPool.Put(buf)
+	}()
+	err := siteGen.markdown.Convert([]byte(text), buf)
+	if err != nil {
+		return err
+	}
+	postData.Content = template.HTML(buf.String())
+	imgIsMentioned := make(map[string]struct{})
+	tokenizer := html.NewTokenizer(bytes.NewReader(buf.Bytes()))
+	for {
+		tokenType := tokenizer.Next()
+		if tokenType == html.ErrorToken {
+			err := tokenizer.Err()
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		if tokenType == html.SelfClosingTagToken {
+			var key, val []byte
+			name, moreAttr := tokenizer.TagName()
+			if !bytes.Equal(name, []byte("img")) {
+				continue
+			}
+			for moreAttr {
+				key, val, moreAttr = tokenizer.TagAttr()
+				if !bytes.Equal(key, []byte("src")) {
+					continue
+				}
+				uri, err := url.Parse(string(val))
+				if err != nil {
+					continue
+				}
+				if uri.Scheme != "" || uri.Host != "" || strings.Contains(uri.Path, "/") {
+					continue
+				}
+				imgIsMentioned[uri.Path] = struct{}{}
+			}
+		}
+	}
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
 		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
 			Dialect: remoteFS.filesDialect,
@@ -841,6 +868,9 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 			if err != nil {
 				return err
 			}
+			if _, ok := imgIsMentioned[name]; ok {
+				continue
+			}
 			postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
 		}
 		err = cursor.Close()
@@ -862,6 +892,9 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 			}
 			switch path.Ext(name) {
 			case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+				if _, ok := imgIsMentioned[name]; ok {
+					continue
+				}
 				postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
 			}
 		}
@@ -1157,7 +1190,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		return page, err
 	}
 	if page == 1 && len(batch) == 0 {
-		err := siteGen.GeneratePostListPage(ctx, category, tmpl, 1, 1, nil)
+		err := siteGen.GeneratePostListPage(ctx, category, tmpl, 1, 1, []Post{})
 		if err != nil {
 			return page, err
 		}
@@ -1623,11 +1656,12 @@ var funcMap = map[string]any{
 		}
 		return dict, nil
 	},
-	"dump": func(a ...any) template.HTML {
-		// TODO: convert each argument into json and print each
-		// argument out in a <pre style="white-space: pre-wrap"></pre>
-		// tag.
-		return ""
+	"dump": func(v any) template.HTML {
+		b, err := json.MarshalIndent(v, "", "  ")
+		if err != nil {
+			return template.HTML("<pre style='white-space:pre-wrap;'>" + err.Error() + "</pre>")
+		}
+		return template.HTML("<pre style='white-space:pre-wrap;'>" + string(b) + "</pre>")
 	},
 	"throw": func(msg string) (string, error) {
 		return "", fmt.Errorf(msg)
