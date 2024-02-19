@@ -203,32 +203,51 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch head {
 		case "", "notes", "pages", "posts", "output":
+<<<<<<< Updated upstream
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				if sitePrefix != "" || urlPath != "" {
 					notAuthorized(w, r)
 					return
 				}
+=======
+			isRoot := sitePrefix == "" && urlPath == ""
+			if !isAuthorizedForSite && !isRoot {
+				notAuthorized(w, r)
+				return
+>>>>>>> Stashed changes
 			}
 			nbrew.files(w, r, username, sitePrefix, urlPath)
 			return
 		case "clipboard":
+<<<<<<< Updated upstream
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.clipboard(w, r, username, sitePrefix, tail)
+=======
+			nbrew.clipboard(w, r, username, tail)
+>>>>>>> Stashed changes
 			return
 		}
 
 		switch urlPath {
 		case "regenerate":
+<<<<<<< Updated upstream
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+=======
+			if !isAuthorizedForSite {
+>>>>>>> Stashed changes
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.regenerate(w, r, sitePrefix)
 		case "regeneratelist":
+<<<<<<< Updated upstream
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+=======
+			if !isAuthorizedForSite {
+>>>>>>> Stashed changes
 				notAuthorized(w, r)
 				return
 			}
@@ -246,25 +265,41 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			nbrew.deletesite(w, r, username)
 		case "createfolder":
+<<<<<<< Updated upstream
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+=======
+			if !isAuthorizedForSite {
+>>>>>>> Stashed changes
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.createfolder(w, r, username, sitePrefix)
 		case "createfile":
+<<<<<<< Updated upstream
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+=======
+			if !isAuthorizedForSite {
+>>>>>>> Stashed changes
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.createfile(w, r, username, sitePrefix)
 		case "delete":
+<<<<<<< Updated upstream
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+=======
+			if !isAuthorizedForSite {
+>>>>>>> Stashed changes
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.delete(w, r, username, sitePrefix)
 		case "search":
+<<<<<<< Updated upstream
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+=======
+			if !isAuthorizedForSite {
+>>>>>>> Stashed changes
 				notAuthorized(w, r)
 				return
 			}
@@ -276,11 +311,18 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			nbrew.uploadfile(w, r, username, sitePrefix)
 		case "rename":
+<<<<<<< Updated upstream
 			if nbrew.UsersDB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			// TODO: nbrew.rename()
+=======
+			if !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
+>>>>>>> Stashed changes
 		default:
 			notFound(w, r)
 		}

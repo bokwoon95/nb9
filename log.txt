@@ -21,6 +21,7 @@ rename.go
 serve_http.go
 notebrew/main.go
 
+<<<<<<< Updated upstream
 TODO: uploadfile.go.
     - OOOH looks like the upload works but the fileID in notebrew-objects/ is all zeroes for some reason.
     - When uploaded to output (i.e. pages/posts/themes), images are always resized to max 1080p. Images in notes are kept untouched. If someone wants to upload a full size image, they can upload it to notes then move it over i to pages/posts/themes, which doesn't incur an additional cost because it's just rewriting metadata.
@@ -33,6 +34,45 @@ TODO: list_directory.html: make images show previews under the file name (again 
 TODO: oh boy pagination on output/themes is broken again (why? investigate)
 TODO: once you can upload images with uploadfile, make it so that any image uploaded but is not mentioned in the markdown content (use goldmark's markdown parser for this) is added to the Images field in PostData. Then in the default post.html, loop over the images and display them in a nice grid or something. No image viewer, pure HTML for this. The easiest dumbest way would be to put some kind of overlay <a href> that links directly to the image (so the browser is the image viewer).
     - This way you achieve the ability to upload images easily! No user intervention is needed for manually embedding the images, they can upload images in a dumb and straightforward way akin to facebook.
+=======
+TODO: change clipboard such that it takes in srcSitePrefix, srcParent, destSitePrefix, destParent and name entirely through parameters (not URL parameters). This will likely involve rethinking how authorization is handled in serve_http.go, because we want users to have unconditional access to files/clipboard/* and validate their access to the sitePrefixes directly inside the clipboard handler itself.
+TODO: UAT the clipboard/paste feature. Some bugs:
+    filepath: posts/1jvxgb4-red-fish-blue-fish.md
+    outputDir: $sitePrefix/output/posts/1jvxgb4-red-fish-blue-fish
+    check head
+    - When showing the clipboard info in file.html, how to construct the paste form accordingly such that it will paste into the page/post's output directory instead of the file itself?
+    - post markdown files don't just end with .md, they also start with a timestamp prefix. What happens if you paste a file with the same timestamp prefix? It's no longer globally unique. Atom IDs have to be globally unique. How? Do we regenerate the timestamp prefix to match the new creation_time of the duplicated file? We can do it for a single copyFile no problem, the issue is what happens if we copyDir in a whole batch using remoteFS? That's potentially multiple filenames we have to generate timestamp prefixes for, how to do it in one swoop? Don't think it's possible. We may have to forbid copying posts into the posts directory.
+TODO: rework listDirectory such that fromTime is response.FromTime and always pulls from the fromtime query param instead of the from query param (same for beforeTime). Then from is always used as the tiebreaker so that even if there are millions of files with the same mod_time or creation_time, we can still paginate them chunk by chunk using the name as the tiebreaker.
+TODO: modify search.go such that it takes into account sort=created or sort=edited. The options: default sort | sort by creation time | sort by modification time
+    - Also add the ability to
+TODO: clipboard: if a destFile exists, no matter whether it's file or folder, paste will be auto rejected.
+    - 20 MB total upload limit (includes all files). When we hit the limit in the middle of a file, what happens is we get an error on Read() which should be caught and checked for ErrTooLarge or something and sent to badRequest().
+TODO: big turn: remove clipboard (cut/copy/paste). condense "site/list settings" and "regenerate site/list" back into a miscellaneous dropdown button, because we will need to accomodate an "upload file" link as well and there's no space.
+    - Uploading files only works for individual files, it doesn't work for folders. If there is a file conflict it simply backs off for that file and refuses to overwrite.
+    - Uploaded files do trigger page/post/postlist regeneration when appropriate.
+    - All files have a little "download" button in the dropdown menu. You can use checkboxes to select multiple files to download. You can only download files not folders, for feature parity with uploading files.
+TODO: Import/Export? How to handle?
+TODO: clipboard.go get paste to work
+TODO: also add the regenerate list button to the output page of a post category
+TODO: structured template error
+    We *have* to parse out template errors because that's the only way we can adjust the line number by the number of lines we add at the start of the template (if we added any).
+    ParseTemplate() error => parseTemplate() (numPrefixLines int, err error)
+    If we assume template errors follow this format: "template: {filePath}:{lineNr}: {errmsg}", we can parse template errors accordingly and send it out as structured JSON objects instead of plain strings, which would allow us to highlight the problematic lines in the codemirror editor.
+    {
+        "abcd.html": [
+            {"line": 3, "msg": "unclosed action"},
+            {"line": 5, "msg": "unterminated quoted string"},
+            {"line": 10, "msg": "executing \"abcd.html\" at <throw>: wrong number of args for throw: want 1 got 0"},
+        ]
+    }
+    - parse and execution errors always contain only one line number, because html/template stops at the first error
+    - internal templates ending in html can be multiple errors. these have no line number.
+    - external templates not starting with /themes/ can be multiple errors. these have no line number.
+    - external templates ending in a circular reference can be multiple errors. these have no line number.
+    - external templates that don't exist can only be one error. these have no line number.
+    - external templates being a dir instead of a file can only be one error. these have no line number.
+    Given the massive number of error types with no line number, maybe it is better to just not highlight line numbers?
+>>>>>>> Stashed changes
 TODO: rename.go
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
     NOTE: for languages don't parse all the language json files and keep them in memory, instead implement a TTL using timers and timer.Reset everytime someone requests for that language file. Once the timer expires, delete it from the map.
