@@ -34,6 +34,10 @@ TODO: once you can upload images with uploadfile, make it so that any image uplo
     - This way you achieve the ability to upload images easily! No user intervention is needed for manually embedding the images, they can upload images in a dumb and straightforward way akin to facebook.
 TODO: rename.go
 TODO: site settings needs a way for users to customize their navbar items. the default is 'home' and 'posts', but the user may choose to link it to something else. as usual, site setting changes will trigger a whole-site rebuild.
+TODO: huge pivot: images can now have text associated with it (which is also fulltext indexed and searchable). So you can search for images too.
+    - Images instead of "view" will get an "edit" as well. And we can do stuff like rotate it and stuff.
+    - The best part is whatever text is associated with the image automatically becomes its alt text.
+    - The only problem is: all this text gets thrown out the moment you export to a folder. It's not possible to store text directly in image files, nor am I interested in bodging this in the filesystem. Image text is editable only if you're using the database backend, which is one more reason to use the database backend instead of the filesystem backend. At least it degrades gracefully.
 TODO: /users/language/?redirect=foo/bar/baz which lets people set the language code in a cookie and redirects them back to the page. Every page is language-aware by pulling out the language code from the cookie. And then in the notebrew navbar we have a little language switcher icon (a globe) that simply links to /users/language/.
     NOTE: for languages don't parse all the language json files and keep them in memory, instead implement a TTL using timers and timer.Reset everytime someone requests for that language file. Once the timer expires, delete it from the map.
     BEFORE YOU DO THIS: look at how big the language files are. If it's an acceptable cost to keep them all in memory then just keep it in memory and reads will be much faster since you don't have to guard reads behind a mutex.
