@@ -155,7 +155,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			response.Size += int(n)
 			return nil
 		}()
-		// TODO: if we paste markdown files in posts, we need to call RegeneratePost and RegeneratePostList as well.
+		// TODO: if we paste markdown files in posts, we need to call RegeneratePost and RegeneratePostList as well. idw to buffer all the posts in memory so we'll do it synchrnously as we process each file.
 		if err != nil {
 			response.Error = err.Error()
 			return
