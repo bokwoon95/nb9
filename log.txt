@@ -21,6 +21,7 @@ rename.go
 serve_http.go
 notebrew/main.go
 
+TODO: uploadfile: don't bother creating a new WithCancel context, the base request context is already canceled once the request exits.
 TODO: OH NO createfile.html and file.html both need to submit their form as multipart/formdata because images might be present.
 TODO: page/post assets: for images, I need to display img.nbrew.io instead if the ImgDomain is set.
 TODO: file.html: the asset list is UGLY AF, make it look reasonably good while also being accessible on an iPhone SE screen.
