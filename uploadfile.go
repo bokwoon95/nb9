@@ -153,9 +153,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		return nil
 	}
 
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	group, groupctx := errgroup.WithContext(ctx)
+	group, groupctx := errgroup.WithContext(r.Context())
 	for {
 		part, err := reader.NextPart()
 		if err != nil {
@@ -189,6 +187,11 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".html", ".css", ".js", ".md", ".txt":
 				err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
 				if err != nil {
+					var maxBytesErr *http.MaxBytesError
+					if errors.As(err, &maxBytesErr) {
+						badRequest(w, r, err)
+						return
+					}
 					getLogger(groupctx).Error(err.Error())
 					internalServerError(w, r, err)
 					return
@@ -204,6 +207,11 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			var b strings.Builder
 			_, err := io.Copy(&b, part)
 			if err != nil {
+				var maxBytesErr *http.MaxBytesError
+				if errors.As(err, &maxBytesErr) {
+					badRequest(w, r, err)
+					return
+				}
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
@@ -231,6 +239,11 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			var b strings.Builder
 			_, err := io.Copy(&b, part)
 			if err != nil {
+				var maxBytesErr *http.MaxBytesError
+				if errors.As(err, &maxBytesErr) {
+					badRequest(w, r, err)
+					return
+				}
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
@@ -265,6 +278,11 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			if err != nil {
 				err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
 				if err != nil {
+					var maxBytesErr *http.MaxBytesError
+					if errors.As(err, &maxBytesErr) {
+						badRequest(w, r, err)
+						return
+					}
 					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)
 					return
@@ -281,6 +299,11 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		case ".html", ".css", ".js", ".md", ".txt":
 			err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
 			if err != nil {
+				var maxBytesErr *http.MaxBytesError
+				if errors.As(err, &maxBytesErr) {
+					badRequest(w, r, err)
+					return
+				}
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
