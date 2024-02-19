@@ -750,6 +750,21 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 	if postData.Category == "." {
 		postData.Category = ""
 	}
+
+	contentBytes := []byte(text)
+	// Content
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		bufPool.Put(buf)
+	}()
+	err := siteGen.markdown.Convert(contentBytes, buf)
+	if err != nil {
+		return err
+	}
+	postData.Content = template.HTML(buf.String())
+
+	// Group 1: find the title.
 	prefix, _, _ := strings.Cut(path.Base(urlPath), "-")
 	if len(prefix) == 0 || len(prefix) > 8 {
 		return nil
@@ -761,7 +776,6 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 	var timestamp [8]byte
 	copy(timestamp[len(timestamp)-5:], b)
 	postData.CreationTime = time.Unix(int64(binary.BigEndian.Uint64(timestamp[:])), 0)
-	contentBytes := []byte(text)
 	// Title
 	var line []byte
 	remainder := contentBytes
@@ -774,13 +788,11 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		postData.Title = stripMarkdownStyles(siteGen.markdown, line)
 		break
 	}
-	// Content
-	var builder strings.Builder
-	err := siteGen.markdown.Convert(contentBytes, &builder)
-	if err != nil {
-		return err
-	}
-	postData.Content = template.HTML(builder.String())
+
+	// TODO: parse the buf.Bytes() using html.Tokenizer and grab all the image
+	// filePaths mentioned in the content and save it into a map. Then do an
+	// image query for all images and exclude the images already mentioned in
+	// the body, and add it to the []Image list.
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
 		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
 			Dialect: remoteFS.filesDialect,
