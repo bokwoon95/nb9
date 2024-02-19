@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strings"
 )
 
 func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -82,6 +83,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		return
 	}
 	response.Parent = string(b)
+	head, _, _ := strings.Cut(response.Parent, "/")
 	// TODO: check if parent is valid.
 	for {
 		part, err := reader.NextPart()
@@ -99,6 +101,13 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 		name := filenameSafe(part.FileName())
+		// ext := path.Ext(name)
+		switch head {
+		case "notes":
+		case "pages":
+		case "posts":
+			// TODO: if we paste markdown files here, we need to generate the timestamp prefix for the name as well as generate the posts and postlist.
+		}
 		// TODO: check if the file extension is valid.
 		// TODO: if extension is an image, stream the part into memory then use golang's stdlib to resize it (consult ChatGPT and Google).
 		err = func() error {
