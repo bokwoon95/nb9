@@ -22,6 +22,7 @@ serve_http.go
 notebrew/main.go
 
 TODO: OH NO createfile.html and file.html both need to submit their form as multipart/formdata because images might be present.
+    - createfile: we need to handle the possible resizing of images and shit.
 TODO: page/post assets: for images, I need to display img.nbrew.io instead if the ImgDomain is set.
 TODO: file.html: the asset list is UGLY AF, make it look reasonably good while also being accessible on an iPhone SE screen.
     - do uploadfile.go first because we need to upload some images!
