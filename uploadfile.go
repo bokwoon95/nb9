@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -107,7 +108,16 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		name := filenameSafe(part.FileName())
+		_, params, err := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
+		if err != nil {
+			params = nil
+		}
+		filePath := params["filename"]
+		dir, name := path.Split(filePath)
+		if dir != "" {
+			continue
+		}
+		name = filenameSafe(name)
 		// ext := path.Ext(name)
 		switch head {
 		case "notes":
