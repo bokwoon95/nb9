@@ -21,7 +21,6 @@ rename.go
 serve_http.go
 notebrew/main.go
 
-TODO: too many actions done in file.html/list_directory.html/list_root_directory.html trigger a template build, make TemplateError a first class citizen in files.go and remove it from the postRedirectGet map. It will always be instantiated in the struct itself.
 TODO: OH NO createfile.html and file.html both need to submit their form as multipart/formdata because images might be present.
     - createfile: we need to handle the possible resizing of images and shit.
 TODO: page/post assets: for images, I need to display img.nbrew.io instead if the ImgDomain is set.
