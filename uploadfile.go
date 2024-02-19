@@ -1,13 +1,21 @@
 package nb9
 
 import (
+	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"io"
 	"mime"
 	"net/http"
+	"os/exec"
 	"path"
 	"strings"
+	"sync/atomic"
+	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -84,15 +92,66 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		return
 	}
 	response.Parent = string(b)
+	var siteGen *SiteGenerator
+	var postTemplate *template.Template
 	head, tail, _ := strings.Cut(response.Parent, "/")
-	if head != "notes" && head != "pages" && head != "posts" {
+	switch head {
+	case "notes":
+		break
+	case "pages":
+		siteGen, err = NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+	case "posts":
+		siteGen, err = NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		postTemplate, err = siteGen.PostTemplate(r.Context())
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+	case "output":
 		next, _, _ := strings.Cut(tail, "/")
-		if head != "output" || next != "themes" {
+		if next != "themes" {
 			response.Error = "InvalidParent"
 			writeResponse(w, r, response)
 			return
 		}
+	default:
+		response.Error = "InvalidParent"
+		writeResponse(w, r, response)
+		return
 	}
+	var count, size atomic.Int64
+	writeFile := func(ctx context.Context, name string, reader io.Reader) error {
+		writer, err := nbrew.FS.WithContext(ctx).OpenWriter(name, 0644)
+		if err != nil {
+			return err
+		}
+		defer writer.Close()
+		n, err := io.Copy(writer, reader)
+		if err != nil {
+			return err
+		}
+		err = writer.Close()
+		if err != nil {
+			return err
+		}
+		count.Add(1)
+		size.Add(n)
+		return nil
+	}
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	group, groupctx := errgroup.WithContext(ctx)
 	for {
 		part, err := reader.NextPart()
 		if err != nil {
@@ -112,54 +171,127 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		if err != nil {
 			params = nil
 		}
-		filePath := params["filename"]
-		dir, name := path.Split(filePath)
-		if dir != "" {
+		name := params["filename"]
+		if strings.Contains(name, "/") {
 			continue
 		}
 		name = filenameSafe(name)
 		ext := path.Ext(name)
-		switch head {
-		case "pages":
+
+		// Since we don't do any image processing or page/post generation
+		// for notes, we can stream the file directly into the filesystem.
+		if head == "notes" {
+			switch ext {
+			case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".html", ".css", ".js", ".md", ".txt":
+				err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
+				if err != nil {
+					getLogger(groupctx).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+			}
+			continue
+		}
+
+		if head == "pages" {
 			if ext != ".html" {
 				continue
 			}
-		case "posts":
+			var b strings.Builder
+			_, err := io.Copy(&b, part)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			text := b.String()
+			group.Go(func() error {
+				filePath := path.Join(sitePrefix, response.Parent, name)
+				err := writeFile(groupctx, filePath, strings.NewReader(text))
+				if err != nil {
+					return err
+				}
+				err = siteGen.GeneratePage(groupctx, filePath, text)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+			continue
+		}
+
+		if head == "posts" {
 			if ext != ".md" {
 				continue
 			}
-			// TODO: if we paste markdown files here, we need to prepend the timestamp prefix to the name.
-		default:
-			if ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif" &&
-				ext != ".html" && ext != ".css" && ext != ".js" && ext != ".md" && ext != ".txt" {
+			var b strings.Builder
+			_, err := io.Copy(&b, part)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			text := b.String()
+			group.Go(func() error {
+				var timestamp [8]byte
+				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
+				prefix := strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
+				if strings.TrimSuffix(name, ext) != "" {
+					name = prefix + "-" + name
+				} else {
+					name = prefix + name
+				}
+				filePath := path.Join(sitePrefix, response.Parent, name)
+				err := writeFile(groupctx, filePath, strings.NewReader(text))
+				if err != nil {
+					return err
+				}
+				err = siteGen.GeneratePost(groupctx, filePath, text, postTemplate)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+			continue
+		}
+
+		switch ext {
+		case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+			cmdPath, err := exec.LookPath("nbrew-process-img")
+			if err == nil {
+				_ = cmdPath
 				continue
 			}
+			switch ext {
+			case ".jpeg", ".jpg":
+			case ".png":
+			case ".gif":
+			default:
+				err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+			}
+		case ".html", ".css", ".js", ".md", ".txt":
+			err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			continue
 		}
-		// TODO: check if the file extension is valid.
-		// TODO: if extension is an image, stream the part into memory then use golang's stdlib to resize it (consult ChatGPT and Google).
-		err = func() error {
-			writer, err := nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(sitePrefix, response.Parent, name), 0644)
-			if err != nil {
-				return err
-			}
-			defer writer.Close()
-			n, err := io.Copy(writer, part)
-			if err != nil {
-				return err
-			}
-			err = writer.Close()
-			if err != nil {
-				return err
-			}
-			response.Count++
-			response.Size += int(n)
-			return nil
-		}()
+	}
+	err = group.Wait()
+	if err != nil {
+		getLogger(r.Context()).Error(err.Error())
+		internalServerError(w, r, err)
+		return
+	}
+	if head == "posts" {
 		// TODO: if we paste markdown files in posts, we need to call RegeneratePost and RegeneratePostList as well. idw to buffer all the posts in memory so we'll do it synchrnously as we process each file.
-		if err != nil {
-			response.Error = err.Error()
-			return
-		}
 	}
 	writeResponse(w, r, response)
 }

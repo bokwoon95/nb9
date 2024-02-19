@@ -45,6 +45,9 @@ TODO: download.go
     - a new "download site" button becomes added to a site, which people can use to export their site folders (and upload it back using plain old uploadfile).
     - a corresponding "upload files" option becomes available in the plus icon dropdown menu (separated from create file/create folder by a <hr>).
 
+image optimization expects a $PATH entry that accepts arguments in this format:
+$ nbrew-process-img 0xfffff.raw.jpg 0xfffff.jpg
+
 God the biggest benefit would be me finally having a personal online vault of my own to store fleeting notes and everything I read on the internet everyday.
 
 -- sqlite
