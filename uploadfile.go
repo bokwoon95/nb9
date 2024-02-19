@@ -99,6 +99,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 
 	var siteGen *SiteGenerator
 	var postTemplate *template.Template
+	var templateErrPtr atomic.Pointer[TemplateError]
 	head, tail, _ := strings.Cut(response.Parent, "/")
 	switch head {
 	case "notes":
@@ -119,9 +120,13 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		}
 		postTemplate, err = siteGen.PostTemplate(r.Context())
 		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
+			var templateErr TemplateError
+			if !errors.As(err, &templateErr) {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			templateErrPtr.CompareAndSwap(nil, &templateErr)
 		}
 	case "output":
 		next, _, _ := strings.Cut(tail, "/")
@@ -228,7 +233,11 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 				}
 				err = siteGen.GeneratePage(groupctx, filePath, text)
 				if err != nil {
-					return err
+					var templateErr TemplateError
+					if !errors.As(err, &templateErr) {
+						return err
+					}
+					templateErrPtr.CompareAndSwap(nil, &templateErr)
 				}
 				return nil
 			})
@@ -268,7 +277,11 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 				}
 				err = siteGen.GeneratePost(groupctx, filePath, text, postTemplate)
 				if err != nil {
-					return err
+					var templateErr TemplateError
+					if !errors.As(err, &templateErr) {
+						return err
+					}
+					templateErrPtr.CompareAndSwap(nil, &templateErr)
 				}
 				return nil
 			})
@@ -363,20 +376,32 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 	}
 	if head == "posts" {
 		category := tail
-		postListTemplate, err := siteGen.PostListTemplate(r.Context(), category)
+		err := func() error {
+			postListTemplate, err := siteGen.PostListTemplate(r.Context(), category)
+			if err != nil {
+				return err
+			}
+			_, err = siteGen.GeneratePostList(r.Context(), category, postListTemplate)
+			if err != nil {
+				return err
+			}
+			return nil
+		}()
 		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		_, err = siteGen.GeneratePostList(r.Context(), category, postListTemplate)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
+			var templateErr TemplateError
+			if !errors.As(err, &templateErr) {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			templateErrPtr.CompareAndSwap(nil, &templateErr)
 		}
 	}
 	response.Count = int(count.Load())
 	response.Size = int(size.Load())
+	templateErr := templateErrPtr.Load()
+	if templateErr != nil {
+		response.TemplateError = *templateErr
+	}
 	writeResponse(w, r, response)
 }
