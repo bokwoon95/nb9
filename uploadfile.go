@@ -118,13 +118,22 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			continue
 		}
 		name = filenameSafe(name)
-		// ext := path.Ext(name)
+		ext := path.Ext(name)
 		switch head {
-		case "notes":
 		case "pages":
+			if ext != ".html" {
+				continue
+			}
 		case "posts":
-			// TODO: if we paste markdown files here, we need to generate the timestamp prefix for the name as well as generate the posts and postlist.
-		case "output":
+			if ext != ".md" {
+				continue
+			}
+			// TODO: if we paste markdown files here, we need to prepend the timestamp prefix to the name.
+		default:
+			if ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif" &&
+				ext != ".html" && ext != ".css" && ext != ".js" && ext != ".md" && ext != ".txt" {
+				continue
+			}
 		}
 		// TODO: check if the file extension is valid.
 		// TODO: if extension is an image, stream the part into memory then use golang's stdlib to resize it (consult ChatGPT and Google).
@@ -146,6 +155,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			response.Size += int(n)
 			return nil
 		}()
+		// TODO: if we paste markdown files in posts, we need to call RegeneratePost and RegeneratePostList as well.
 		if err != nil {
 			response.Error = err.Error()
 			return
