@@ -106,7 +106,7 @@
 </div>
 {{- if eq (index $.PostRedirectGet "from") "regenerate" }}
   {{- $templateError := index $.PostRedirectGet "templateError" }}
-  {{- if $templateError.Description }}
+  {{- if $templateError.ErrorMessage }}
   <div class='mv2 invalid-red'>
     <span class='b'>template error: </span>
     {{- $path := "" }}
@@ -118,9 +118,9 @@
       {{- end }}
     {{- end }}
     {{- if $path }}
-    <a href='/{{ $path }}{{ if $templateError.Line }}#L{{ $templateError.Line }}{{ end }}'>{{ $templateError.Name }}{{ if $templateError.Line }}:{{ $templateError.Line }}{{ end }}</a>: {{ $templateError.Description }}
+    <a href='/{{ $path }}{{ if $templateError.Line }}#L{{ $templateError.Line }}{{ end }}'>{{ $templateError.Name }}{{ if $templateError.Line }}:{{ $templateError.Line }}{{ end }}</a>: {{ $templateError.ErrorMessage }}
     {{- else }}
-    {{ $templateError.Description }}
+    {{ $templateError.ErrorMessage }}
     {{- end }}
   </div>
   {{- end }}

@@ -316,9 +316,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			}
 			outputDir = path.Join(sitePrefix, "output", tail, response.Name)
 		case "posts":
-			var timestamp [8]byte
-			binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
-			prefix := strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
 			if request.Name != "" {
 				response.Name = urlSafe(request.Name)
 			} else {
@@ -333,6 +330,9 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 					break
 				}
 			}
+			var timestamp [8]byte
+			binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
+			prefix := strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
 			if response.Name != "" {
 				response.Name = prefix + "-" + response.Name
 			} else {

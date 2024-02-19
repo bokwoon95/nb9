@@ -20,10 +20,11 @@ import (
 
 func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
 	type Response struct {
-		Error  string `json:"error,omitempty"`
-		Parent string `json:"parent"`
-		Count  int    `json:"count"`
-		Size   int    `json:"size"`
+		Error         string        `json:"error,omitempty"`
+		Parent        string        `json:"parent"`
+		Count         int           `json:"count"`
+		Size          int           `json:"size"`
+		TemplateError TemplateError `json:"templateError"`
 	}
 	if r.Method != "POST" {
 		methodNotAllowed(w, r)

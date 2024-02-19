@@ -29,7 +29,7 @@
   {{- $count := index $.PostRedirectGet "count" }}
   {{- $timeTaken := index $.PostRedirectGet "timeTaken" }}
   {{- $templateError := index $.PostRedirectGet "templateError" }}
-  {{- if not $templateError.Description }}
+  {{- if not $templateError.ErrorMessage }}
   <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
     <div>regenerated {{ if eq (index $.PostRedirectGet "from") "regeneratelist" }}list{{ else }}site{{ end }} ({{ $count }} file{{ if ne $count 1.0 }}s{{ end }} in {{ $timeTaken }})</div>
     <div class='flex-grow-1'></div>
@@ -244,7 +244,7 @@
 </div>
 {{- if eq (index $.PostRedirectGet "from") "regenerate" "regeneratelist" }}
   {{- $templateError := index $.PostRedirectGet "templateError" }}
-  {{- if $templateError.Description }}
+  {{- if $templateError.ErrorMessage }}
   <div class='mv2 invalid-red'>
     <span class='b'>template error: </span>
     {{- $path := "" }}
@@ -256,9 +256,9 @@
       {{- end }}
     {{- end }}
     {{- if $path }}
-    <a href='/{{ $path }}{{ if $templateError.Line }}#L{{ $templateError.Line }}{{ end }}'>{{ $templateError.Name }}{{ if $templateError.Line }}:{{ $templateError.Line }}{{ end }}</a>: {{ $templateError.Description }}
+    <a href='/{{ $path }}{{ if $templateError.Line }}#L{{ $templateError.Line }}{{ end }}'>{{ $templateError.Name }}{{ if $templateError.Line }}:{{ $templateError.Line }}{{ end }}</a>: {{ $templateError.ErrorMessage }}
     {{- else }}
-    {{ $templateError.Description }}
+    {{ $templateError.ErrorMessage }}
     {{- end }}
   </div>
   {{- end }}

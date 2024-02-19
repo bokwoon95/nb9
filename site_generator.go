@@ -187,8 +187,8 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 		internalName := tmpl.Name()
 		if strings.HasSuffix(internalName, ".html") && internalName != name {
 			return nil, TemplateError{
-				Name:        name,
-				Description: "define " + strconv.Quote(internalName) + ": internal template name cannot end with .html",
+				Name:         name,
+				ErrorMessage: "define " + strconv.Quote(internalName) + ": internal template name cannot end with .html",
 			}
 		}
 	}
@@ -218,8 +218,8 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				if strings.HasSuffix(node.Name, ".html") {
 					if !strings.HasPrefix(node.Name, "/themes/") {
 						return nil, TemplateError{
-							Name:        name,
-							Description: "template " + strconv.Quote(node.Name) + ": external template name must start with /themes/",
+							Name:         name,
+							ErrorMessage: "template " + strconv.Quote(node.Name) + ": external template name must start with /themes/",
 						}
 					}
 					externalNames = append(externalNames, node.Name)
@@ -239,8 +239,8 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 			n := slices.Index(callers, externalName)
 			if n > 0 {
 				return TemplateError{
-					Name:        externalName,
-					Description: "circular template reference: " + strings.Join(callers[n:], "=>") + " => " + externalName,
+					Name:         externalName,
+					ErrorMessage: "circular template reference: " + strings.Join(callers[n:], "=>") + " => " + externalName,
 				}
 			}
 
@@ -299,8 +299,8 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				// externalTemplateErrs list.
 				if errors.Is(err, fs.ErrNotExist) {
 					return TemplateError{
-						Name:        name,
-						Description: "template " + strconv.Quote(externalName) + " does not exist",
+						Name:         name,
+						ErrorMessage: "template " + strconv.Quote(externalName) + " does not exist",
 					}
 				}
 				return err
@@ -317,8 +317,8 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 				// (associating it with the current template) instead of adding
 				// it to the externalTemplateErrs list.
 				return TemplateError{
-					Name:        name,
-					Description: strconv.Quote(externalName) + " is a folder",
+					Name:         name,
+					ErrorMessage: strconv.Quote(externalName) + " is a folder",
 				}
 			}
 			var b strings.Builder
@@ -360,8 +360,8 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 			_, err = finalTemplate.AddParseTree(tmpl.Name(), tmpl.Tree)
 			if err != nil {
 				return nil, TemplateError{
-					Name:        name,
-					Description: fmt.Sprintf("%s: add %s: %s", externalNames[i], tmpl.Name(), err),
+					Name:         name,
+					ErrorMessage: fmt.Sprintf("%s: add %s: %s", externalNames[i], tmpl.Name(), err),
 				}
 			}
 		}
@@ -370,8 +370,8 @@ func (siteGen *SiteGenerator) ParseTemplate(groupctx context.Context, name, text
 		_, err = finalTemplate.AddParseTree(tmpl.Name(), tmpl.Tree)
 		if err != nil {
 			return nil, TemplateError{
-				Name:        name,
-				Description: fmt.Sprintf("add %s: %s", tmpl.Name(), err),
+				Name:         name,
+				ErrorMessage: fmt.Sprintf("add %s: %s", tmpl.Name(), err),
 			}
 		}
 	}
@@ -1617,9 +1617,9 @@ var funcMap = map[string]any{
 }
 
 type TemplateError struct {
-	Name        string
-	Line        int
-	Description string
+	Name         string
+	Line         int
+	ErrorMessage string
 }
 
 var (
@@ -1631,21 +1631,21 @@ func NewTemplateError(err error) error {
 	sections := strings.SplitN(err.Error(), ":", 4)
 	if len(sections) < 4 || strings.TrimSpace(sections[0]) != "template" {
 		return TemplateError{
-			Description: err.Error(),
+			ErrorMessage: err.Error(),
 		}
 	}
 	templateName := strings.TrimSpace(sections[1])
 	lineNo, _ := strconv.Atoi(strings.TrimSpace(sections[2]))
-	description := strings.TrimSpace(sections[3])
-	i := strings.Index(description, ":")
+	errorMessage := strings.TrimSpace(sections[3])
+	i := strings.Index(errorMessage, ":")
 	if i > 0 {
-		colNo, _ := strconv.Atoi(strings.TrimSpace(description[:i]))
+		colNo, _ := strconv.Atoi(strings.TrimSpace(errorMessage[:i]))
 		if colNo > 0 {
-			description = strings.TrimSpace(description[i+1:])
+			errorMessage = strings.TrimSpace(errorMessage[i+1:])
 		}
 	}
 	var oldnew []string
-	if matches := postRegexp.FindAllString(description, -1); len(matches) > 0 {
+	if matches := postRegexp.FindAllString(errorMessage, -1); len(matches) > 0 {
 		slices.Sort(matches)
 		matches = slices.Compact(matches)
 		for _, match := range matches {
@@ -1653,7 +1653,7 @@ func NewTemplateError(err error) error {
 			oldnew = append(oldnew, match, "/themes/post.html:"+strconv.Itoa(lineNo-5))
 		}
 	}
-	if matches := postlistRegexp.FindAllString(description, -1); len(matches) > 0 {
+	if matches := postlistRegexp.FindAllString(errorMessage, -1); len(matches) > 0 {
 		slices.Sort(matches)
 		matches = slices.Compact(matches)
 		for _, match := range matches {
@@ -1670,7 +1670,7 @@ func NewTemplateError(err error) error {
 		offset = 5
 		pageRegexp, err := regexp.Compile(templateName + `:\d+`)
 		if err == nil {
-			if matches := pageRegexp.FindAllString(description, -1); len(matches) > 0 {
+			if matches := pageRegexp.FindAllString(errorMessage, -1); len(matches) > 0 {
 				slices.Sort(matches)
 				matches = slices.Compact(matches)
 				for _, match := range matches {
@@ -1681,23 +1681,23 @@ func NewTemplateError(err error) error {
 		}
 	}
 	if len(oldnew) > 0 {
-		description = strings.NewReplacer(oldnew...).Replace(description)
+		errorMessage = strings.NewReplacer(oldnew...).Replace(errorMessage)
 	}
 	return TemplateError{
-		Name:        templateName,
-		Line:        lineNo - offset,
-		Description: description,
+		Name:         templateName,
+		Line:         lineNo - offset,
+		ErrorMessage: errorMessage,
 	}
 }
 
 func (templateErr TemplateError) Error() string {
 	if templateErr.Name == "" {
-		return templateErr.Description
+		return templateErr.ErrorMessage
 	}
 	if templateErr.Line == 0 {
-		return templateErr.Name + ": " + templateErr.Description
+		return templateErr.Name + ": " + templateErr.ErrorMessage
 	}
-	return templateErr.Name + ":" + strconv.Itoa(templateErr.Line) + ": " + templateErr.Description
+	return templateErr.Name + ":" + strconv.Itoa(templateErr.Line) + ": " + templateErr.ErrorMessage
 }
 
 type Pagination struct {

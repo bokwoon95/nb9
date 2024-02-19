@@ -183,7 +183,7 @@
   {{- end }}
 </div>
 <form method='post' enctype='multipart/form-data' class='mv2'>
-  {{- if $.TemplateError.Description }}
+  {{- if $.TemplateError.ErrorMessage }}
   <div class='mv2 invalid-red'>
     <span class='b'>template error: </span>
     {{- $path := "" }}
@@ -195,9 +195,9 @@
       {{- end }}
     {{- end }}
     {{- if $path }}
-    <a href='/{{ $path }}{{ if $.TemplateError.Line }}#L{{ $.TemplateError.Line }}{{ end }}'>{{ $.TemplateError.Name }}{{ if $.TemplateError.Line }}:{{ $.TemplateError.Line }}{{ end }}</a>: {{ $.TemplateError.Description }}
+    <a href='/{{ $path }}{{ if $.TemplateError.Line }}#L{{ $.TemplateError.Line }}{{ end }}'>{{ $.TemplateError.Name }}{{ if $.TemplateError.Line }}:{{ $.TemplateError.Line }}{{ end }}</a>: {{ $.TemplateError.ErrorMessage }}
     {{- else }}
-    {{ $.TemplateError.Description }}
+    {{ $.TemplateError.ErrorMessage }}
     {{- end }}
   </div>
   {{- end }}
