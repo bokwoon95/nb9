@@ -458,28 +458,33 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				internalServerError(w, r, err)
 				return
 			}
-			part, err := reader.NextPart()
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			var maxBytesErr *http.MaxBytesError
-			var b strings.Builder
-			_, err = io.Copy(&b, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
-			if err != nil {
-				if errors.As(err, &maxBytesErr) {
-					badRequest(w, r, err)
+			for i := 0; i < 2; i++ {
+				part, err := reader.NextPart()
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
 					return
 				}
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
+				var maxBytesErr *http.MaxBytesError
+				var b strings.Builder
+				_, err = io.Copy(&b, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
+				if err != nil {
+					if errors.As(err, &maxBytesErr) {
+						badRequest(w, r, err)
+						return
+					}
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				formName := part.FormName()
+				if formName == "content" {
+					request.Content = b.String()
+				}
 			}
-			request.Content = b.String()
 		default:
 			unsupportedContentType(w, r)
 			return
