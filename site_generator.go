@@ -50,11 +50,17 @@ type SiteGenerator struct {
 	imgFileIDs         map[string][16]byte
 }
 
+type NavigationLink struct {
+	Name string
+	URL  template.URL
+}
+
 type Site struct {
-	Lang        string
-	Title       string
-	Description template.HTML
-	Favicon     template.URL
+	Lang            string
+	Title           string
+	Description     template.HTML
+	Favicon         template.URL
+	NavigationLinks []NavigationLink
 }
 
 func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, imgDomain string) (*SiteGenerator, error) {
@@ -68,12 +74,13 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 		templateInProgress: make(map[string]chan struct{}),
 	}
 	var config struct {
-		Lang        string
-		Title       string
-		Description string
-		Emoji       string
-		Favicon     string
-		CodeStyle   string
+		Lang            string
+		Title           string
+		Description     string
+		Emoji           string
+		Favicon         string
+		CodeStyle       string
+		NavigationLinks []NavigationLink
 	}
 	b, err := fs.ReadFile(fsys, path.Join(sitePrefix, "site.json"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
