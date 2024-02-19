@@ -108,14 +108,20 @@ for (const dataPaste of document.querySelectorAll("[data-paste]")) {
       return;
     }
     let dataTransfer = new DataTransfer();
+    let invalidCount = 0;
     for (let i = 0; i < event.clipboardData.files.length; i++) {
       const file = event.clipboardData.files.item(i);
       const n = file.name.lastIndexOf(".");
       const ext = n < 0 ? "" : file.name.substring(n);
       if (!isValidExt[ext]) {
+        invalidCount++;
         continue;
       }
       dataTransfer.items.add(file);
+    }
+    if (invalidCount > 0) {
+      dataPaste.value = `${invalidCount} invalid file${invalidCount == 1 ? "" : "s"}`;
+      setTimeout(function() { dataPaste.value = "" }, 800);
     }
     input.files = dataTransfer.files;
   });
