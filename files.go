@@ -47,6 +47,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		BelongsTo       string         `json:"belongsTo,omitempty"`
 		AssetDir        string         `json:"assetDir,omitempty"`
 		Assets          []Asset        `json:"assets,omitempty"`
+		FilesTooBig     []string       `json:"filesTooBig,omitempty"`
 	}
 
 	file, err := nbrew.FS.Open(path.Join(".", sitePrefix, filePath))
@@ -429,10 +430,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		var request struct {
 			Content string
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
 		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		switch contentType {
 		case "application/json":
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
 			decoder := json.NewDecoder(r.Body)
 			decoder.DisallowUnknownFields()
 			err := decoder.Decode(&request)
@@ -440,21 +441,43 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				badRequest(w, r, err)
 				return
 			}
-		case "application/x-www-form-urlencoded", "multipart/form-data":
-			if contentType == "multipart/form-data" {
-				err := r.ParseMultipartForm(1 << 20 /* 1 MB */)
-				if err != nil {
-					badRequest(w, r, err)
-					return
-				}
-			} else {
-				err := r.ParseForm()
-				if err != nil {
-					badRequest(w, r, err)
-					return
-				}
+		case "application/x-www-form-urlencoded":
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20 /* 1 MB */)
+			err := r.ParseForm()
+			if err != nil {
+				badRequest(w, r, err)
+				return
 			}
 			request.Content = r.Form.Get("content")
+		case "multipart/form-data":
+			reader, err := r.MultipartReader()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			part, err := reader.NextPart()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			var maxBytesErr *http.MaxBytesError
+			var b strings.Builder
+			_, err = io.Copy(&b, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
+			if err != nil {
+				if errors.As(err, &maxBytesErr) {
+					badRequest(w, r, err)
+					return
+				}
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			request.Content = b.String()
 		default:
 			unsupportedContentType(w, r)
 			return

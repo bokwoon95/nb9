@@ -12,8 +12,10 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -433,6 +435,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 			if reader != nil {
+				group, groupctx := errgroup.WithContext(r.Context())
 				for {
 					part, err := reader.NextPart()
 					if err != nil {
@@ -466,24 +469,59 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 						}
 						continue
 					}
-					// TODO: call nbrew-process-img on the image if present, else save it as-is to the filesystem.
-					err = func() error {
-						writer, err := nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(outputDir, fileName), 0644)
-						if err != nil {
-							return err
-						}
-						defer writer.Close()
-						_, err = io.Copy(writer, part)
-						if err != nil {
-							return err
-						}
-						return writer.Close()
-					}()
+					randomID := NewID()
+					inputFilePath := encodeUUID(randomID) + "-input" + ext
+					outputFilePath := encodeUUID(randomID) + "-output" + ext
+					tempDir, err := filepath.Abs(filepath.Join(os.TempDir(), "notebrew-temp"))
 					if err != nil {
 						getLogger(r.Context()).Error(err.Error())
 						internalServerError(w, r, err)
 						return
 					}
+					inputFile, err := os.OpenFile(filepath.Join(tempDir, inputFilePath), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
+					_, err = io.Copy(inputFile, part)
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
+					err = inputFile.Close()
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
+					group.Go(func() error {
+						defer os.Remove(inputFilePath)
+						defer os.Remove(outputFilePath)
+						cmd := exec.CommandContext(groupctx, cmdPath, inputFilePath, outputFilePath)
+						cmd.Stdout = os.Stdout
+						cmd.Stderr = os.Stderr
+						err := cmd.Run()
+						if err != nil {
+							return err
+						}
+						outputFile, err := os.Open(outputFilePath)
+						if err != nil {
+							return err
+						}
+						err = writeFile(groupctx, path.Join(outputDir, fileName), outputFile)
+						if err != nil {
+							return err
+						}
+						return nil
+					})
+				}
+				err := group.Wait()
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
 				}
 			}
 		}
