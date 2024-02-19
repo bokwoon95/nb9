@@ -246,14 +246,14 @@
       <form method='post' enctype='multipart/form-data' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
         <input type='hidden' name='parent' value='{{ join "output" (trimSuffix (tail $.FilePath) ".html") }}'>
         <input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif,.html,.css,.js,.md,.txt' multiple>
-        <input placeholder='paste clipboard here' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif",".html",".css",".js",".md",".txt"]}'>
+        <input placeholder='paste clipboard here' style='min-width: 200px;' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif",".html",".css",".js",".md",".txt"]}'>
         <button type='submit' class='button ba br2 pa2 w-100 mt2'>upload</button>
       </form>
       {{- else }}
       <form method='post' enctype='multipart/form-data' action='/{{ join "files" $.SitePrefix "uploadfile" }}/' class='pa2'>
         <input type='hidden' name='parent' value='{{ join "output" (trimSuffix $.FilePath ".md") }}'>
         <input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif' multiple>
-        <input placeholder='paste clipboard here' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif"]}'>
+        <input placeholder='paste clipboard here' style='min-width: 200px;' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif"]}'>
         <button type='submit' class='button ba br2 pa2 w-100 mt2'>upload</button>
       </form>
       {{- end }}
