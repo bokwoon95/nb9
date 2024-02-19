@@ -50,10 +50,11 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		}
 		err := nbrew.setSession(w, r, "flash", map[string]any{
 			"postRedirectGet": map[string]any{
-				"from":  "uploadfile",
-				"error": response.Error,
-				"count": response.Count,
-				"size":  response.Size,
+				"from":          "uploadfile",
+				"error":         response.Error,
+				"count":         response.Count,
+				"size":          response.Size,
+				"templateError": response.TemplateError,
 			},
 		})
 		if err != nil {
