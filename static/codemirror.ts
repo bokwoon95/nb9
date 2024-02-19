@@ -100,7 +100,7 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
   if (position && position <= textarea.value.length) {
     editor.dispatch({
       selection: { anchor: position, head: position },
-      scrollIntoView: true,
+      effects: EditorView.scrollIntoView(position, { y: "center" }),
     });
   }
 
