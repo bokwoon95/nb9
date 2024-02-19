@@ -21,6 +21,7 @@ rename.go
 serve_http.go
 notebrew/main.go
 
+TODO: site settings needs a way for users to customize their navbar items. the default is 'home' and 'posts', but the user may choose to link it to something else. as usual, site setting changes will trigger a whole-site rebuild.
 TODO: uploadfile.go.
     - When uploaded to output (i.e. pages/posts/themes), images are always resized to max 1080p. Images in notes are kept untouched. If someone wants to upload a full size image, they can upload it to notes then move it over i to pages/posts/themes, which doesn't incur an additional cost because it's just rewriting metadata.
 TODO: OH NO I createfile.html and file.html both need to submit their form as multipart/formdata because images might be present.
