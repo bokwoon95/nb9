@@ -258,22 +258,22 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		switch ext {
 		case ".jpeg", ".jpg", ".png", ".webp", ".gif":
 			cmdPath, err := exec.LookPath("nbrew-process-img")
-			if err == nil {
-				_ = cmdPath
-				continue
-			}
-			switch ext {
-			case ".jpeg", ".jpg":
-			case ".png":
-			case ".gif":
-			default:
+			if err != nil {
 				err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)
 					return
 				}
+				continue
 			}
+			// TODO: stream part into $TMPDIR/$RANDOMID-input.jpeg, then kick
+			// off a group.Go() that calls `nbrew-process-img
+			// $TMPDIR/$RANDOMID-input.jpeg $TMPDIR/$RANDOMID-output.jpeg` and
+			// then stream $TMPDIR/$RANDOMID-output.jpeg into the filesystem
+			// and delete both files.
+			_ = cmdPath
+			continue
 		case ".html", ".css", ".js", ".md", ".txt":
 			err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
 			if err != nil {
@@ -291,7 +291,19 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		return
 	}
 	if head == "posts" {
-		// TODO: if we paste markdown files in posts, we need to call RegeneratePost and RegeneratePostList as well. idw to buffer all the posts in memory so we'll do it synchrnously as we process each file.
+		category := tail
+		postListTemplate, err := siteGen.PostListTemplate(r.Context(), category)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		_, err = siteGen.GeneratePostList(r.Context(), category, postListTemplate)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
 	}
 	writeResponse(w, r, response)
 }
