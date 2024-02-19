@@ -104,6 +104,16 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 	if config.CodeStyle == "" {
 		config.CodeStyle = "onedark"
 	}
+	if len(config.NavigationLinks) == 0 {
+		home := strings.TrimPrefix(sitePrefix, "@")
+		if home == "" {
+			home = "home"
+		}
+		config.NavigationLinks = []NavigationLink{
+			{Name: home, URL: "/"},
+			{Name: "posts", URL: "/posts/"},
+		}
+	}
 	siteGen.markdown = goldmark.New(
 		goldmark.WithParserOptions(parser.WithAttribute()),
 		goldmark.WithExtensions(
@@ -116,9 +126,10 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 		),
 	)
 	siteGen.Site = Site{
-		Lang:    config.Lang,
-		Title:   config.Title,
-		Favicon: template.URL(config.Favicon),
+		Lang:            config.Lang,
+		Title:           config.Title,
+		Favicon:         template.URL(config.Favicon),
+		NavigationLinks: config.NavigationLinks,
 	}
 	if config.Description != "" {
 		var b strings.Builder

@@ -3,10 +3,11 @@ html { max-width: 70ch; padding: 3em 1em; margin: auto; line-height: 1.75; font-
 p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
 </style>
 <title>{{ if $.Category }}{{ $.Category }}{{ else }}posts{{ end }}</title>
-<div>
-  <a href='/'>{{ if $.Site.Title }}{{ $.Site.Title }}{{ else }}home{{ end }}</a>
-  &boxv; <a href='/posts/'>posts</a>
-</div>
+<nav>
+  {{- range $i, $navigationLink := $.Site.NavigationLinks }}
+  {{ if $i }}&boxv; {{ end }}<a href='{{ $navigationLink.URL }}'>{{ $navigationLink.Name }}</a>
+  {{- end }}
+</nav>
 <hr>
 <h1>{{ if $.Category }}{{ $.Category }}{{ else }}posts{{ end }}</h1>
 {{ if $.Posts }}
