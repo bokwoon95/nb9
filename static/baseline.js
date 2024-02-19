@@ -82,7 +82,6 @@ for (const dataPaste of document.querySelectorAll("[data-paste]")) {
     }
     element = element.parentElement;
   }
-  window.form = form;
   if (!form) {
     continue;
   }
