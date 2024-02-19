@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path"
@@ -430,6 +431,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		var request struct {
 			Content string
 		}
+		var reader *multipart.Reader
 		contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		switch contentType {
 		case "application/json":
@@ -450,7 +452,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			}
 			request.Content = r.Form.Get("content")
 		case "multipart/form-data":
-			reader, err := r.MultipartReader()
+			reader, err = r.MultipartReader()
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
@@ -503,9 +505,14 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		}
 
 		if nbrew.UsersDB != nil {
-			// TODO: check if the owner has exceeded his storage limit, then
-			// defer a function that will calculate and update the new storage
-			// used after the file has been saved.
+			// TODO: calculate the available storage space of the owner and add
+			// it as a MaxBytesReader to the request body.
+			//
+			// TODO: but then: how do we differentiate between a MaxBytesError
+			// returned by a file exceeding 10 MB vs a MaxBytesError returned
+			// by the request body exceeding available storage space? Maybe if
+			// maxBytesErr is 10 MB we assume it's a file going over the limit,
+			// otherwise we assume it's the owner exceeding his storage space?
 		}
 
 		writer, err := nbrew.FS.OpenWriter(path.Join(sitePrefix, filePath), 0644)
@@ -528,6 +535,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			return
 		}
 
+		// TODO: determine the outputDir
+		// TODO: if contentType is multipart/form-data, keep streaming files from the reader into the filesystem (follow what uploadfile and createfile already do).
+
+		// TODO: refactor this so that it matches the code in createfile.go
 		siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())

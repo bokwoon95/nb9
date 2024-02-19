@@ -434,7 +434,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				internalServerError(w, r, err)
 				return
 			}
-			if reader != nil {
+			if contentType == "multipart/form-data" {
 				group, groupctx := errgroup.WithContext(r.Context())
 				for {
 					part, err := reader.NextPart()
