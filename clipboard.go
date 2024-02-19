@@ -825,17 +825,3 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 	}
 	return nil
 }
-
-func encodeUUID(id [16]byte) string {
-	var b [32 + 4]byte
-	hex.Encode(b[:], id[:4])
-	b[8] = '-'
-	hex.Encode(b[9:13], id[4:6])
-	b[13] = '-'
-	hex.Encode(b[14:18], id[6:8])
-	b[18] = '-'
-	hex.Encode(b[19:23], id[8:10])
-	b[23] = '-'
-	hex.Encode(b[24:], id[10:])
-	return string(b[:])
-}

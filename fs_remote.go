@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -128,7 +127,7 @@ func (fsys *RemoteFS) Open(name string) (fs.File, error) {
 	}
 	file.isFulltextIndexed = isFulltextIndexed(file.info.FilePath)
 	if fileType.IsObject {
-		file.readCloser, err = file.storage.Get(file.ctx, hex.EncodeToString(file.info.FileID[:])+path.Ext(file.info.FilePath))
+		file.readCloser, err = file.storage.Get(file.ctx, encodeUUID(file.info.FileID)+path.Ext(file.info.FilePath))
 		if err != nil {
 			return nil, err
 		}
@@ -407,7 +406,7 @@ func (fsys *RemoteFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, er
 		file.storageWriter = pipeWriter
 		file.storageResult = make(chan error, 1)
 		go func() {
-			file.storageResult <- fsys.storage.Put(file.ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath), pipeReader)
+			file.storageResult <- fsys.storage.Put(file.ctx, encodeUUID(file.fileID)+path.Ext(file.filePath), pipeReader)
 			close(file.storageResult)
 		}()
 	} else {
@@ -576,7 +575,7 @@ func (file *RemoteFileWriter) Close() error {
 			},
 		})
 		if err != nil {
-			go file.storage.Delete(context.Background(), hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
+			go file.storage.Delete(context.Background(), encodeUUID(file.fileID)+path.Ext(file.filePath))
 			return err
 		}
 	} else {
@@ -874,7 +873,7 @@ func (fsys *RemoteFS) Remove(name string) error {
 	}
 	switch path.Ext(name) {
 	case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-		err = fsys.storage.Delete(fsys.ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
+		err = fsys.storage.Delete(fsys.ctx, encodeUUID(file.fileID)+path.Ext(file.filePath))
 		if err != nil {
 			return err
 		}
@@ -939,7 +938,7 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := fsys.storage.Delete(fsys.ctx, hex.EncodeToString(file.fileID[:])+path.Ext(file.filePath))
+			err := fsys.storage.Delete(fsys.ctx, encodeUUID(file.fileID)+path.Ext(file.filePath))
 			if err != nil {
 				fsys.logger.Error(err.Error())
 			}
@@ -1135,7 +1134,7 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 		return err
 	}
 	if deletedFileID != [16]byte{} {
-		err := fsys.storage.Delete(fsys.ctx, hex.EncodeToString(deletedFileID[:])+path.Ext(newname))
+		err := fsys.storage.Delete(fsys.ctx, encodeUUID(deletedFileID)+path.Ext(newname))
 		if err != nil {
 			return err
 		}
