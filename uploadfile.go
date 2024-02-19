@@ -83,8 +83,15 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		return
 	}
 	response.Parent = string(b)
-	head, _, _ := strings.Cut(response.Parent, "/")
-	// TODO: check if parent is valid.
+	head, tail, _ := strings.Cut(response.Parent, "/")
+	if head != "notes" && head != "pages" && head != "posts" {
+		next, _, _ := strings.Cut(tail, "/")
+		if head != "output" || next != "themes" {
+			response.Error = "InvalidParent"
+			writeResponse(w, r, response)
+			return
+		}
+	}
 	for {
 		part, err := reader.NextPart()
 		if err != nil {
@@ -107,6 +114,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		case "pages":
 		case "posts":
 			// TODO: if we paste markdown files here, we need to generate the timestamp prefix for the name as well as generate the posts and postlist.
+		case "output":
 		}
 		// TODO: check if the file extension is valid.
 		// TODO: if extension is an image, stream the part into memory then use golang's stdlib to resize it (consult ChatGPT and Google).
