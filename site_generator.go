@@ -761,96 +761,80 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 	var timestamp [8]byte
 	copy(timestamp[len(timestamp)-5:], b)
 	postData.CreationTime = time.Unix(int64(binary.BigEndian.Uint64(timestamp[:])), 0)
-	var err error
-	group, groupctx := errgroup.WithContext(ctx)
-	group.Go(func() error {
-		err := groupctx.Err()
-		if err != nil {
-			return err
+	contentBytes := []byte(text)
+	// Title
+	var line []byte
+	remainder := contentBytes
+	for len(remainder) > 0 {
+		line, remainder, _ = bytes.Cut(remainder, []byte("\n"))
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
 		}
-		contentBytes := []byte(text)
-		// Title
-		var line []byte
-		remainder := contentBytes
-		for len(remainder) > 0 {
-			line, remainder, _ = bytes.Cut(remainder, []byte("\n"))
-			line = bytes.TrimSpace(line)
-			if len(line) == 0 {
-				continue
-			}
-			postData.Title = stripMarkdownStyles(siteGen.markdown, line)
-			break
-		}
-		// Content
-		var b strings.Builder
-		err = siteGen.markdown.Convert(contentBytes, &b)
-		if err != nil {
-			return err
-		}
-		postData.Content = template.HTML(b.String())
-		return nil
-	})
-	group.Go(func() error {
-		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-			cursor, err := sq.FetchCursor(groupctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
-				Format: "SELECT {*}" +
-					" FROM files" +
-					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
-					" AND NOT is_dir" +
-					" AND (" +
-					"file_path LIKE '%.jpeg'" +
-					" OR file_path LIKE '%.jpg'" +
-					" OR file_path LIKE '%.png'" +
-					" OR file_path LIKE '%.webp'" +
-					" OR file_path LIKE '%.gif'" +
-					") " +
-					" ORDER BY file_path",
-				Values: []any{
-					sq.StringParam("outputDir", outputDir),
-				},
-			}, func(row *sq.Row) string {
-				return path.Base(row.String("file_path"))
-			})
-			if err != nil {
-				return err
-			}
-			defer cursor.Close()
-			for cursor.Next() {
-				name, err := cursor.Result()
-				if err != nil {
-					return err
-				}
-				postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
-			}
-			err = cursor.Close()
-			if err != nil {
-				return err
-			}
-		} else {
-			dirEntries, err := siteGen.fsys.WithContext(groupctx).ReadDir(outputDir)
-			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					return nil
-				}
-				return err
-			}
-			for _, dirEntry := range dirEntries {
-				name := dirEntry.Name()
-				if dirEntry.IsDir() {
-					continue
-				}
-				switch path.Ext(name) {
-				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
-					postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
-				}
-			}
-		}
-		return nil
-	})
-	err = group.Wait()
+		postData.Title = stripMarkdownStyles(siteGen.markdown, line)
+		break
+	}
+	// Content
+	var builder strings.Builder
+	err := siteGen.markdown.Convert(contentBytes, &builder)
 	if err != nil {
 		return err
+	}
+	postData.Content = template.HTML(builder.String())
+	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
+		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
+			Dialect: remoteFS.filesDialect,
+			Format: "SELECT {*}" +
+				" FROM files" +
+				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
+				" AND NOT is_dir" +
+				" AND (" +
+				"file_path LIKE '%.jpeg'" +
+				" OR file_path LIKE '%.jpg'" +
+				" OR file_path LIKE '%.png'" +
+				" OR file_path LIKE '%.webp'" +
+				" OR file_path LIKE '%.gif'" +
+				") " +
+				" ORDER BY file_path",
+			Values: []any{
+				sq.StringParam("outputDir", outputDir),
+			},
+		}, func(row *sq.Row) string {
+			return path.Base(row.String("file_path"))
+		})
+		if err != nil {
+			return err
+		}
+		defer cursor.Close()
+		for cursor.Next() {
+			name, err := cursor.Result()
+			if err != nil {
+				return err
+			}
+			postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
+		}
+		err = cursor.Close()
+		if err != nil {
+			return err
+		}
+	} else {
+		dirEntries, err := siteGen.fsys.WithContext(ctx).ReadDir(outputDir)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		for _, dirEntry := range dirEntries {
+			name := dirEntry.Name()
+			if dirEntry.IsDir() {
+				continue
+			}
+			switch path.Ext(name) {
+			case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+				postData.Images = append(postData.Images, Image{Parent: urlPath, Name: name})
+			}
+		}
 	}
 	writer, err := siteGen.fsys.WithContext(ctx).OpenWriter(path.Join(outputDir, "index.html"), 0644)
 	if err != nil {

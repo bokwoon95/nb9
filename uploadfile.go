@@ -29,7 +29,6 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		methodNotAllowed(w, r)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 25<<20 /* 25 MB */)
 	referer := r.Referer()
 	if referer == "" {
 		http.Redirect(w, r, "/"+path.Join("files", sitePrefix)+"/", http.StatusFound)
@@ -61,6 +60,8 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		}
 		http.Redirect(w, r, referer, http.StatusFound)
 	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 25<<20 /* 25 MB */)
 	reader, err := r.MultipartReader()
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
@@ -92,6 +93,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		return
 	}
 	response.Parent = string(b)
+
 	var siteGen *SiteGenerator
 	var postTemplate *template.Template
 	head, tail, _ := strings.Cut(response.Parent, "/")
@@ -130,6 +132,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		writeResponse(w, r, response)
 		return
 	}
+
 	var count, size atomic.Int64
 	writeFile := func(ctx context.Context, name string, reader io.Reader) error {
 		writer, err := nbrew.FS.WithContext(ctx).OpenWriter(name, 0644)
@@ -149,6 +152,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		size.Add(n)
 		return nil
 	}
+
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	group, groupctx := errgroup.WithContext(ctx)
@@ -305,5 +309,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			return
 		}
 	}
+	response.Count = int(count.Load())
+	response.Size = int(size.Load())
 	writeResponse(w, r, response)
 }
