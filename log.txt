@@ -23,7 +23,7 @@ notebrew/main.go
 
 TODO: split files.go into file.go, listdirectory.go and listrootdirectory.go now that they don't share the same Response object. So much more straightforward!
 TODO: instead of conditionally importing codemirror.js depending on whether the byte count exceeds 50000, we'll just permanently disable syntax highlighting in JavaScript if textarea.value.length exceeds 50000. That way we still get codemirror goodies like restore cursor position for large txt files (which have no syntax highlighting to begin with anyway, no need to disable codemirror as a whole).
-    - is it possible to scroll to cursor? instead of just restoring cursor position? what are view.coordsAtPos() and view.scrollDOM.scrollTop = offset? https://discuss.codemirror.net/t/cm6-scroll-to-middle/2924/4
+    - is it possible to scroll to cursor? instead of just restoring cursor position? what are view.coordsAtPos() and view.scrollDOM.scrollTop = offset? what about                     view.scrollPosIntoView()? https://discuss.codemirror.net/t/cm6-scroll-to-middle/2924/4
 TODO: files.go: make it handle multipart/form-data as well and upload files.
     - We also need a function that takes in an image name and converts it into an https://img.nbrew.io/xxxx.jpeg if imgDomain is provided. Then call that function for each img in the image/asset list.
 TODO: uploadfile.go and createfile.go: instead of imposing a blanket 25 MB upload limit, we instead do a per-file size limit (both images and video are max 10 MB. images may be web-optimized so it's no problem, videos we will never optimize so it's always the full size up to 10 MB).
