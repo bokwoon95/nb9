@@ -555,6 +555,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 	}
 	type Response struct {
 		PostRedirectGet map[string]any `json:"postRedirectGet,omitempty"`
+		TemplateError   TemplateError  `json:"templateError,omitempty"`
 		ContentSite     string         `json:"contentSite"`
 		Username        NullString     `json:"username"`
 		SitePrefix      string         `json:"sitePrefix"`
@@ -992,6 +993,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 	}
 	type Response struct {
 		PostRedirectGet map[string]any `json:"postRedirectGet,omitempty"`
+		TemplateError   TemplateError  `json:"templateError,omitempty"`
 		ContentSite     string         `json:"contentSite"`
 		Username        NullString     `json:"username"`
 		SitePrefix      string         `json:"sitePrefix"`
