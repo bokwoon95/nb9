@@ -21,11 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-<<<<<<< Updated upstream
 func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, sitePrefix, action string) {
-=======
-func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, username, action string) {
->>>>>>> Stashed changes
 	isValidParent := func(sitePrefix, parent string) bool {
 		head, _, _ := strings.Cut(parent, "/")
 		switch head {
@@ -52,12 +48,8 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 	}
 	referer := r.Referer()
 	if referer == "" {
-<<<<<<< Updated upstream
 		http.Redirect(w, r, "/"+path.Join("files", sitePrefix)+"/", http.StatusFound)
 		return
-=======
-		referer = "/files/"
->>>>>>> Stashed changes
 	}
 	switch action {
 	case "cut", "copy":
