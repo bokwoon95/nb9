@@ -21,6 +21,7 @@ rename.go
 serve_http.go
 notebrew/main.go
 
+TODO: split files.go into file.go, list_directory.go and list_root_directory.go now that they don't share the same Response object. So much more straightforward!
 TODO: files.go: make it handle multipart/form-data as well and upload files.
     - We also need a function that takes in an image name and converts it into an https://img.nbrew.io/xxxx.jpeg if imgDomain is provided. Then call that function for each img in the image/asset list.
 TODO: uploadfile.go and createfile.go: instead of imposing a blanket 25 MB upload limit, we instead do a per-file size limit (both images and video are max 10 MB. images may be web-optimized so it's no problem, videos we will never optimize so it's always the full size up to 10 MB).
