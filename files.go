@@ -468,6 +468,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 					internalServerError(w, r, err)
 					return
 				}
+				formName := part.FormName()
+				if formName == "ext" {
+					continue
+				}	
 				var maxBytesErr *http.MaxBytesError
 				var b strings.Builder
 				_, err = io.Copy(&b, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
@@ -480,7 +484,6 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 					internalServerError(w, r, err)
 					return
 				}
-				formName := part.FormName()
 				if formName == "content" {
 					request.Content = b.String()
 				}
