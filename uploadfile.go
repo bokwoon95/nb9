@@ -9,8 +9,10 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -290,12 +292,53 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 				}
 				continue
 			}
-			// TODO: stream part into $TMPDIR/$RANDOMID-input.jpeg, then kick
-			// off a group.Go() that calls `nbrew-process-img
-			// $TMPDIR/$RANDOMID-input.jpeg $TMPDIR/$RANDOMID-output.jpeg` and
-			// then stream $TMPDIR/$RANDOMID-output.jpeg into the filesystem
-			// and delete both files.
-			_ = cmdPath
+			randomID := NewID()
+			inputFilePath := encodeUUID(randomID) + "-input" + ext
+			outputFilePath := encodeUUID(randomID) + "-output" + ext
+			tempDir, err := filepath.Abs(filepath.Join(os.TempDir(), "notebrew-temp"))
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			inputFile, err := os.OpenFile(filepath.Join(tempDir, inputFilePath), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			_, err = io.Copy(inputFile, part)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			err = inputFile.Close()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			group.Go(func() error {
+				defer os.Remove(inputFilePath)
+				defer os.Remove(outputFilePath)
+				cmd := exec.CommandContext(r.Context(), cmdPath, inputFilePath, outputFilePath)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				err := cmd.Run()
+				if err != nil {
+					return err
+				}
+				outputFile, err := os.Open(outputFilePath)
+				if err != nil {
+					return err
+				}
+				err = writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), outputFile)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
 			continue
 		case ".html", ".css", ".js", ".md", ".txt":
 			err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
