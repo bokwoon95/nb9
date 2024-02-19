@@ -24,6 +24,7 @@ notebrew/main.go
 TODO: uploadfile.go.
     - When uploaded to output (i.e. pages/posts/themes), images are always resized to max 1080p. Images in notes are kept untouched. If someone wants to upload a full size image, they can upload it to notes then move it over i to pages/posts/themes, which doesn't incur an additional cost because it's just rewriting metadata.
 TODO: OH NO I createfile.html and file.html both need to submit their form as multipart/formdata because images might be present.
+    - do uploadfile first okay that is easymode, since we don't have to care about content type being x-www-urlencoded or appliction/json
 TODO: page/post assets: for images, I need to display img.nbrew.io instead if the ImgDomain is set.
 TODO: file.html: the asset list is UGLY AF, make it look reasonably good while also being accessible on an iPhone SE screen.
     - do uploadfile.go first because we need to upload some images!
