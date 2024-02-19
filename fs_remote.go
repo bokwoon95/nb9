@@ -929,15 +929,15 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 		return err
 	}
 	defer cursor.Close()
-	var wg sync.WaitGroup
+	var waitGroup sync.WaitGroup
 	for cursor.Next() {
 		file, err := cursor.Result()
 		if err != nil {
 			return err
 		}
-		wg.Add(1)
+		waitGroup.Add(1)
 		go func() {
-			defer wg.Done()
+			defer waitGroup.Done()
 			err := fsys.storage.Delete(fsys.ctx, encodeUUID(file.fileID)+path.Ext(file.filePath))
 			if err != nil {
 				fsys.logger.Error(err.Error())
@@ -948,7 +948,7 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	if err != nil {
 		return err
 	}
-	wg.Wait()
+	waitGroup.Wait()
 	_, err = sq.Exec(fsys.ctx, fsys.filesDB, sq.Query{
 		Dialect: fsys.filesDialect,
 		Format:  "DELETE FROM files WHERE file_path = {name} OR file_path LIKE {pattern} ESCAPE '\\'",

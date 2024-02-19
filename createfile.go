@@ -1,6 +1,7 @@
 package nb9
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -11,11 +12,14 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"path"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/yuin/goldmark"
+	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -405,6 +409,22 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
+		writeFile := func(ctx context.Context, name string, reader io.Reader) error {
+			writer, err := nbrew.FS.WithContext(ctx).OpenWriter(name, 0644)
+			if err != nil {
+				return err
+			}
+			defer writer.Close()
+			_, err = io.Copy(writer, reader)
+			if err != nil {
+				return err
+			}
+			err = writer.Close()
+			if err != nil {
+				return err
+			}
+			return nil
+		}
 		if outputDir != "" {
 			err := nbrew.FS.WithContext(r.Context()).MkdirAll(outputDir, 0755)
 			if err != nil {
@@ -431,6 +451,22 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 					if ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif" {
 						continue
 					}
+					cmdPath, err := exec.LookPath("nbrew-process-img")
+					if err != nil {
+						err := writeFile(r.Context(), path.Join(outputDir, fileName), part)
+						if err != nil {
+							var maxBytesErr *http.MaxBytesError
+							if errors.As(err, &maxBytesErr) {
+								badRequest(w, r, err)
+								return
+							}
+							getLogger(r.Context()).Error(err.Error())
+							internalServerError(w, r, err)
+							return
+						}
+						continue
+					}
+					// TODO: call nbrew-process-img on the image if present, else save it as-is to the filesystem.
 					err = func() error {
 						writer, err := nbrew.FS.WithContext(r.Context()).OpenWriter(path.Join(outputDir, fileName), 0644)
 						if err != nil {
@@ -464,36 +500,59 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				if err != nil {
 					if !errors.As(err, &response.TemplateError) {
 						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
 					}
 				}
 			case "posts":
-				tmpl, err := siteGen.PostTemplate(r.Context())
-				if err != nil {
-					if !errors.Is(err, &response.TemplateError) {
-						getLogger(r.Context()).Error(err.Error())
-					}
-				} else {
-					err := siteGen.GeneratePost(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content, tmpl)
+				var templateErrPtr atomic.Pointer[TemplateError]
+				group, groupctx := errgroup.WithContext(r.Context())
+				group.Go(func() error {
+					var templateErr TemplateError
+					tmpl, err := siteGen.PostTemplate(groupctx)
 					if err != nil {
-						if !errors.Is(err, &response.TemplateError) {
-							getLogger(r.Context()).Error(err.Error())
+						if errors.As(err, &templateErr) {
+							templateErrPtr.CompareAndSwap(nil, &templateErr)
+							return nil
 						}
-					} else {
-						category := tail
-						tmpl, err := siteGen.PostListTemplate(r.Context(), category)
-						if err != nil {
-							if !errors.Is(err, &response.TemplateError) {
-								getLogger(r.Context()).Error(err.Error())
-							}
-						} else {
-							_, err := siteGen.GeneratePostList(r.Context(), category, tmpl)
-							if err != nil {
-								if !errors.Is(err, &response.TemplateError) {
-									getLogger(r.Context()).Error(err.Error())
-								}
-							}
-						}
+						return err
 					}
+					err = siteGen.GeneratePost(groupctx, path.Join(response.Parent, response.Name+response.Ext), response.Content, tmpl)
+					if err != nil {
+						if errors.As(err, &templateErr) {
+							templateErrPtr.CompareAndSwap(nil, &templateErr)
+							return nil
+						}
+						return err
+					}
+					return nil
+				})
+				group.Go(func() error {
+					var templateErr TemplateError
+					category := tail
+					tmpl, err := siteGen.PostListTemplate(groupctx, category)
+					if err != nil {
+						if errors.As(err, &templateErr) {
+							templateErrPtr.CompareAndSwap(nil, &templateErr)
+							return nil
+						}
+						return err
+					}
+					_, err = siteGen.GeneratePostList(r.Context(), category, tmpl)
+					if err != nil {
+						if errors.As(err, &templateErr) {
+							templateErrPtr.CompareAndSwap(nil, &templateErr)
+							return nil
+						}
+						return err
+					}
+					return nil
+				})
+				err := group.Wait()
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
 				}
 			}
 		}

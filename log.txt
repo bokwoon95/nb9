@@ -23,6 +23,8 @@ notebrew/main.go
 
 TODO: OH NO createfile.html and file.html both need to submit their form as multipart/formdata because images might be present.
     - createfile: we need to handle the possible resizing of images and shit.
+TODO: uploadfile.go and createfile.go: instead of imposing a blanket 25 MB upload limit, we instead do a per-file size limit (both images and video are max 10 MB. images may be web-optimized so it's no problem, videos we will never optimize so it's always the full size up to 10 MB).
+    - and whenever we come across a *multipart.Part that's too big, we just skip uploading that file instead of erroring out immediately. Then we aggregate all the skipped files and display them to the user at the end. So files under the limit will still get uploaded.
 TODO: page/post assets: for images, I need to display img.nbrew.io instead if the ImgDomain is set.
 TODO: file.html: the asset list is UGLY AF, make it look reasonably good while also being accessible on an iPhone SE screen.
     - do uploadfile.go first because we need to upload some images!
