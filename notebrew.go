@@ -838,7 +838,7 @@ func internalServerError(w http.ResponseWriter, r *http.Request, serverErr error
 		data = map[string]any{
 			"Referer":  getReferer(r),
 			"Title":    "deadline exceeded",
-			"Headline": "The server took too long to respond.",
+			"Headline": "The server took too long to process your request.",
 		}
 	} else {
 		data = map[string]any{

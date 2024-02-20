@@ -46,6 +46,7 @@ func NewServer(nbrew *nb9.Notebrew, configDir, addr string) (*http.Server, error
 	server.ReadTimeout = 60 * time.Second
 	server.WriteTimeout = 60 * time.Second
 	server.IdleTimeout = 120 * time.Second
+	server.Handler = http.TimeoutHandler(nbrew, 60*time.Second, "The server took too long to process your request.")
 
 	var dns01Solver acmez.Solver
 	b, err := os.ReadFile(filepath.Join(configDir, "dns.json"))
