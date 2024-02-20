@@ -23,8 +23,6 @@ rename.go
 serve_http.go
 notebrew/main.go
 
-TODO: make the .html/.css/.md asset icons look good when mixed together with images. need to scale up the SVGs and center it vertically and horizontally.
-TODO: when the image or asset list is empty, show the user a button that programatically brings up the file input's filepicker (which should hopefully be translated to the file picker on mobile).
 TODO: file.html: the asset list is UGLY AF, make it look reasonably good while also being accessible on an iPhone SE screen.
     - do uploadfile.go first because we need to upload some images!
     - I think... the best way forward would be to elimate the dropdown and explode the menu into horizontally spread out buttons... (edit|view, rename, cut, copy, delete, (full width) insert into page)

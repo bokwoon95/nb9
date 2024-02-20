@@ -194,7 +194,7 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 					return
 				}
 				if next == "posts" {
-					http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "posts", tail+".md"), http.StatusFound)
+					http.Redirect(w, r, "/"+path.Join("files", sitePrefix, tail+".md"), http.StatusFound)
 					return
 				}
 				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages", tail+".html"), http.StatusFound)

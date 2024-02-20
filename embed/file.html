@@ -231,11 +231,11 @@
     {{- if eq (head $.FilePath) "pages" }}
     <div class='b'>Upload Assets:</div>
     <div><input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif,.css,.js,.md' multiple></div>
-    <div><input placeholder='paste from clipboard here' style='min-width: 200px;' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif",".css",".js",".md"]}'></div>
+    <div><input placeholder='paste files from clipboard' style='min-width: 220px;' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif",".css",".js",".md"]}'></div>
     {{- else if eq (head $.FilePath) "posts" }}
     <div class='b'>Upload Images:</div>
     <div><input type='file' name='file' style='max-width: 220px;' accept='.jpeg,.jpg,.png,.webp,.gif' multiple></div>
-    <div><input placeholder='paste from clipboard here' style='min-width: 200px;' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif"]}'></div>
+    <div><input placeholder='paste images from clipboard' style='min-width: 220px;' class='mt2' data-paste='{"name":"file","ext":[".jpeg",".jpg",".png",".webp",".gif"]}'></div>
     {{- end }}
   </div>
   {{- end }}
