@@ -396,7 +396,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				if nbrew.ImgDomain != "" && isS3Storage {
 					return template.URL("https://" + nbrew.ImgDomain + "/" + encodeUUID(asset.FileID) + path.Ext(asset.Name))
 				}
-				return template.URL("/" + path.Join("files", response.SitePrefix, response.AssetDir, asset.Name) + "/?raw")
+				return template.URL("/" + path.Join("files", response.SitePrefix, response.AssetDir, asset.Name) + "?raw")
 			},
 		}
 		tmpl, err := template.New("file.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/file.html")
