@@ -169,6 +169,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		defer writer.Close()
 		n, err := io.Copy(writer, reader)
 		if err != nil {
+			_ = nbrew.FS.WithContext(ctx).Remove(filePath)
 			return err
 		}
 		err = writer.Close()
@@ -191,16 +192,19 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
+		formName := part.FormName()
+		if formName != "file" {
+			continue
+		}
 		_, params, err := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
 		if err != nil {
-			params = nil
+			continue
 		}
 		fileName := params["filename"]
 		if strings.Contains(fileName, "/") {
 			continue
 		}
 		fileName = filenameSafe(fileName)
-		ext := path.Ext(fileName)
 		filePath := path.Join(sitePrefix, response.Parent, fileName)
 		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), filePath)
 		if err != nil {
@@ -213,6 +217,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			response.FilesExist = append(response.FilesExist, fileName)
 			continue
 		}
+		ext := path.Ext(fileName)
 
 		// Since we don't do any image processing or page/post generation
 		// for notes, we can stream the file directly into the filesystem.
@@ -226,7 +231,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 						response.FilesTooBig = append(response.FilesTooBig, fileName)
 						continue
 					}
-					getLogger(groupctx).Error(err.Error())
+					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)
 					return
 				}
@@ -238,7 +243,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 						response.FilesTooBig = append(response.FilesTooBig, fileName)
 						continue
 					}
-					getLogger(groupctx).Error(err.Error())
+					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)
 					return
 				}
@@ -370,7 +375,6 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			}
 			err = input.Close()
 			if err != nil {
-				os.Remove(inputPath)
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
@@ -378,7 +382,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			group.Go(func() error {
 				defer os.Remove(inputPath)
 				defer os.Remove(outputPath)
-				cmd := exec.CommandContext(r.Context(), cmdPath, inputPath, outputPath)
+				cmd := exec.CommandContext(groupctx, cmdPath, inputPath, outputPath)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				err := cmd.Run()
@@ -389,7 +393,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 				if err != nil {
 					return err
 				}
-				err = writeFile(r.Context(), filePath, output)
+				err = writeFile(groupctx, filePath, output)
 				if err != nil {
 					return err
 				}

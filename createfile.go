@@ -34,7 +34,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 	type Response struct {
 		Error         string        `json:"error,omitempty"`
 		FormErrors    url.Values    `json:"formErrors,omitempty"`
-		TemplateError TemplateError `json:"templateError,omitempty"`
 		ContentSite   string        `json:"contentSite"`
 		Username      NullString    `json:"username"`
 		SitePrefix    string        `json:"sitePrefix"`
@@ -42,6 +41,9 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		Name          string        `json:"name,omitempty"`
 		Ext           string        `json:"ext,omitempty"`
 		Content       string        `json:"content,omitempty"`
+		FilesExist    []string      `json:"filesExist,omitempty"`
+		FilesTooBig   []string      `json:"filesTooBig,omitempty"`
+		TemplateError TemplateError `json:"templateError,omitempty"`
 	}
 
 	isValidParent := func(parent string) bool {
@@ -222,7 +224,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			request.Ext = r.Form.Get("ext")
 			request.Content = r.Form.Get("content")
 		case "multipart/form-data":
-			r.Body = http.MaxBytesReader(w, r.Body, 25<<20 /* 25 MB */)
 			reader, err = r.MultipartReader()
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
@@ -241,7 +242,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 					return
 				}
 				var b strings.Builder
-				_, err = io.Copy(&b, part)
+				_, err = io.Copy(&b, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
 				if err != nil {
 					if errors.As(err, &maxBytesErr) {
 						badRequest(w, r, err)
@@ -279,7 +280,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			writeResponse(w, r, response)
 			return
 		}
-		var outputDir string
 		head, tail, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes":
@@ -330,7 +330,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				writeResponse(w, r, response)
 				return
 			}
-			outputDir = path.Join(sitePrefix, "output", tail, response.Name)
 		case "posts":
 			if request.Name != "" {
 				response.Name = urlSafe(request.Name)
@@ -357,7 +356,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			if response.Ext != ".md" {
 				response.Ext = ".md"
 			}
-			outputDir = path.Join(sitePrefix, "output/posts", tail, response.Name)
 		case "output":
 			if request.Name != "" {
 				response.Name = urlSafe(request.Name)
@@ -421,18 +419,18 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		if outputDir != "" && contentType == "multipart/form-data" {
-			writeFile := func(ctx context.Context, name string, reader io.Reader) error {
-				writer, err := nbrew.FS.WithContext(ctx).OpenWriter(name, 0644)
+		if (head == "pages" || head == "posts") && contentType == "multipart/form-data" {
+			writeFile := func(ctx context.Context, filePath string, reader io.Reader) error {
+				writer, err := nbrew.FS.WithContext(ctx).OpenWriter(filePath, 0644)
 				if err != nil {
 					if !errors.Is(err, fs.ErrNotExist) {
 						return err
 					}
-					err := nbrew.FS.WithContext(r.Context()).MkdirAll(outputDir, 0755)
+					err := nbrew.FS.WithContext(r.Context()).MkdirAll(path.Dir(filePath), 0755)
 					if err != nil {
 						return err
 					}
-					writer, err = nbrew.FS.WithContext(ctx).OpenWriter(name, 0644)
+					writer, err = nbrew.FS.WithContext(ctx).OpenWriter(filePath, 0644)
 					if err != nil {
 						return err
 					}
@@ -440,6 +438,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				defer writer.Close()
 				_, err = io.Copy(writer, reader)
 				if err != nil {
+					_ = nbrew.FS.WithContext(ctx).Remove(filePath)
 					return err
 				}
 				err = writer.Close()
@@ -447,6 +446,12 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 					return err
 				}
 				return nil
+			}
+			var outputDir string
+			if head == "posts" {
+				outputDir = path.Join(sitePrefix, "output/posts", tail, response.Name)
+			} else {
+				outputDir = path.Join(sitePrefix, "output", tail, response.Name)
 			}
 			group, groupctx := errgroup.WithContext(r.Context())
 			for {
@@ -463,73 +468,99 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				if formName != "file" {
 					continue
 				}
-				fileName := part.FileName()
-				ext := path.Ext(fileName)
-				if ext != ".jpeg" && ext != ".jpg" && ext != ".png" && ext != ".webp" && ext != ".gif" {
+				_, params, err := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
+				if err != nil {
 					continue
 				}
-				cmdPath, err := exec.LookPath("nbrew-process-img")
+				fileName := params["filename"]
+				if strings.Contains(fileName, "/") {
+					continue
+				}
+				fileName = filenameSafe(fileName)
+				filePath := path.Join(outputDir, fileName)
+				_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), filePath)
 				if err != nil {
-					err := writeFile(r.Context(), path.Join(outputDir, fileName), part)
+					if !errors.Is(err, fs.ErrNotExist) {
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
+				} else {
+					response.FilesExist = append(response.FilesExist, fileName)
+					continue
+				}
+				ext := path.Ext(fileName)
+				switch ext {
+				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+					cmdPath, err := exec.LookPath("nbrew-process-img")
 					if err != nil {
+						err := writeFile(r.Context(), filePath, http.MaxBytesReader(nil, part, 10<<20 /* 10 MB */))
+						if err != nil {
+							var maxBytesErr *http.MaxBytesError
+							if errors.As(err, &maxBytesErr) {
+								response.FilesTooBig = append(response.FilesTooBig, fileName)
+								continue
+							}
+							getLogger(r.Context()).Error(err.Error())
+							internalServerError(w, r, err)
+							return
+						}
+						continue
+					}
+					tempDir, err := filepath.Abs(filepath.Join(os.TempDir(), "notebrew-temp"))
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
+					id := NewID()
+					inputPath := path.Join(tempDir, encodeUUID(id)+"-input"+ext)
+					outputPath := path.Join(tempDir, encodeUUID(id)+"-output"+ext)
+					input, err := os.OpenFile(inputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+					if err != nil {
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
+					}
+					_, err = io.Copy(input, http.MaxBytesReader(nil, part, 10<<20 /* 10 MB */))
+					if err != nil {
+						os.Remove(inputPath)
 						var maxBytesErr *http.MaxBytesError
 						if errors.As(err, &maxBytesErr) {
-							badRequest(w, r, err)
-							return
+							response.FilesTooBig = append(response.FilesTooBig, fileName)
+							continue
 						}
 						getLogger(r.Context()).Error(err.Error())
 						internalServerError(w, r, err)
 						return
 					}
-					continue
-				}
-				randomID := NewID()
-				inputFilePath := encodeUUID(randomID) + "-input" + ext
-				outputFilePath := encodeUUID(randomID) + "-output" + ext
-				tempDir, err := filepath.Abs(filepath.Join(os.TempDir(), "notebrew-temp"))
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				inputFile, err := os.OpenFile(filepath.Join(tempDir, inputFilePath), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				_, err = io.Copy(inputFile, part)
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				err = inputFile.Close()
-				if err != nil {
-					getLogger(r.Context()).Error(err.Error())
-					internalServerError(w, r, err)
-					return
-				}
-				group.Go(func() error {
-					defer os.Remove(inputFilePath)
-					defer os.Remove(outputFilePath)
-					cmd := exec.CommandContext(groupctx, cmdPath, inputFilePath, outputFilePath)
-					cmd.Stdout = os.Stdout
-					cmd.Stderr = os.Stderr
-					err := cmd.Run()
+					err = input.Close()
 					if err != nil {
-						return err
+						getLogger(r.Context()).Error(err.Error())
+						internalServerError(w, r, err)
+						return
 					}
-					outputFile, err := os.Open(outputFilePath)
-					if err != nil {
-						return err
-					}
-					err = writeFile(groupctx, path.Join(outputDir, fileName), outputFile)
-					if err != nil {
-						return err
-					}
-					return nil
-				})
+					group.Go(func() error {
+						defer os.Remove(inputPath)
+						defer os.Remove(outputPath)
+						cmd := exec.CommandContext(groupctx, cmdPath, inputPath, outputPath)
+						cmd.Stdout = os.Stdout
+						cmd.Stderr = os.Stderr
+						err := cmd.Run()
+						if err != nil {
+							return err
+						}
+						output, err := os.Open(outputPath)
+						if err != nil {
+							return err
+						}
+						err = writeFile(groupctx, filePath, output)
+						if err != nil {
+							return err
+						}
+						return nil
+					})
+				}
 			}
 			err = group.Wait()
 			if err != nil {
