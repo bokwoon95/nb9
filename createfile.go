@@ -187,6 +187,16 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			}
 			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent, response.Name+response.Ext), http.StatusFound)
 		}
+		if nbrew.UsersDB != nil {
+			// TODO: calculate the available storage space of the owner and add
+			// it as a MaxBytesReader to the request body.
+			//
+			// TODO: but then: how do we differentiate between a MaxBytesError
+			// returned by a file exceeding 10 MB vs a MaxBytesError returned
+			// by the request body exceeding available storage space? Maybe if
+			// maxBytesErr is 10 MB we assume it's a file going over the limit,
+			// otherwise we assume it's the owner exceeding his storage space?
+		}
 
 		var err error
 		var request Request
@@ -411,28 +421,32 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		writeFile := func(ctx context.Context, name string, reader io.Reader) error {
-			writer, err := nbrew.FS.WithContext(ctx).OpenWriter(name, 0644)
-			if err != nil {
-				return err
-			}
-			defer writer.Close()
-			_, err = io.Copy(writer, reader)
-			if err != nil {
-				return err
-			}
-			err = writer.Close()
-			if err != nil {
-				return err
-			}
-			return nil
-		}
 		if outputDir != "" && contentType == "multipart/form-data" {
-			err := nbrew.FS.WithContext(r.Context()).MkdirAll(outputDir, 0755)
-			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
+			writeFile := func(ctx context.Context, name string, reader io.Reader) error {
+				writer, err := nbrew.FS.WithContext(ctx).OpenWriter(name, 0644)
+				if err != nil {
+					if !errors.Is(err, fs.ErrNotExist) {
+						return err
+					}
+					err := nbrew.FS.WithContext(r.Context()).MkdirAll(outputDir, 0755)
+					if err != nil {
+						return err
+					}
+					writer, err = nbrew.FS.WithContext(ctx).OpenWriter(name, 0644)
+					if err != nil {
+						return err
+					}
+				}
+				defer writer.Close()
+				_, err = io.Copy(writer, reader)
+				if err != nil {
+					return err
+				}
+				err = writer.Close()
+				if err != nil {
+					return err
+				}
+				return nil
 			}
 			group, groupctx := errgroup.WithContext(r.Context())
 			for {
@@ -445,7 +459,8 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 					internalServerError(w, r, err)
 					return
 				}
-				if part.FormName() != "file" {
+				formName := part.FormName()
+				if formName != "file" {
 					continue
 				}
 				fileName := part.FileName()

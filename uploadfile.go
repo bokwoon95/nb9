@@ -7,6 +7,7 @@ import (
 	"errors"
 	"html/template"
 	"io"
+	"io/fs"
 	"mime"
 	"net/http"
 	"os"
@@ -26,6 +27,8 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		Parent        string        `json:"parent"`
 		Count         int           `json:"count"`
 		Size          int           `json:"size"`
+		FilesExist    []string      `json:"fileExist,omitempty"`
+		FilesTooBig   []string      `json:"filesTooBig,omitempty"`
 		TemplateError TemplateError `json:"templateError"`
 	}
 	if r.Method != "POST" {
@@ -64,8 +67,17 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		}
 		http.Redirect(w, r, referer, http.StatusFound)
 	}
+	if nbrew.UsersDB != nil {
+		// TODO: calculate the available storage space of the owner and add
+		// it as a MaxBytesReader to the request body.
+		//
+		// TODO: but then: how do we differentiate between a MaxBytesError
+		// returned by a file exceeding 10 MB vs a MaxBytesError returned
+		// by the request body exceeding available storage space? Maybe if
+		// maxBytesErr is 10 MB we assume it's a file going over the limit,
+		// otherwise we assume it's the owner exceeding his storage space?
+	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 25<<20 /* 25 MB */)
 	reader, err := r.MultipartReader()
 	if err != nil {
 		getLogger(r.Context()).Error(err.Error())
@@ -76,7 +88,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 	part, err := reader.NextPart()
 	if err != nil {
 		if err == io.EOF {
-			response.Error = "NoFilesProvided"
+			response.Error = "ParentNotFound"
 			writeResponse(w, r, response)
 			return
 		}
@@ -90,13 +102,19 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		writeResponse(w, r, response)
 		return
 	}
-	b, err := io.ReadAll(part)
+	var b strings.Builder
+	_, err = io.Copy(&b, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			badRequest(w, r, err)
+			return
+		}
 		getLogger(r.Context()).Error(err.Error())
 		internalServerError(w, r, err)
 		return
 	}
-	response.Parent = string(b)
+	response.Parent = b.String()
 
 	var siteGen *SiteGenerator
 	var postTemplate *template.Template
@@ -143,8 +161,8 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 	}
 
 	var count, size atomic.Int64
-	writeFile := func(ctx context.Context, name string, reader io.Reader) error {
-		writer, err := nbrew.FS.WithContext(ctx).OpenWriter(name, 0644)
+	writeFile := func(ctx context.Context, filePath string, reader io.Reader) error {
+		writer, err := nbrew.FS.WithContext(ctx).OpenWriter(filePath, 0644)
 		if err != nil {
 			return err
 		}
@@ -169,11 +187,6 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			if err == io.EOF {
 				break
 			}
-			var maxBytesErr *http.MaxBytesError
-			if errors.As(err, &maxBytesErr) {
-				badRequest(w, r, err)
-				return
-			}
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
@@ -182,24 +195,48 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		if err != nil {
 			params = nil
 		}
-		name := params["filename"]
-		if strings.Contains(name, "/") {
+		fileName := params["filename"]
+		if strings.Contains(fileName, "/") {
 			continue
 		}
-		name = filenameSafe(name)
-		ext := path.Ext(name)
+		fileName = filenameSafe(fileName)
+		ext := path.Ext(fileName)
+		filePath := path.Join(sitePrefix, response.Parent, fileName)
+		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), filePath)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+		} else {
+			response.FilesExist = append(response.FilesExist, fileName)
+			continue
+		}
 
 		// Since we don't do any image processing or page/post generation
 		// for notes, we can stream the file directly into the filesystem.
 		if head == "notes" {
 			switch ext {
-			case ".jpeg", ".jpg", ".png", ".webp", ".gif", ".html", ".css", ".js", ".md", ".txt":
-				err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
+			case ".jpeg", ".jpg", ".png", ".webp", ".gif":
+				err := writeFile(r.Context(), filePath, http.MaxBytesReader(nil, part, 10<<20 /* 10 MB */))
 				if err != nil {
 					var maxBytesErr *http.MaxBytesError
 					if errors.As(err, &maxBytesErr) {
-						badRequest(w, r, err)
-						return
+						response.FilesTooBig = append(response.FilesTooBig, fileName)
+						continue
+					}
+					getLogger(groupctx).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+			case ".html", ".css", ".js", ".md", ".txt":
+				err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, fileName), http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
+				if err != nil {
+					var maxBytesErr *http.MaxBytesError
+					if errors.As(err, &maxBytesErr) {
+						response.FilesTooBig = append(response.FilesTooBig, fileName)
+						continue
 					}
 					getLogger(groupctx).Error(err.Error())
 					internalServerError(w, r, err)
@@ -214,12 +251,12 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 				continue
 			}
 			var b strings.Builder
-			_, err := io.Copy(&b, part)
+			_, err := io.Copy(&b, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
 			if err != nil {
 				var maxBytesErr *http.MaxBytesError
 				if errors.As(err, &maxBytesErr) {
-					badRequest(w, r, err)
-					return
+					response.FilesTooBig = append(response.FilesTooBig, fileName)
+					continue
 				}
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
@@ -227,7 +264,6 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			}
 			text := b.String()
 			group.Go(func() error {
-				filePath := path.Join(sitePrefix, response.Parent, name)
 				err := writeFile(groupctx, filePath, strings.NewReader(text))
 				if err != nil {
 					return err
@@ -250,12 +286,12 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 				continue
 			}
 			var b strings.Builder
-			_, err := io.Copy(&b, part)
+			_, err := io.Copy(&b, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
 			if err != nil {
 				var maxBytesErr *http.MaxBytesError
 				if errors.As(err, &maxBytesErr) {
-					badRequest(w, r, err)
-					return
+					response.FilesTooBig = append(response.FilesTooBig, fileName)
+					continue
 				}
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
@@ -266,12 +302,11 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 				var timestamp [8]byte
 				binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().Unix()))
 				prefix := strings.TrimLeft(base32Encoding.EncodeToString(timestamp[len(timestamp)-5:]), "0")
-				if strings.TrimSuffix(name, ext) != "" {
-					name = prefix + "-" + name
+				if strings.TrimSuffix(fileName, ext) != "" {
+					fileName = prefix + "-" + fileName
 				} else {
-					name = prefix + name
+					fileName = prefix + fileName
 				}
-				filePath := path.Join(sitePrefix, response.Parent, name)
 				err := writeFile(groupctx, filePath, strings.NewReader(text))
 				if err != nil {
 					return err
@@ -293,12 +328,12 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		case ".jpeg", ".jpg", ".png", ".webp", ".gif":
 			cmdPath, err := exec.LookPath("nbrew-process-img")
 			if err != nil {
-				err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
+				err := writeFile(r.Context(), filePath, http.MaxBytesReader(nil, part, 10<<20 /* 10 MB */))
 				if err != nil {
 					var maxBytesErr *http.MaxBytesError
 					if errors.As(err, &maxBytesErr) {
-						badRequest(w, r, err)
-						return
+						response.FilesTooBig = append(response.FilesTooBig, fileName)
+						continue
 					}
 					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)
@@ -306,48 +341,55 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 				}
 				continue
 			}
-			randomID := NewID()
-			inputFilePath := encodeUUID(randomID) + "-input" + ext
-			outputFilePath := encodeUUID(randomID) + "-output" + ext
 			tempDir, err := filepath.Abs(filepath.Join(os.TempDir(), "notebrew-temp"))
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
-			inputFile, err := os.OpenFile(filepath.Join(tempDir, inputFilePath), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+			id := NewID()
+			inputPath := path.Join(tempDir, encodeUUID(id)+"-input"+ext)
+			outputPath := path.Join(tempDir, encodeUUID(id)+"-output"+ext)
+			input, err := os.OpenFile(inputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
-			_, err = io.Copy(inputFile, part)
+			_, err = io.Copy(input, http.MaxBytesReader(nil, part, 10<<20 /* 10 MB */))
 			if err != nil {
+				os.Remove(inputPath)
+				var maxBytesErr *http.MaxBytesError
+				if errors.As(err, &maxBytesErr) {
+					response.FilesTooBig = append(response.FilesTooBig, fileName)
+					continue
+				}
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
-			err = inputFile.Close()
+			err = input.Close()
 			if err != nil {
+				os.Remove(inputPath)
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
 			group.Go(func() error {
-				defer os.Remove(inputFilePath)
-				defer os.Remove(outputFilePath)
-				cmd := exec.CommandContext(r.Context(), cmdPath, inputFilePath, outputFilePath)
+				defer os.Remove(inputPath)
+				defer os.Remove(outputPath)
+				cmd := exec.CommandContext(r.Context(), cmdPath, inputPath, outputPath)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				err := cmd.Run()
 				if err != nil {
 					return err
 				}
-				outputFile, err := os.Open(outputFilePath)
+				output, err := os.Open(outputPath)
 				if err != nil {
 					return err
 				}
-				err = writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), outputFile)
+				err = writeFile(r.Context(), filePath, output)
 				if err != nil {
 					return err
 				}
@@ -355,12 +397,12 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			})
 			continue
 		case ".html", ".css", ".js", ".md", ".txt":
-			err := writeFile(r.Context(), path.Join(sitePrefix, response.Parent, name), part)
+			err := writeFile(r.Context(), filePath, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))
 			if err != nil {
 				var maxBytesErr *http.MaxBytesError
 				if errors.As(err, &maxBytesErr) {
-					badRequest(w, r, err)
-					return
+					response.FilesTooBig = append(response.FilesTooBig, fileName)
+					continue
 				}
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
