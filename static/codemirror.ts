@@ -95,25 +95,9 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
     }),
   });
 
-  // Restore cursor position from localStorage.
-  const position = Number(localStorage.getItem(`${window.location.pathname}:${index}`));
-  if (position && position <= textarea.value.length) {
-    editor.dispatch({
-      selection: { anchor: position, head: position },
-      effects: [
-        EditorView.scrollIntoView(position, { y: "center" }),
-      ],
-    });
-    const rect = editor.coordsForChar(editor.state.selection.main.head);
-    console.log(rect);
-    if (rect) {
-      window.scroll(0, rect.top);
-    }
-  }
-
   // Configure language.
   const extElement = form.elements["ext"];
-  if (extElement) {
+  if (extElement && textarea.value.length <= 50000) {
     const configureLanguage = function() {
       if (extElement.value == ".html") {
         editor.dispatch({
@@ -185,6 +169,15 @@ for (const [index, dataCodemirror] of document.querySelectorAll<HTMLElement>("[d
     if (cmContent) {
       cmContent.focus();
     }
+  }
+
+  // Restore cursor position from localStorage.
+  const position = Number(localStorage.getItem(`${window.location.pathname}:${index}`));
+  if (position && position <= textarea.value.length) {
+    editor.dispatch({
+      selection: { anchor: position, head: position },
+      effects: EditorView.scrollIntoView(position, { y: "center" }),
+    });
   }
 
   // On submit, synchronize the codemirror editor's contents with the

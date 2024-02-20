@@ -6,9 +6,7 @@
 <link rel='icon' href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>☕</text></svg>'>
 <style>{{ stylesCSS }}</style>
 <script type='module'>{{ baselineJS }}</script>
-{{- if le (len $.Content) 50000 }}
 <script type='module' src='/files/static/codemirror.js'></script>
-{{- end }}
 <title>{{ base $.FilePath }}{{ if $.SitePrefix }} - {{ $.SitePrefix }}{{ end }}</title>
 <body class='centered-body'>
 <nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
