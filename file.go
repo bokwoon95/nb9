@@ -765,7 +765,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			})
 			group.Go(func() error {
 				var templateErr TemplateError
-				category := tail
+				category := path.Dir(tail)
 				tmpl, err := siteGen.PostListTemplate(groupctx, category)
 				if err != nil {
 					if errors.As(err, &templateErr) {
