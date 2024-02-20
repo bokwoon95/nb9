@@ -7,7 +7,9 @@ creation_time_linux.go
 init.go
 notebrew.go
 site_generator.go
-files.go
+list_root_directory.go
+list_directory.go
+file.go
 regenerate.go
 createsite.go
 deletesite.go
