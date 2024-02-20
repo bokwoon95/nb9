@@ -21,6 +21,7 @@ rename.go
 serve_http.go
 notebrew/main.go
 
+TODO: long shot, but maybe EditorView.scrollIntoView is not working because the editor hasn't been materialized yet? Replace the textarea with the codemirror editor first, *then* scroll into view.
 TODO: split files.go into file.go, listdirectory.go and listrootdirectory.go now that they don't share the same Response object. So much more straightforward!
     - file.go: if the ?raw query param is present, serve the file's raw contents instead of showing the editor.
     - file.go: then when listing assets, if the asset is an image then pass it into the imgURL template function which eithers spits out https://img.nbrew.io/xxxx.jpeg or /files/output/path/to/page/xxxx.jpeg?raw.
