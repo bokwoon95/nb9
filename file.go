@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -536,7 +537,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			return
 		}
 		defer writer.Close()
-		_, err = io.Copy(writer, strings.NewReader(request.Content))
+		_, err = io.Copy(writer, strings.NewReader(response.Content))
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
@@ -549,8 +550,39 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			return
 		}
 
-		// TODO: determine the outputDir
-		// TODO: if contentType is multipart/form-data, keep streaming files from the reader into the filesystem (follow what uploadfile and createfile already do).
+		head, tail, _ := strings.Cut(filePath, "/")
+		if (head == "pages" || head == "posts") && contentType == "multipart/form-data" {
+			var waitGroup sync.WaitGroup
+			waitGroup.Add(2)
+			existCh := make(chan string)
+			go func() {
+				defer waitGroup.Done()
+				response.FilesExist = []string{}
+				for name := range existCh {
+					response.FilesExist = append(response.FilesExist, name)
+				}
+			}()
+			tooBigCh := make(chan string)
+			go func() {
+				defer waitGroup.Done()
+				response.FilesTooBig = []string{}
+				for name := range tooBigCh {
+					response.FilesTooBig = append(response.FilesTooBig, name)
+				}
+			}()
+			var outputDir string
+			if head == "pages" {
+				outputDir = path.Join(sitePrefix, "output", strings.TrimSuffix(tail, ".html"))
+			} else {
+				outputDir = path.Join(sitePrefix, "output/posts", strings.TrimSuffix(tail, ".md"))
+			}
+			err := nbrew.FS.WithContext(r.Context()).MkdirAll(outputDir, 0755)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+		}
 
 		switch head {
 		case "pages":

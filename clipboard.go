@@ -268,7 +268,6 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				return
 			}
 		}
-
 		var waitGroup sync.WaitGroup
 		waitGroup.Add(4)
 		notExistCh := make(chan string)
