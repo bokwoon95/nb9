@@ -85,7 +85,7 @@ for (const dataPaste of document.querySelectorAll("[data-paste]")) {
     continue;
   }
   const input = form.elements[name];
-  if (!input || !(input instanceof HTMLInputElement) || input.type != "file") {
+  if (!(input instanceof HTMLInputElement) || input.type != "file") {
     continue;
   }
 
