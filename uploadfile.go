@@ -357,9 +357,23 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			outputPath := path.Join(tempDir, encodeUUID(id)+"-output"+ext)
 			input, err := os.OpenFile(inputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
+				if !errors.Is(err, fs.ErrNotExist) {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				err := os.MkdirAll(filepath.Dir(inputPath), 0755)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				input, err = os.OpenFile(inputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
 			}
 			_, err = io.Copy(input, http.MaxBytesReader(nil, part, 10<<20 /* 10 MB */))
 			if err != nil {
