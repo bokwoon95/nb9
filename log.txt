@@ -7,8 +7,8 @@ creation_time_linux.go
 init.go
 notebrew.go
 site_generator.go
-list_root_directory.go
-list_directory.go
+rootdirectory.go
+directory.go
 file.go
 regenerate.go
 createsite.go
@@ -23,11 +23,15 @@ rename.go
 serve_http.go
 notebrew/main.go
 
+rootdirectory.go
+directory.go
+file.go
+
 TODO: clipboard.go: fix InvalidDestParent when trying to paste images into a page or post.
-TODO: list_root_directory.html, list_directory.html, file.html: if the parent is output and not output/themes, it should link to the parent page/post instead of the output folder itself. 
+TODO: rootdirectory.html, directory.html, file.html: if the parent is output and not output/themes, it should link to the parent page/post instead of the output folder itself. 
     - Also, show the dotted border around clipboard items in file.html
 TODO: uploadfile.go, createfile.go, file.go: if any of those handlers returns FilesExist or FilesTooBig, display it on the frontend accordingly.
-TODO: list_directory.html: make images show previews under the file name (again using an imgDomain is present... should I make this into a function?).
+TODO: directory.html: make images show previews under the file name (again using an imgDomain is present... should I make this into a function?).
 TODO: oh boy pagination on output/themes is broken again (why? investigate)
 TODO: once you can upload images with uploadfile, make it so that any image uploaded but is not mentioned in the markdown content (use goldmark's markdown parser for this) is added to the Images field in PostData. Then in the default post.html, loop over the images and display them in a nice grid or something. No image viewer, pure HTML for this. The easiest dumbest way would be to put some kind of overlay <a href> that links directly to the image (so the browser is the image viewer).
     - This way you achieve the ability to upload images easily! No user intervention is needed for manually embedding the images, they can upload images in a dumb and straightforward way akin to facebook.

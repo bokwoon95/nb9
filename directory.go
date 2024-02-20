@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
+func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string, modTime time.Time) {
 	type File struct {
 		Name         string    `json:"name"`
 		IsDir        bool      `json:"isDir"`
@@ -130,7 +130,7 @@ func (nbrew *Notebrew) listDirectory(w http.ResponseWriter, r *http.Request, use
 				return isInClipboard[name]
 			},
 		}
-		tmpl, err := template.New("list_directory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/list_directory.html")
+		tmpl, err := template.New("directory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/directory.html")
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)

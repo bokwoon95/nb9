@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix string, modTime time.Time) {
+func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, username, sitePrefix string, modTime time.Time) {
 	type File struct {
 		Name         string    `json:"name"`
 		IsDir        bool      `json:"isDir"`
@@ -107,7 +107,7 @@ func (nbrew *Notebrew) listRootDirectory(w http.ResponseWriter, r *http.Request,
 				return tail
 			},
 		}
-		tmpl, err := template.New("list_root_directory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/list_root_directory.html")
+		tmpl, err := template.New("rootdirectory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/rootdirectory.html")
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
