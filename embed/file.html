@@ -243,24 +243,25 @@
     {{- range $asset := $.Assets }}
     <li class='h-100'>
       {{- if eq (ext $asset.Name) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
-      <label style='display: block; position: relative;'>
-        <input type='checkbox' id='{{ $asset.Name }}' name='name' value='{{ $asset.Name }}' style='position: absolute; top: 4px; left: 4px;' class='pointer'>
+      <label class='pointer' style='display: block; position: relative;'>
+        <input type='checkbox' id='{{ $asset.Name }}' name='name' value='{{ $asset.Name }}' class='pointer' style='position: absolute; top: 4px; left: 4px;'>
         <img src='{{ imgURL $asset }}' class='w-100' loading='lazy'>
       </label>
       <div style='overflow-wrap: break-word;'>
-        <span class='b'>{{ $asset.Name }} loremipsumdolorsitamet</span>
-        <a href=''>edit</a>
-        <a href=''>rename</a>
-        <button>cut</button>
-        <button>copy</button>
-        <button>delete</button>
+        <span class='b dib mr2 mb2'>{{ $asset.Name }}</span>
+        <a href='' class='dib mr2 mb2'>edit</a>
+        <a href='' class='dib mr2 mb2'>rename</a>
+        <button class='button ba br2 pa2 mr2 mb2'>cut</button>
+        <button class='button ba br2 pa2 mr2 mb2'>copy</button>
+        <button class='button-danger ba br2 b--dark-red pa2 mr2 mb2'>delete</button>
       </div>
       {{- else }}
-      <label style='display: block; position: relative;'>
+      <label class='pointer' style='display: block; position: relative;'>
         <input type='checkbox' id='{{ $asset.Name }}' name='name' value='{{ $asset.Name }}' class='pointer'>
-        {{ template "octicons-file-code" }}
+        <div class='dib' style='height: 200px; width: 200px'>{{ template "octicons-file-code" }}</div>
       </label>
       <div style='overflow-wrap: break-word;'>
+        <input type='checkbox' id='{{ $asset.Name }}' name='name' value='{{ $asset.Name }}' class='pointer'>
         <span class='b'>{{ $asset.Name }} loremipsumdolorsitamet</span>
         <a href=''>edit</a>
         <a href=''>rename</a>
