@@ -115,7 +115,7 @@ for (const dataPaste of document.querySelectorAll("[data-paste]")) {
       const file = event.clipboardData.files.item(i);
       const n = file.name.lastIndexOf(".");
       const ext = n < 0 ? "" : file.name.substring(n);
-      if (!isValidExt[ext]) {
+      if (!validExt.has(ext)) {
         invalidCount++;
         continue;
       }
