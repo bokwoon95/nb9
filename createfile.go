@@ -146,7 +146,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			if next == "themes" {
 				response.Ext = ".html"
 			} else {
-				response.Ext = ".css"
+				response.Ext = ".js"
 			}
 		default:
 			response.Error = "InvalidParent"

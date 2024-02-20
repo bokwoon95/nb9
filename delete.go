@@ -188,15 +188,19 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			}
 			head, tail, _ := strings.Cut(response.Parent, "/")
 			next, _, _ := strings.Cut(tail, "/")
-			if head != "output" || next == "themes" {
-				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
+			if head == "output" {
+				if next == "themes" {
+					http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
+					return
+				}
+				if next == "posts" {
+					http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "posts", tail+".md"), http.StatusFound)
+					return
+				}
+				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages", tail+".html"), http.StatusFound)
 				return
 			}
-			if next == "posts" {
-				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "posts", response.Parent+".md"), http.StatusFound)
-				return
-			}
-			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages", response.Parent+".html"), http.StatusFound)
+			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
 		}
 
 		var request Request
