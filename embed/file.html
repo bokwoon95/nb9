@@ -243,14 +243,14 @@
     {{- range $asset := $.Assets }}
     <li class='h-100'>
       {{- if eq (ext $asset.Name) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
-      <img src='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='w-100' loading='lazy'>
+      <img src='{{ imgURL $asset }}' class='w-100' loading='lazy'>
       {{- else }}
       <div class='flex justify-center items-center pa2'>
         {{ template "octicons-file-code" }}
       </div>
       {{- end }}
       {{- if eq (ext $asset.Name) ".css" ".js" ".md" }}
-      <div class='flex items-center justify-center'>
+      <div class='tc'>
         <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>edit</a>
       </div>
       {{- else }}

@@ -25,6 +25,7 @@ import (
 
 func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
 	type Asset struct {
+		FileID       [16]byte  `json:"-"`
 		Name         string    `json:"name"`
 		ModTime      time.Time `json:"modTime"`
 		CreationTime time.Time `json:"creationTime"`
@@ -129,6 +130,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 
 	switch r.Method {
 	case "GET":
+		if r.Form.Has("raw") {
+			serveFile(w, r, file, fileInfo, fileType, "no-store")
+			return
+		}
 		var response Response
 		_, err = nbrew.getSession(r, "flash", &response)
 		if err != nil {
@@ -262,6 +267,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 					},
 				}, func(row *sq.Row) Asset {
 					return Asset{
+						FileID:       row.UUID("file_id"),
 						Name:         path.Base(row.String("file_path")),
 						Size:         row.Int64("size"),
 						ModTime:      row.Time("mod_time"),
@@ -327,17 +333,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		}
 
 		if !isEditable {
-			var cacheControl string
-			switch fileType.Ext {
-			case ".html":
-				cacheControl = "no-cache, must-revalidate"
-				fileType.ContentType = "text/plain; charset=utf-8"
-			case ".eot", ".otf", ".ttf", ".woff", ".woff2":
-				cacheControl = "no-cache, stale-while-revalidate, max-age=2592000" /* 30 days */
-			default:
-				cacheControl = "no-cache, stale-while-revalidate, max-age=120" /* 2 minutes */
-			}
-			serveFile(w, r, file, fileInfo, fileType, cacheControl)
+			serveFile(w, r, file, fileInfo, fileType, "no-store")
 			return
 		}
 
@@ -362,6 +358,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				}
 			}
 		}
+		isS3Storage := false
+		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
+			_, isS3Storage = remoteFS.storage.(*S3Storage)
+		}
 		funcMap := map[string]any{
 			"join":             path.Join,
 			"dir":              path.Dir,
@@ -384,6 +384,12 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			"tail": func(s string) string {
 				_, tail, _ := strings.Cut(s, "/")
 				return tail
+			},
+			"imgURL": func(asset Asset) template.URL {
+				if nbrew.ImgDomain != "" && isS3Storage {
+					return template.URL("https://" + nbrew.ImgDomain + "/" + encodeUUID(asset.FileID) + path.Ext(asset.Name))
+				}
+				return template.URL("/" + path.Join("files", response.SitePrefix, response.AssetDir, asset.Name) + "/?raw")
 			},
 		}
 		tmpl, err := template.New("file.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/file.html")
@@ -468,7 +474,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				formName := part.FormName()
 				if formName == "ext" {
 					continue
-				}	
+				}
 				var maxBytesErr *http.MaxBytesError
 				var b strings.Builder
 				_, err = io.Copy(&b, http.MaxBytesReader(nil, part, 1<<20 /* 1 MB */))

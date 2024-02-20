@@ -24,8 +24,9 @@ serve_http.go
 notebrew/main.go
 
 TODO: split files.go into file.go, listdirectory.go and listrootdirectory.go now that they don't share the same Response object. So much more straightforward!
-    - file.go: if the ?raw query param is present, serve the file's raw contents instead of showing the editor.
     - file.go: then when listing assets, if the asset is an image then pass it into the imgURL template function which eithers spits out https://img.nbrew.io/xxxx.jpeg or /files/output/path/to/page/xxxx.jpeg?raw.
+        - PROBLEM: is it https://img.nbrew.io/relative/path or img.nbrew.io/uuid.jpeg?
+        - convert to uuid.jpeg *only* if we assert FS to be remoteFS and storage to be s3Storage. else we leave it as /files/output/pages/path/to/page/img.jpeg?raw
 TODO: files.go: make it handle multipart/form-data as well and upload files.
     - We also need a function that takes in an image name and converts it into an https://img.nbrew.io/xxxx.jpeg if imgDomain is provided. Then call that function for each img in the image/asset list.
 TODO: uploadfile.go and createfile.go: instead of imposing a blanket 25 MB upload limit, we instead do a per-file size limit (both images and video are max 10 MB. images may be web-optimized so it's no problem, videos we will never optimize so it's always the full size up to 10 MB).
