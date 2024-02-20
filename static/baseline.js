@@ -104,7 +104,7 @@ for (const dataPaste of document.querySelectorAll("[data-paste]")) {
     }
     if (!hasInvalidExt) {
       if (event.clipboardData.files.length == 0) {
-        dataPaste.value = "clipboard is empty";
+        dataPaste.value = "no files in clipboard";
         setTimeout(function() { dataPaste.value = "" }, 800);
       }
       input.files = event.clipboardData.files;

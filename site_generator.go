@@ -1628,6 +1628,8 @@ var funcMap = map[string]any{
 	"join":             path.Join,
 	"base":             path.Base,
 	"ext":              path.Ext,
+	"hasPrefix":        strings.HasPrefix,
+	"hasSuffix":        strings.HasSuffix,
 	"trimPrefix":       strings.TrimPrefix,
 	"trimSuffix":       strings.TrimSuffix,
 	"fileSizeToString": fileSizeToString,
