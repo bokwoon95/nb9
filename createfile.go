@@ -453,6 +453,12 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			} else {
 				outputDir = path.Join(sitePrefix, "output", tail, response.Name)
 			}
+			tempDir, err := filepath.Abs(filepath.Join(os.TempDir(), "notebrew-temp"))
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
 			group, groupctx := errgroup.WithContext(r.Context())
 			for {
 				part, err := reader.NextPart()
@@ -506,12 +512,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 							return
 						}
 						continue
-					}
-					tempDir, err := filepath.Abs(filepath.Join(os.TempDir(), "notebrew-temp"))
-					if err != nil {
-						getLogger(r.Context()).Error(err.Error())
-						internalServerError(w, r, err)
-						return
 					}
 					id := NewID()
 					inputPath := path.Join(tempDir, encodeUUID(id)+"-input"+ext)
