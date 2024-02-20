@@ -22,12 +22,13 @@ serve_http.go
 notebrew/main.go
 
 TODO: split files.go into file.go, listdirectory.go and listrootdirectory.go now that they don't share the same Response object. So much more straightforward!
+    - file.go: if the ?raw query param is present, serve the file's raw contents instead of showing the editor.
+    - file.go: then when listing assets, if the asset is an image then pass it into the imgURL template function which eithers spits out https://img.nbrew.io/xxxx.jpeg or /files/output/path/to/page/xxxx.jpeg?raw.
 TODO: instead of conditionally importing codemirror.js depending on whether the byte count exceeds 50000, we'll just permanently disable syntax highlighting in JavaScript if textarea.value.length exceeds 50000. That way we still get codemirror goodies like restore cursor position for large txt files (which have no syntax highlighting to begin with anyway, no need to disable codemirror as a whole).
 TODO: files.go: make it handle multipart/form-data as well and upload files.
     - We also need a function that takes in an image name and converts it into an https://img.nbrew.io/xxxx.jpeg if imgDomain is provided. Then call that function for each img in the image/asset list.
 TODO: uploadfile.go and createfile.go: instead of imposing a blanket 25 MB upload limit, we instead do a per-file size limit (both images and video are max 10 MB. images may be web-optimized so it's no problem, videos we will never optimize so it's always the full size up to 10 MB).
     - and whenever we come across a *multipart.Part that's too big, we just skip uploading that file instead of erroring out immediately. Then we aggregate all the skipped files and display them to the user at the end. So files under the limit will still get uploaded.
-TODO: page/post assets: for images, I need to display img.nbrew.io instead if the ImgDomain is set.
 TODO: file.html: the asset list is UGLY AF, make it look reasonably good while also being accessible on an iPhone SE screen.
     - do uploadfile.go first because we need to upload some images!
     - I think... the best way forward would be to elimate the dropdown and explode the menu into horizontally spread out buttons... (edit|view, rename, cut, copy, delete, (full width) insert into page)
