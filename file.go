@@ -17,10 +17,12 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/bokwoon95/nb9/sq"
 	"golang.org/x/crypto/blake2b"
+	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
@@ -46,6 +48,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		BelongsTo       string         `json:"belongsTo,omitempty"`
 		AssetDir        string         `json:"assetDir,omitempty"`
 		Assets          []Asset        `json:"assets,omitempty"`
+		FilesExist      []string       `json:"filesExist,omitempty"`
 		FilesTooBig     []string       `json:"filesTooBig,omitempty"`
 	}
 
@@ -549,35 +552,77 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		// TODO: determine the outputDir
 		// TODO: if contentType is multipart/form-data, keep streaming files from the reader into the filesystem (follow what uploadfile and createfile already do).
 
-		// TODO: refactor this so that it matches the code in createfile.go
-		siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
-		if err != nil {
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		head, _, _ := strings.Cut(filePath, "/")
 		switch head {
 		case "pages":
-			err := siteGen.GeneratePage(r.Context(), filePath, response.Content)
+			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			err = siteGen.GeneratePage(r.Context(), filePath, response.Content)
 			if err != nil {
 				if !errors.As(err, &response.TemplateError) {
 					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
 				}
 			}
 		case "posts":
-			tmpl, err := siteGen.PostTemplate(r.Context())
+			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 			if err != nil {
-				if !errors.As(err, &response.TemplateError) {
-					getLogger(r.Context()).Error(err.Error())
-				}
-			} else {
-				err := siteGen.GeneratePost(r.Context(), filePath, response.Content, tmpl)
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			var templateErrPtr atomic.Pointer[TemplateError]
+			group, groupctx := errgroup.WithContext(r.Context())
+			group.Go(func() error {
+				var templateErr TemplateError
+				tmpl, err := siteGen.PostTemplate(groupctx)
 				if err != nil {
-					if !errors.As(err, &response.TemplateError) {
-						getLogger(r.Context()).Error(err.Error())
+					if errors.As(err, &templateErr) {
+						templateErrPtr.CompareAndSwap(nil, &templateErr)
+						return nil
 					}
+					return err
 				}
+				err = siteGen.GeneratePost(groupctx, filePath, response.Content, tmpl)
+				if err != nil {
+					if errors.As(err, &templateErr) {
+						templateErrPtr.CompareAndSwap(nil, &templateErr)
+						return nil
+					}
+					return err
+				}
+				return nil
+			})
+			group.Go(func() error {
+				var templateErr TemplateError
+				category := tail
+				tmpl, err := siteGen.PostListTemplate(groupctx, category)
+				if err != nil {
+					if errors.As(err, &templateErr) {
+						templateErrPtr.CompareAndSwap(nil, &templateErr)
+						return nil
+					}
+					return err
+				}
+				_, err = siteGen.GeneratePostList(r.Context(), category, tmpl)
+				if err != nil {
+					if errors.As(err, &templateErr) {
+						templateErrPtr.CompareAndSwap(nil, &templateErr)
+						return nil
+					}
+					return err
+				}
+				return nil
+			})
+			err = group.Wait()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
 			}
 		}
 		writeResponse(w, r, response)

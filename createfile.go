@@ -525,73 +525,77 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				}
 			}
 		}
-		if head == "pages" || head == "posts" {
+		switch head {
+		case "pages":
 			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
 				return
 			}
-			switch head {
-			case "pages":
-				err := siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content)
-				if err != nil {
-					if !errors.As(err, &response.TemplateError) {
-						getLogger(r.Context()).Error(err.Error())
-						internalServerError(w, r, err)
-						return
-					}
-				}
-			case "posts":
-				var templateErrPtr atomic.Pointer[TemplateError]
-				group, groupctx := errgroup.WithContext(r.Context())
-				group.Go(func() error {
-					var templateErr TemplateError
-					tmpl, err := siteGen.PostTemplate(groupctx)
-					if err != nil {
-						if errors.As(err, &templateErr) {
-							templateErrPtr.CompareAndSwap(nil, &templateErr)
-							return nil
-						}
-						return err
-					}
-					err = siteGen.GeneratePost(groupctx, path.Join(response.Parent, response.Name+response.Ext), response.Content, tmpl)
-					if err != nil {
-						if errors.As(err, &templateErr) {
-							templateErrPtr.CompareAndSwap(nil, &templateErr)
-							return nil
-						}
-						return err
-					}
-					return nil
-				})
-				group.Go(func() error {
-					var templateErr TemplateError
-					category := tail
-					tmpl, err := siteGen.PostListTemplate(groupctx, category)
-					if err != nil {
-						if errors.As(err, &templateErr) {
-							templateErrPtr.CompareAndSwap(nil, &templateErr)
-							return nil
-						}
-						return err
-					}
-					_, err = siteGen.GeneratePostList(r.Context(), category, tmpl)
-					if err != nil {
-						if errors.As(err, &templateErr) {
-							templateErrPtr.CompareAndSwap(nil, &templateErr)
-							return nil
-						}
-						return err
-					}
-					return nil
-				})
-				err := group.Wait()
-				if err != nil {
+			err = siteGen.GeneratePage(r.Context(), path.Join(response.Parent, response.Name+response.Ext), response.Content)
+			if err != nil {
+				if !errors.As(err, &response.TemplateError) {
 					getLogger(r.Context()).Error(err.Error())
 					internalServerError(w, r, err)
 					return
 				}
+			}
+		case "posts":
+			siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, sitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			var templateErrPtr atomic.Pointer[TemplateError]
+			group, groupctx := errgroup.WithContext(r.Context())
+			group.Go(func() error {
+				var templateErr TemplateError
+				tmpl, err := siteGen.PostTemplate(groupctx)
+				if err != nil {
+					if errors.As(err, &templateErr) {
+						templateErrPtr.CompareAndSwap(nil, &templateErr)
+						return nil
+					}
+					return err
+				}
+				err = siteGen.GeneratePost(groupctx, path.Join(response.Parent, response.Name+response.Ext), response.Content, tmpl)
+				if err != nil {
+					if errors.As(err, &templateErr) {
+						templateErrPtr.CompareAndSwap(nil, &templateErr)
+						return nil
+					}
+					return err
+				}
+				return nil
+			})
+			group.Go(func() error {
+				var templateErr TemplateError
+				category := tail
+				tmpl, err := siteGen.PostListTemplate(groupctx, category)
+				if err != nil {
+					if errors.As(err, &templateErr) {
+						templateErrPtr.CompareAndSwap(nil, &templateErr)
+						return nil
+					}
+					return err
+				}
+				_, err = siteGen.GeneratePostList(r.Context(), category, tmpl)
+				if err != nil {
+					if errors.As(err, &templateErr) {
+						templateErrPtr.CompareAndSwap(nil, &templateErr)
+						return nil
+					}
+					return err
+				}
+				return nil
+			})
+			err = group.Wait()
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
 			}
 		}
 		writeResponse(w, r, response)
