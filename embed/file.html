@@ -266,7 +266,7 @@
           <a href='/{{ join $.SitePrefix $.AssetDir $asset.Name }}' class='dib mr2 mb2'>view</a>
           <a href='' class='dib mr2 mb2'>rename</a>
           <button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/cut" }}/' name='name' value='{{ $asset.Name }}' class='button ba br2 pa2 mr2 mb2'>cut</button>
-          <button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/cut" }}/' name='name' value='{{ $asset.Name }}' class='button ba br2 pa2 mr2 mb2'>copy</button>
+          <button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/copy" }}/' name='name' value='{{ $asset.Name }}' class='button ba br2 pa2 mr2 mb2'>copy</button>
           <button type='submit' formmethod='get' formaction='/{{ join "files" $.SitePrefix "delete" }}/' name='name' value='{{ $asset.Name }}' class='button-danger ba br2 b--dark-red pa2 mr2 mb2'>delete</button>
         </div>
         {{- else }}
