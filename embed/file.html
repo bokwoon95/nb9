@@ -250,13 +250,13 @@
       </div>
       {{- end }}
       {{- if eq (ext $asset.Name) ".css" ".js" ".md" }}
-      <div class='tc'>
-        <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>edit</a>
-      </div>
+      <!-- <div class='tc'> -->
+      <!--   <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>edit</a> -->
+      <!-- </div> -->
       {{- else }}
-      <div class='tc'>
-        <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>view</a>
-      </div>
+      <!-- <div class='tc'> -->
+      <!--   <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}'>view</a> -->
+      <!-- </div> -->
       {{- end }}
       <!-- <div class='flex items-center'> -->
       <!--   <div class='mr2'><input id='{{ $asset.Name }}' type='checkbox' class='pointer'></div> -->
