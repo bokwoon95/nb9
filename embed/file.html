@@ -243,10 +243,30 @@
     {{- range $asset := $.Assets }}
     <li class='h-100'>
       {{- if eq (ext $asset.Name) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
-      <img src='{{ imgURL $asset }}' class='w-100' loading='lazy'>
+      <label style='display: block; position: relative;'>
+        <input type='checkbox' id='{{ $asset.Name }}' name='name' value='{{ $asset.Name }}' style='position: absolute; top: 4px; left: 4px;' class='pointer'>
+        <img src='{{ imgURL $asset }}' class='w-100' loading='lazy'>
+      </label>
+      <div style='overflow-wrap: break-word;'>
+        <span class='b'>{{ $asset.Name }} loremipsumdolorsitamet</span>
+        <a href=''>edit</a>
+        <a href=''>rename</a>
+        <button>cut</button>
+        <button>copy</button>
+        <button>delete</button>
+      </div>
       {{- else }}
-      <div class='flex justify-center items-center pa2'>
+      <label style='display: block; position: relative;'>
+        <input type='checkbox' id='{{ $asset.Name }}' name='name' value='{{ $asset.Name }}' class='pointer'>
         {{ template "octicons-file-code" }}
+      </label>
+      <div style='overflow-wrap: break-word;'>
+        <span class='b'>{{ $asset.Name }} loremipsumdolorsitamet</span>
+        <a href=''>edit</a>
+        <a href=''>rename</a>
+        <button>cut</button>
+        <button>copy</button>
+        <button>delete</button>
       </div>
       {{- end }}
       {{- if eq (ext $asset.Name) ".css" ".js" ".md" }}
