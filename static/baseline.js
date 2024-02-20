@@ -56,7 +56,7 @@ for (const dataDisableClickSelection of document.querySelectorAll("[data-disable
 
 for (const dataPaste of document.querySelectorAll("[data-paste]")) {
   let name = "";
-  let isValidExt = {};
+  let validExt = new Set();
   try {
     const obj = JSON.parse(dataPaste.getAttribute("data-paste"));
     if (obj.name) {
@@ -64,8 +64,7 @@ for (const dataPaste of document.querySelectorAll("[data-paste]")) {
     }
     if (obj.ext) {
       for (let i = 0; i < obj.ext.length; i++) {
-        const ext = obj.ext[i]
-        isValidExt[ext] = true;
+        validExt.add(obj.ext[i]);
       }
     }
   } catch (e) {
@@ -97,7 +96,7 @@ for (const dataPaste of document.querySelectorAll("[data-paste]")) {
       const file = event.clipboardData.files.item(i);
       const n = file.name.lastIndexOf(".");
       const ext = n < 0 ? "" : file.name.substring(n);
-      if (!isValidExt[ext]) {
+      if (!validExt.has(ext)) {
         hasInvalidExt = true;
         break;
       }
