@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 	"time"
+	"slices"
 
 	"github.com/bokwoon95/nb9/sq"
 )
@@ -129,6 +130,8 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 				response.Exts = append(response.Exts, ext)
 			}
 		}
+		slices.Sort(response.Exts)
+		response.Exts = slices.Compact(response.Exts)
 	}
 	if !isValidParent(response.Parent) {
 		response.Parent = "."
