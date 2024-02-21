@@ -11,5 +11,14 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
 <hr>
 <div style='font-size: 0.875rem; color: #555555;'>{{ $.CreationTime.Format "2006-01-02" }}</div>
 {{ $.Content }}
+<ul style='display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 0.25fr)); grid-gap: 2rem; margin: 0; padding: 0; list-style: none;'>
+  {{- range $image := $.Images }}
+  <li>
+    <figure style='height: 100%;'>
+      <img src='{{ $image.Name }}' style='width: 100%; height: 100%; object-fit: cover;' loading='lazy'>
+    </figure>
+  </li>
+  {{- end }}
+</ul>
 <hr>
 <div style='font-size: 0.875rem; color: #555555;'>last modified {{ $.ModificationTime.Format "2006-01-02 15:04:05 UTC" }}</div>
