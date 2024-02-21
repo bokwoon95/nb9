@@ -35,11 +35,6 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		methodNotAllowed(w, r)
 		return
 	}
-	referer := r.Referer()
-	if referer == "" {
-		http.Redirect(w, r, "/"+path.Join("files", sitePrefix)+"/", http.StatusFound)
-		return
-	}
 	writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
 		if r.Form.Has("api") {
 			w.Header().Set("Content-Type", "application/json")
@@ -65,7 +60,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		http.Redirect(w, r, referer, http.StatusFound)
+		http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
 	}
 	if nbrew.UsersDB != nil {
 		// TODO: calculate the available storage space of the owner and add
