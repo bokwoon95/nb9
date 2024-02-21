@@ -123,8 +123,9 @@
   {{- $count := index $.PostRedirectGet "count" }}
   {{- $filesExist := index $.PostRedirectGet "filesExist" }}
   {{- $filesTooBig := index $.PostRedirectGet "filesTooBig" }}
+  {{- $size := float64ToInt64 (index $.PostRedirectGet "size") }}
   <div>
-    <div>{{ $count }} file{{ if ne $count 1.0 }}s{{ end }} uploaded ({{ fileSizeToString (float64ToInt64 (index $.PostRedirectGet "size")) }} total)</div>
+    <div>{{ $count }} file{{ if ne $count 1.0 }}s{{ end }} uploaded ({{ fileSizeToString $size }} total)</div>
     {{- if $filesExist }}
     <br>
     <div>

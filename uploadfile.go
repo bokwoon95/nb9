@@ -203,7 +203,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 			continue
 		}
 		fileName := params["filename"]
-		if strings.Contains(fileName, "/") {
+		if fileName == "" || strings.Contains(fileName, "/") {
 			continue
 		}
 		fileName = filenameSafe(fileName)

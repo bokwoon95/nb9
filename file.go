@@ -623,7 +623,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 					continue
 				}
 				fileName := params["filename"]
-				if strings.Contains(fileName, "/") {
+				if fileName == "" || strings.Contains(fileName, "/") {
 					continue
 				}
 				fileName = filenameSafe(fileName)
