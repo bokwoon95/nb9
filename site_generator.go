@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -1573,7 +1572,7 @@ func (siteGen *SiteGenerator) rewriteURLs(writer io.Writer, reader io.Reader, ur
 								if isS3Storage {
 									filePath := path.Join(siteGen.sitePrefix, "output", uri.Path)
 									if fileID, ok := siteGen.imgFileIDs[filePath]; ok {
-										uri.Path = "/" + hex.EncodeToString(fileID[:]) + path.Ext(filePath)
+										uri.Path = "/" + encodeUUID(fileID) + path.Ext(filePath)
 										val = []byte(uri.String())
 									}
 								} else {
@@ -1587,7 +1586,7 @@ func (siteGen *SiteGenerator) rewriteURLs(writer io.Writer, reader io.Reader, ur
 									if isS3Storage {
 										filePath := path.Join(siteGen.sitePrefix, "output", urlPath, uri.Path)
 										if fileID, ok := siteGen.imgFileIDs[filePath]; ok {
-											uri.Path = "/" + hex.EncodeToString(fileID[:]) + path.Ext(filePath)
+											uri.Path = "/" + encodeUUID(fileID) + path.Ext(filePath)
 											val = []byte(uri.String())
 										}
 									} else {

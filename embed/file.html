@@ -114,17 +114,17 @@
   </div>
   {{- if eq $.FilePath "pages/index.html" }}
   <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
-    <input type='hidden' name='parent' value='/{{ join "files" $.SitePrefix "output" }}/'>
+    <input type='hidden' name='parent' value='/output/'>
     <button type='submit' class='button ba br2 pv2 ph2'>paste</button>
   </form>
   {{- else if eq (head $.FilePath) "pages" }}
   <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
-    <input type='hidden' name='parent' value='/{{ join "files" $.SitePrefix "output" (trimSuffix (tail $.FilePath) (ext $.FilePath)) }}/'>
+    <input type='hidden' name='parent' value='/{{ join "output" (trimSuffix (tail $.FilePath) ".html") }}/'>
     <button type='submit' class='button ba br2 pv2 ph2'>paste</button>
   </form>
   {{- else if eq (head $.FilePath) "posts" }}
   <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}/' class='ml2'>
-    <input type='hidden' name='parent' value='/{{ join "files" $.SitePrefix "output" (trimSuffix $.FilePath (ext $.FilePath)) }}/'>
+    <input type='hidden' name='parent' value='/{{ join "output" (trimSuffix $.FilePath ".md") }}/'>
     <button type='submit' class='button ba br2 pv2 ph2'>paste</button>
   </form>
   {{- end }}

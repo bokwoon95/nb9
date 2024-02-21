@@ -592,7 +592,7 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 		ext := path.Ext(srcFilePath)
 		fileType := fileTypes[ext]
 		if fileType.IsObject {
-			err := remoteFS.storage.Copy(ctx, hex.EncodeToString(srcFileID[:])+ext, hex.EncodeToString(destFileID[:])+ext)
+			err := remoteFS.storage.Copy(ctx, encodeUUID(srcFileID)+ext, encodeUUID(destFileID)+ext)
 			if err != nil {
 				getLogger(ctx).Error(err.Error())
 			}
