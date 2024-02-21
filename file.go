@@ -402,7 +402,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				if sitePrefix != clipboard.Get("sitePrefix") {
 					return false
 				}
-				if response.FilePath != clipboard.Get("parent") {
+				if response.AssetDir != clipboard.Get("parent") {
 					return false
 				}
 				return isInClipboard[name]

@@ -117,9 +117,9 @@
       {{- if eq (head (tail $srcParent)) "themes" }}
       <a href='/{{ join "files" $srcSitePrefix $srcParent }}/'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
       {{- else if eq (head (tail $srcParent)) "posts" }}
-      <a href='/{{ join "files" $srcSitePrefix (tail $srcParent) }}.md'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
+      <a href='/{{ join "files" $srcSitePrefix $srcParent }}.md'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
       {{- else }}
-      <a href='/{{ join "files" $srcSitePrefix (tail (tail $srcParent)) }}.html'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
+      <a href='/{{ join "files" $srcSitePrefix "pages" (tail $srcParent) }}.html'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
       {{- end }}
     {{- else }}
     <a href='/{{ join "files" $srcSitePrefix $srcParent }}/'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
@@ -270,7 +270,7 @@
       {{- range $asset := $.Assets }}
       <li class='h-100'>
         {{- if eq (ext $asset.Name) ".jpeg" ".jpg" ".png" ".webp" ".gif" }}
-        <label class='pointer' style='display: block; position: relative;' data-disable-click-selection>
+        <label class='pointer{{ if isInClipboard $asset.Name }} dashed-border{{ end }}' style='display: block; position: relative;' data-disable-click-selection>
           <input type='checkbox' id='{{ $asset.Name }}' name='name' value='{{ $asset.Name }}' class='pointer' style='position: absolute; top: 4px; left: 4px;'>
           <img src='{{ imgURL $asset }}' class='w-100' loading='lazy'>
         </label>
@@ -283,7 +283,7 @@
           <button type='submit' formmethod='get' formaction='/{{ join "files" $.SitePrefix "delete" }}/' name='name' value='{{ $asset.Name }}' class='button-danger ba br2 b--dark-red pa2 mr2 mb2'>delete</button>
         </div>
         {{- else }}
-        <label class='pointer' style='display: block; position: relative;' data-disable-click-selection>
+        <label class='pointer{{ if isInClipboard $asset.Name }} dashed-border{{ end }}' style='display: block; position: relative;' data-disable-click-selection>
           <input type='checkbox' id='{{ $asset.Name }}' name='name' value='{{ $asset.Name }}' class='pointer' style='position: absolute; top: 4px; left: 4px;'>
           <div class='flex justify-center pv4'>
             <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='50' height='50'>

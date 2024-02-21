@@ -250,7 +250,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			return
 		}
 		if response.SrcSitePrefix == response.DestSitePrefix && response.SrcParent == response.DestParent {
-			response.Error = "DestinationTheSame"
+			response.Error = "PasteSameDestination"
 			writeResponse(w, r, response)
 			return
 		}
