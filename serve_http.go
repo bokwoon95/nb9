@@ -19,16 +19,16 @@ import (
 )
 
 func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
-		}
-	}()
-
 	scheme := "https://"
 	if nbrew.CMSDomain == "localhost" || strings.HasPrefix(nbrew.CMSDomain, "localhost:") {
 		scheme = "http://"
 	}
+
+	defer func() {
+		if v := recover(); v != nil {
+			fmt.Println(r.Method + " " + scheme + r.Host + r.URL.RequestURI() + ":\n" + string(debug.Stack()))
+		}
+	}()
 
 	// Redirect the www subdomain to the bare domain.
 	if r.Host == "www."+nbrew.CMSDomain {

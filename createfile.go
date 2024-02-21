@@ -41,7 +41,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		Name          string        `json:"name,omitempty"`
 		Ext           string        `json:"ext,omitempty"`
 		Content       string        `json:"content,omitempty"`
-		FilesExist    []string      `json:"filesExist,omitempty"`
 		FilesTooBig   []string      `json:"filesTooBig,omitempty"`
 		TemplateError TemplateError `json:"templateError,omitempty"`
 	}
@@ -483,17 +482,6 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 				}
 				fileName = filenameSafe(fileName)
 				filePath := path.Join(outputDir, fileName)
-				_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), filePath)
-				if err != nil {
-					if !errors.Is(err, fs.ErrNotExist) {
-						getLogger(r.Context()).Error(err.Error())
-						internalServerError(w, r, err)
-						return
-					}
-				} else {
-					response.FilesExist = append(response.FilesExist, fileName)
-					continue
-				}
 				ext := path.Ext(fileName)
 				switch ext {
 				case ".jpeg", ".jpg", ".png", ".webp", ".gif":
