@@ -274,7 +274,7 @@
   </div>
   <input type='hidden' name='ext' value='{{ ext $.FilePath }}'>
   <div data-codemirror>
-    <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code' autofocus>{{ $.Content }}</textarea>
+    <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code'>{{ $.Content }}</textarea>
   </div>
   {{- if eq (head $.FilePath) "pages" "posts" }}
   <div class='mt2'>

@@ -52,6 +52,9 @@ TODO: download.go
     - "download" becomes a new contextual button users can use on selected files, just like cut/copy/delete.
     - a new "download site" button becomes added to a site, which people can use to export their site folders (and upload it back using plain old uploadfile).
     - a corresponding "upload files" option becomes available in the plus icon dropdown menu (separated from create file/create folder by a <hr>).
+TODO: don't make /users/signup/ a built-in page in notebrew. Instead, admins are only expected to create new users through the notebrew CLI command. So notebrew doesn't care about a mailer, nor does it care about configuring SMTP credentials.
+    - `notebrew createuser` allows the admin to generate an account creation link which they can distribute to other users, or they can manually create the users themselves and hand them the username/password. Password resets are handled manually through the CLI command as well, so notebrew never has to concern itself with sending an email reset password.
+    - However, we *do* have to devise a handler that can handle signups and email resets. The only bonus is we don't have to make that code resuable by others, so we can hardcode certain mail API expectations and stuff. We don't have make it accomodate multiple mailer services.
 
 image optimization expects a $PATH entry that accepts arguments in this format:
 $ nbrew-process-img 0xfffff.raw.jpg 0xfffff.jpg
