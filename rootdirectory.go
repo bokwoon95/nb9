@@ -92,6 +92,7 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 			"hasPrefix":        strings.HasPrefix,
 			"hasSuffix":        strings.HasSuffix,
 			"trimPrefix":       strings.TrimPrefix,
+			"trimSuffix":       strings.TrimSuffix,
 			"fileSizeToString": fileSizeToString,
 			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },
 			"baselineJS":       func() template.JS { return template.JS(baselineJS) },

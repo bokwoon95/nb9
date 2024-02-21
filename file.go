@@ -398,6 +398,15 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				}
 				return template.URL("/" + path.Join("files", response.SitePrefix, response.AssetDir, asset.Name) + "?raw")
 			},
+			"isInClipboard": func(name string) bool {
+				if sitePrefix != clipboard.Get("sitePrefix") {
+					return false
+				}
+				if response.FilePath != clipboard.Get("parent") {
+					return false
+				}
+				return isInClipboard[name]
+			},
 		}
 		tmpl, err := template.New("file.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/file.html")
 		if err != nil {
