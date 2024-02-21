@@ -463,14 +463,36 @@ func (file *RemoteFileWriter) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
+func (file *RemoteFileWriter) ReadFrom(r io.Reader) (n int64, err error) {
+	err = file.ctx.Err()
+	if err != nil {
+		file.writeFailed = true
+		return 0, err
+	}
+	if file.fileType.IsObject {
+		n, err = io.Copy(file.storageWriter, r)
+	} else {
+		if file.fileType.IsGzippable && !file.isFulltextIndexed {
+			n, err = io.Copy(file.gzipWriter, r)
+		} else {
+			n, err = file.buf.ReadFrom(r)
+		}
+	}
+	file.size += int64(n)
+	if err != nil {
+		file.writeFailed = true
+	}
+	return n, err
+}
+
 func (file *RemoteFileWriter) Close() error {
 	if file.fileType.IsObject {
 		if file.storageWriter == nil {
 			return fs.ErrClosed
 		}
 		file.storageWriter.Close()
-		err := <-file.storageResult
 		file.storageWriter = nil
+		err := <-file.storageResult
 		if err != nil {
 			return err
 		}
@@ -507,6 +529,9 @@ func (file *RemoteFileWriter) Close() error {
 		}
 	}
 	if file.writeFailed {
+		if file.fileType.IsObject {
+			_ = file.storage.Delete(file.ctx, encodeUUID(file.fileID)+path.Ext(file.filePath))
+		}
 		return nil
 	}
 

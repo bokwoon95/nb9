@@ -169,7 +169,6 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		defer writer.Close()
 		n, err := io.Copy(writer, reader)
 		if err != nil {
-			_ = nbrew.FS.WithContext(ctx).Remove(filePath)
 			return err
 		}
 		err = writer.Close()

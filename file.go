@@ -581,7 +581,6 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				defer writer.Close()
 				_, err = io.Copy(writer, reader)
 				if err != nil {
-					_ = nbrew.FS.WithContext(ctx).Remove(filePath)
 					return err
 				}
 				err = writer.Close()
