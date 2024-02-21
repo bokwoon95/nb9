@@ -177,9 +177,10 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
-					"from":          "createfile",
-					"templateError": response.TemplateError,
+					"from": "createfile",
 				},
+				"templateError": response.TemplateError,
+				"filesTooBig":   response.FilesTooBig,
 			})
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())

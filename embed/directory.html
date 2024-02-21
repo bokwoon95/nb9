@@ -56,13 +56,13 @@
   {{- $numErrors := index $.PostRedirectGet "numErrors" }}
   <div class='flex items-center'>
     {{ template "heroicons-trash" }}
-    <span class='ml2'>{{ $numDeleted }} file{{ if ne $numDeleted 1.0 }}s{{ end }} deleted {{ if $numErrors }}({{ $numErrors }} error{{ if ne $numErrors 1.0 }}s{{ end }}){{ end }}</span>
+    <div class='ml2'>{{ $numDeleted }} file{{ if ne $numDeleted 1.0 }}s{{ end }} deleted {{ if $numErrors }}({{ $numErrors }} error{{ if ne $numErrors 1.0 }}s{{ end }}){{ end }}</div>
   </div>
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
 {{- end }}
-{{- if eq (index $.PostRedirectGet "from") "paste" }}
+{{- if eq (index $.PostRedirectGet "from") "clipboard/paste" }}
 <div role='alert' class='alert mv2 pa2 br2 flex items-center'>
   {{- $error := index $.PostRedirectGet "error" }}
   {{- if $error }}
@@ -114,6 +114,40 @@
       {{- end }}
     </div>
   {{- end }}
+  <div class='flex-grow-1'></div>
+  <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
+</div>
+{{- end }}
+{{- if eq (index $.PostRedirectGet "from") "uploadfile" }}
+<div role='alert' class='alert mv2 pa2 br2 flex items-center'>
+  {{- $count := index $.PostRedirectGet "count" }}
+  {{- $filesExist := index $.PostRedirectGet "filesExist" }}
+  {{- $filesTooBig := index $.PostRedirectGet "filesTooBig" }}
+  <div>
+    <div>{{ $count }} file{{ if ne $count 1.0 }}s{{ end }} uploaded ({{ fileSizeToString (float64ToInt64 (index $.PostRedirectGet "size")) }} total)</div>
+    {{- if $filesExist }}
+    <br>
+    <div>
+      The following files were not uploaded because a destination file already exists:
+      <ul class='list-style-disc ph3'>
+        {{- range $name := $filesExist }}
+        <li>{{ $name }}</li>
+        {{- end }}
+      </ul>
+    </div>
+    {{- end }}
+    {{- if $filesTooBig }}
+    <br>
+    <div>
+      The following files were not uploaded because they are too big (max 10 MB per file):
+      <ul class='list-style-disc ph3'>
+        {{- range $name := $filesTooBig }}
+        <li>{{ $name }}</li>
+        {{- end }}
+      </ul>
+    </div>
+    {{- end }}
+  </div>
   <div class='flex-grow-1'></div>
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>

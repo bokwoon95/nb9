@@ -96,6 +96,7 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 			"referer":          func() string { return referer },
 			"clipboard":        func() url.Values { return clipboard },
 			"safeHTML":         func(s string) template.HTML { return template.HTML(s) },
+			"float64ToInt64":   func(n float64) int64 { return int64(n) },
 			"head": func(s string) string {
 				head, _, _ := strings.Cut(s, "/")
 				return head

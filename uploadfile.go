@@ -53,6 +53,8 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 				"count":         response.Count,
 				"size":          response.Size,
 				"templateError": response.TemplateError,
+				"filesExist":    response.FilesExist,
+				"filesTooBig":   response.FilesTooBig,
 			},
 		})
 		if err != nil {

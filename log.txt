@@ -27,6 +27,14 @@ rootdirectory.go
 directory.go
 file.go
 
+directory.html:from
+- regenerate
+- regeneratelist
+- createfolder
+- delete
+- clipboard/paste
+- uploadfile
+
 TODO: uploadfile.go, createfile.go, file.go: if any of those handlers returns FilesExist or FilesTooBig, display it on the frontend accordingly.
     - uploadfile: directory.html
     - createfile: file.html
