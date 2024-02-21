@@ -27,8 +27,7 @@ rootdirectory.go
 directory.go
 file.go
 
-TODO: clipboard.go: fix InvalidDestParent when trying to paste images into a page or post.
-TODO: rootdirectory.html, directory.html, file.html: if the parent is output and not output/themes, it should link to the parent page/post instead of the output folder itself. 
+TODO: rootdirectory.html, directory.html, file.html: if the parent is output and not output/themes, it should link to the parent page/post instead of the output folder itself.
     - Also, show the dotted border around clipboard items in file.html
 TODO: uploadfile.go, createfile.go, file.go: if any of those handlers returns FilesExist or FilesTooBig, display it on the frontend accordingly.
 TODO: directory.html: make images show previews under the file name (again using an imgDomain is present... should I make this into a function?).

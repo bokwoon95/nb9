@@ -88,6 +88,7 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 			"ext":              path.Ext,
 			"hasPrefix":        strings.HasPrefix,
 			"hasSuffix":        strings.HasSuffix,
+			"trimSuffix":       strings.TrimSuffix,
 			"trimPrefix":       strings.TrimPrefix,
 			"fileSizeToString": fileSizeToString,
 			"stylesCSS":        func() template.CSS { return template.CSS(stylesCSS) },

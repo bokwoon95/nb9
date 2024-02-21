@@ -118,10 +118,26 @@
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
 {{- end }}
-{{- if gt (len $clipboard) 0 }}
+{{- if len $clipboard }}
+{{- $srcSitePrefix := $clipboard.Get "sitePrefix" }}
+{{- $srcParent := $clipboard.Get "parent" }}
+{{- $names := index $clipboard "name" }}
 <div class='dashed-border mv2 pa2 br2 flex items-center'>
   <div class='flex-grow-1 truncate'>
-    <a href='/{{ join "files" ($clipboard.Get "sitePrefix") ($clipboard.Get "parent") }}/'>{{ len (index $clipboard "name") }} file{{ if ne (len (index $clipboard "name")) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := index $clipboard "name" }}{{ if gt $i 0 }}, {{ end }}{{ $name }}{{ end }}
+    output/themes
+    output/posts then join "files" $srcSitePrefix (trimSuffix (tail $srcParent) ".md")
+    output/* then join "files" $srcSitePrefix (trimSuffix (tail (tail $srcParent)) ".html")
+    {{- if eq (head $srcParent) "output" }}
+      {{- if eq (head (tail $srcParent)) "themes" }}
+      <a href='/{{ join "files" $srcSitePrefix $srcParent }}/'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
+      {{- else if eq (head (tail $srcParent)) "posts" }}
+      <a href='/{{ join "files" $srcSitePrefix (trimSuffix (tail $srcParent) ".md") }}/'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
+      {{- else }}
+      <a href='/{{ join "files" $srcSitePrefix (trimSuffix (tail (tail $srcParent)) ".html) }}/'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
+      {{- end }}
+    {{- else }}
+    <a href='/{{ join "files" $srcSitePrefix $srcParent }}/'>{{ len $names }} file{{ if ne (len $names) 1 }}s{{ end }} {{ if $clipboard.Has "cut" }}cut{{ else }}copied{{ end }}</a>: {{ range $i, $name := $names }}{{ if $i }}, {{ end }}{{ $name }}{{ end }}
+    {{- end }}
   </div>
   {{- if not $readOnly }}
   <form method='post' action='/{{ join "files" $.SitePrefix "clipboard/paste" }}' class='ml2'>
