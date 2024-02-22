@@ -91,26 +91,12 @@ for (const dataPaste of document.querySelectorAll("[data-paste]")) {
 
   dataPaste.addEventListener("paste", function(event) {
     event.preventDefault();
-    let hasInvalidExt = false;
-    for (let i = 0; i < event.clipboardData.files.length; i++) {
-      const file = event.clipboardData.files.item(i);
-      const n = file.name.lastIndexOf(".");
-      const ext = n < 0 ? "" : file.name.substring(n);
-      if (!validExt.has(ext)) {
-        hasInvalidExt = true;
-        break;
-      }
-    }
-    if (!hasInvalidExt) {
-      if (event.clipboardData.files.length == 0) {
-        dataPaste.value = "no files in clipboard";
-        setTimeout(function() { dataPaste.value = "" }, 800);
-      }
-      input.files = event.clipboardData.files;
-      return;
-    }
     let dataTransfer = new DataTransfer();
     let invalidCount = 0;
+    for (let i = 0; i < input.files.length; i++) {
+      const file = input.files.item(i);
+      dataTransfer.items.add(file);
+    }
     for (let i = 0; i < event.clipboardData.files.length; i++) {
       const file = event.clipboardData.files.item(i);
       const n = file.name.lastIndexOf(".");
