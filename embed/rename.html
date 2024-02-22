@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang='en'>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<link rel='icon' href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22><text y=%221em%22 font-size=%228%22>☕</text></svg>'>
+<style>{{ stylesCSS }}</style>
+<script type='module'>{{ baselineJS }}</script>
+<title>Rename</title>
+<body class='centered-body'>
+<nav class='mv2 bg-dark-cyan white flex flex-wrap items-center'>
+  <a href='/files/' class='ma2 white'>🖋️☕ notebrew</a>
+  &bull;
+  <a href='{{ $.ContentSite }}' class='ma2 white'>{{ if hasPrefix $.ContentSite "https://" }}{{ trimPrefix $.ContentSite "https://" }}{{ else }}{{ trimPrefix $.ContentSite "http://" }}{{ end }}</a>
+  <span class='flex-grow-1'></span>
+  {{- if $.Username.Valid }}
+  <a href='' class='ma2'>{{ if $.Username.String }}@{{ $.Username.String }}{{ else }}user{{ end }}</a>
+  <a href='/users/logout/' class='ma2'>logout</a>
+  {{- end }}
+</nav>
+{{- if eq $.Error "InvalidParent" "InvalidName" }}
+<div class='mv5 w-80 w-70-m w-60-l center'>
+  {{- if referer }}
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- end }}
+  <div class='mv3 b tc'>Nothing to rename.</div>
+</div>
+{{- else }}
+<form method='post' action='/{{ join "files" $.SitePrefix "rename" }}/' class='mv5 w-80 w-70-m w-60-l center'>
+  {{- if referer }}
+  <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
+  {{- else }}
+  <div><a href='/{{ join "files" $.SitePrefix $.Parent }}/'>&larr; back</a></div>
+  {{- end }}
+  <h1 class='f3 mv3 b'>
+    Rename <a href='/{{ join "files" $.SitePrefix $.Parent $.OldName }}{{ if $.IsDir }}/{{ end }}'>{{ $.OldName }}</a>
+  </h1>
+  <input type='hidden' name='parent' value='{{ $.Parent }}'>
+  <input type='hidden' name='oldName' value='{{ $.OldName }}'>
+  <div class='mv3'>
+    <div><label for='name' class='b'>New Name:</label></div>
+    <input id='newName' name='newName' value='{{ $.NewName }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "newName" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>
+    <ul class='list-style-disc ph3 f6 invalid-red'>
+      {{- range $error := index $.FormErrors "newName" }}
+      <li>{{ $error }}</li>
+      {{- end }}
+    </ul>
+  </div>
+  <button type='submit' class='button ba br2 pa2 mv3 w-100'>Rename</button>
+</form>
+{{- end }}

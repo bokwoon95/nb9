@@ -280,7 +280,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				notAuthorized(w, r)
 				return
 			}
-			// TODO: nbrew.rename()
+			nbrew.rename(w, r, username, sitePrefix)
 		default:
 			notFound(w, r)
 		}
