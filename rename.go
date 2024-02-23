@@ -80,7 +80,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		name := r.Form.Get("name")
-		if strings.Contains(name, "/") {
+		if name == "" || strings.Contains(name, "/") {
 			response.Error = "InvalidFile"
 			writeResponse(w, r, response)
 			return
@@ -210,6 +210,11 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 		response := Response{
 			FormErrors: make(url.Values),
 			Parent:     path.Clean(strings.Trim(request.Parent, "/")),
+		}
+		if request.Name == "" || strings.Contains(request.Name, "/") {
+			response.Error = "InvalidFile"
+			writeResponse(w, r, response)
+			return
 		}
 		head, tail, _ := strings.Cut(response.Parent, "/")
 		switch head {
