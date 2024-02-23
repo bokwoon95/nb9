@@ -15,10 +15,9 @@ import (
 
 func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
 	type Request struct {
-		Parent  string `json:"parent"`
-		Ext     string `json:"ext"`
-		OldName string `json:"oldName"`
-		NewName string `json:"newName"`
+		Parent   string `json:"parent"`
+		Name     string `json:"name"`
+		ChangeTo string `json:"changeTo"`
 	}
 	type Response struct {
 		Error       string     `json:"status"`
@@ -27,9 +26,10 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 		Username    NullString `json:"username"`
 		SitePrefix  string     `json:"sitePrefix"`
 		Parent      string     `json:"parent"`
+		Prefix      string     `json:"prefix"`
+		From        string     `json:"from"`
+		To          string     `json:"to"`
 		Ext         string     `json:"ext"`
-		OldName     string     `json:"oldName"`
-		NewName     string     `json:"newName"`
 		IsDir       bool       `json:"isDir"`
 	}
 
@@ -79,13 +79,11 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			writeResponse(w, r, response)
 			return
 		}
-		response.Ext = r.Form.Get("ext")
-		response.OldName = r.Form.Get("oldName")
-		response.NewName = r.Form.Get("newName")
+		name := r.Form.Get("name")
 		head, _, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes", "pages", "posts", "output":
-			switch path.Join(response.Parent, response.OldName+response.Ext) {
+			switch path.Join(response.Parent, response.Name) {
 			case "pages/index.html", "pages/404.html", "output/themes/post.html", "output/themes/postlist.html":
 				response.Error = "InvalidFile"
 				writeResponse(w, r, response)
@@ -96,7 +94,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			writeResponse(w, r, response)
 			return
 		}
-		fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, response.OldName+response.Ext))
+		fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, response.Name))
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				response.Error = "InvalidFile"
@@ -136,7 +134,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 				redirectURL := "/" + path.Join("files", sitePrefix, "rename") + "/" +
 					"?parent=" + url.QueryEscape(response.Parent) +
 					"&ext=" + url.QueryEscape(response.Ext) +
-					"&oldName=" + url.QueryEscape(response.OldName)
+					"&oldName=" + url.QueryEscape(response.Name)
 				http.Redirect(w, r, redirectURL, http.StatusFound)
 				return
 			}
@@ -145,7 +143,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 					"from":    "rename",
 					"parent":  response.Parent,
 					"ext":     response.Ext,
-					"oldName": response.OldName,
+					"oldName": response.Name,
 					"newName": response.NewName,
 					"isDir":   response.IsDir,
 				},
@@ -184,8 +182,8 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			}
 			request.Parent = r.Form.Get("parent")
 			request.Ext = r.Form.Get("ext")
-			request.OldName = r.Form.Get("oldName")
-			request.NewName = r.Form.Get("newName")
+			request.Name = r.Form.Get("oldName")
+			request.ChangeTo = r.Form.Get("newName")
 		default:
 			unsupportedContentType(w, r)
 			return
@@ -195,8 +193,8 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			FormErrors: make(url.Values),
 			Parent:     path.Clean(strings.Trim(request.Parent, "/")),
 			Ext:        request.Ext,
-			OldName:    request.OldName,
-			NewName:    request.NewName,
+			Name:       request.Name,
+			NewName:    request.ChangeTo,
 		}
 		head, _, _ := strings.Cut(response.Parent, "/")
 		switch head {
@@ -233,7 +231,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			writeResponse(w, r, response)
 			return
 		}
-		oldPath := path.Join(response.SitePrefix, response.Parent, response.OldName+response.Ext)
+		oldPath := path.Join(response.SitePrefix, response.Parent, response.Name+response.Ext)
 		newPath := path.Join(response.SitePrefix, response.Parent, response.NewName+response.Ext)
 		fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), oldPath)
 		if err != nil {
