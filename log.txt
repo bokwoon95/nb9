@@ -36,7 +36,7 @@ directory.html:from
 - uploadfile
 
 TODO: rename.go
-    - Actually instead of letting them rename the entire name, we need to prominently display a (readonly) oldName field followed by an editable newName field, both without the extension. We do not allow users to change a file's extension.
+    - TODO: Actually instead of letting them rename the entire name, we need to prominently display a (readonly) oldName field followed by an editable newName field, both without the extension. We do not allow users to change a file's extension.
 TODO: oh boy pagination on output/themes is broken again (why? investigate)
 TODO: once you can upload images with uploadfile, make it so that any image uploaded but is not mentioned in the markdown content (use goldmark's markdown parser for this) is added to the Images field in PostData. Then in the default post.html, loop over the images and display them in a nice grid or something. No image viewer, pure HTML for this. The easiest dumbest way would be to put some kind of overlay <a href> that links directly to the image (so the browser is the image viewer).
     - This way you achieve the ability to upload images easily! No user intervention is needed for manually embedding the images, they can upload images in a dumb and straightforward way akin to facebook.
