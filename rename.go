@@ -211,7 +211,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			FormErrors: make(url.Values),
 			Parent:     path.Clean(strings.Trim(request.Parent, "/")),
 		}
-		head, _, _ := strings.Cut(response.Parent, "/")
+		head, tail, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes":
 			for _, char := range response.To {
@@ -286,9 +286,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			response.From = strings.TrimSuffix(remainder, ext)
 			response.Ext = ext
 		}
-		oldPath := path.Join(sitePrefix, response.Parent, response.Prefix+response.From+response.Ext)
-		newPath := path.Join(sitePrefix, response.Parent, response.Prefix+response.To+response.Ext)
-		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), newPath)
+		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, response.Parent, response.Prefix+response.To+response.Ext))
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				getLogger(r.Context()).Error(err.Error())
@@ -301,13 +299,37 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			writeResponse(w, r, response)
 			return
 		}
-		err = nbrew.FS.WithContext(r.Context()).Rename(oldPath, newPath)
+		err = nbrew.FS.WithContext(r.Context()).Rename(
+			path.Join(sitePrefix, response.Parent, response.Prefix+response.From+response.Ext),
+			path.Join(sitePrefix, response.Parent, response.Prefix+response.To+response.Ext),
+		)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
 			return
 		}
-		// TODO: if head is pages or posts, we need to rename the outputDir as well.
+		switch head {
+		case "pages":
+			err = nbrew.FS.WithContext(r.Context()).Rename(
+				path.Join(sitePrefix, "output", tail, response.From),
+				path.Join(sitePrefix, "output", tail, response.To),
+			)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+		case "posts":
+			err = nbrew.FS.WithContext(r.Context()).Rename(
+				path.Join(sitePrefix, "output/posts", tail, response.Prefix+response.From),
+				path.Join(sitePrefix, "output/posts", tail, response.Prefix+response.To),
+			)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+		}
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)
