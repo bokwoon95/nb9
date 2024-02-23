@@ -132,6 +132,7 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 				return isInClipboard[name]
 			},
 		}
+		// pages/index.html posts/404.html themes/post.html
 		tmpl, err := template.New("directory.html").Funcs(funcMap).ParseFS(RuntimeFS, "embed/directory.html")
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())

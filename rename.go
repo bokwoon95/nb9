@@ -128,8 +128,8 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 					internalServerError(w, r, err)
 					return
 				}
-				redirectURL := "/" + path.Join("files", sitePrefix, "rename") +
-					"/?parent=" + url.QueryEscape(response.Parent) +
+				redirectURL := "/" + path.Join("files", sitePrefix, "rename") + "/" +
+					"?parent=" + url.QueryEscape(response.Parent) +
 					"&ext=" + url.QueryEscape(response.Ext) +
 					"&oldName=" + url.QueryEscape(response.OldName)
 				http.Redirect(w, r, redirectURL, http.StatusFound)
