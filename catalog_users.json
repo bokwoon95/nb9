@@ -66,11 +66,17 @@
         "unique": true
       },
       {
-        "column": "failed_logins",
+        "column": "failed_login_attempts",
         "type": {
           "default": "INT"
         }
       },
+      {
+        "column": "disable_reason",
+        "type": {
+          "default": "VARCHAR(500)"
+        }
+      },  
       {
         "column": "site_limit",
         "type": {
