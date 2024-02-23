@@ -272,20 +272,17 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			response.From = request.Name
 		} else {
 			remainder := request.Name
-			if head == "posts" {
-				i := strings.Index(remainder, "-")
-				if i >= 0 {
-					prefix, suffix := remainder[:i], remainder[i+1:]
-					if len(prefix) > 0 && len(prefix) <= 8 {
-						b, _ := base32Encoding.DecodeString(fmt.Sprintf("%08s", prefix))
-						if len(b) == 5 {
-							response.Prefix = prefix + "-"
-							remainder = suffix
-						}
+			ext := path.Ext(remainder)
+			if head == "posts" && ext == ".md" {
+				prefix, suffix, ok := strings.Cut(remainder, "-")
+				if ok && len(prefix) > 0 && len(prefix) <= 8 {
+					b, _ := base32Encoding.DecodeString(fmt.Sprintf("%08s", prefix))
+					if len(b) == 5 {
+						response.Prefix = prefix + "-"
+						remainder = suffix
 					}
 				}
 			}
-			ext := path.Ext(remainder)
 			response.From = strings.TrimSuffix(remainder, ext)
 			response.Ext = ext
 		}
