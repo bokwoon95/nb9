@@ -165,6 +165,7 @@ details[open] summary.button { background-color: white; }
 .bg-dark-cyan { background-color: #007d9c; }
 .bg-transparent { background-color: transparent; }
 .bg-white { background-color: #fff; }
+.bg-near-white { background-color: #f4f4f4; }
 
 /* border color */
 .b--invalid-red { border-color: #dc3545; }

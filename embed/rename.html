@@ -32,12 +32,16 @@
   <div><a href='/{{ join "files" $.SitePrefix $.Parent }}/'>&larr; back</a></div>
   {{- end }}
   <h1 class='f3 mv3 b'>
-    Rename <a href='/{{ join "files" $.SitePrefix $.Parent $.OldName }}{{ if $.IsDir }}/{{ end }}'>{{ $.OldName }}</a>
+    Rename <a href='/{{ join "files" $.SitePrefix $.Parent $.OldName }}{{ $.Ext }}{{ if $.IsDir }}/{{ end }}'>{{ $.OldName }}{{ $.Ext }}{{ if $.IsDir }}/{{ end }}</a>
   </h1>
   <input type='hidden' name='parent' value='{{ $.Parent }}'>
-  <input type='hidden' name='oldName' value='{{ $.OldName }}'>
+  <input type='hidden' name='ext' value='{{ $.Ext }}'>
   <div class='mv3'>
-    <div><label for='name' class='b'>New Name:</label></div>
+    <div><label for='oldName' class='b'>Old Name:</label></div>
+    <input id='oldName' name='oldName' value='{{ $.OldName }}' class='pv1 ph2 br2 ba w-100 bg-near-white' autocomplete='on' readonly>
+  </div>
+  <div class='mv3'>
+    <div><label for='newName' class='b'>New Name:</label></div>
     <input id='newName' name='newName' value='{{ $.NewName }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "newName" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>
     <ul class='list-style-disc ph3 f6 invalid-red'>
       {{- range $error := index $.FormErrors "newName" }}

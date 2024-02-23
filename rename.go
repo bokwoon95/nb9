@@ -16,6 +16,7 @@ import (
 func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
 	type Request struct {
 		Parent  string `json:"parent"`
+		Ext     string `json:"ext"`
 		OldName string `json:"oldName"`
 		NewName string `json:"newName"`
 	}
@@ -26,6 +27,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 		Username    NullString `json:"username"`
 		SitePrefix  string     `json:"sitePrefix"`
 		Parent      string     `json:"parent"`
+		Ext         string     `json:"ext"`
 		OldName     string     `json:"oldName"`
 		NewName     string     `json:"newName"`
 		IsDir       bool       `json:"isDir"`
@@ -77,28 +79,35 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			writeResponse(w, r, response)
 			return
 		}
+		response.Ext = r.Form.Get("ext")
+		response.OldName = r.Form.Get("oldName")
+		response.NewName = r.Form.Get("newName")
 		head, _, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes", "pages", "posts", "output":
-			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, response.OldName))
-			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					response.Error = "InvalidFile"
-					writeResponse(w, r, response)
-					return
-				}
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			response.IsDir = fileInfo.IsDir()
+			break
 		default:
 			response.Error = "InvalidFile"
 			writeResponse(w, r, response)
 			return
 		}
-		response.OldName = r.Form.Get("oldName")
-		response.NewName = r.Form.Get("newName")
+		fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, response.OldName+response.Ext))
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				response.Error = "InvalidFile"
+				writeResponse(w, r, response)
+				return
+			}
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		response.IsDir = fileInfo.IsDir()
+		if response.IsDir && response.Ext == "" {
+			response.Error = "InvalidFile"
+			writeResponse(w, r, response)
+			return
+		}
 		writeResponse(w, r, response)
 	case "POST":
 		writeResponse := func(w http.ResponseWriter, r *http.Request, response Response) {
@@ -119,13 +128,18 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 					internalServerError(w, r, err)
 					return
 				}
-				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "createfolder")+"/?parent="+url.QueryEscape(response.Parent)+"&oldName="+url.QueryEscape(response.OldName), http.StatusFound)
+				redirectURL := "/" + path.Join("files", sitePrefix, "rename") +
+					"/?parent=" + url.QueryEscape(response.Parent) +
+					"&ext=" + url.QueryEscape(response.Ext) +
+					"&oldName=" + url.QueryEscape(response.OldName)
+				http.Redirect(w, r, redirectURL, http.StatusFound)
 				return
 			}
 			err := nbrew.setSession(w, r, "flash", map[string]any{
 				"postRedirectGet": map[string]any{
 					"from":    "rename",
 					"parent":  response.Parent,
+					"ext":     response.Ext,
 					"oldName": response.OldName,
 					"newName": response.NewName,
 					"isDir":   response.IsDir,
@@ -164,6 +178,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 				}
 			}
 			request.Parent = r.Form.Get("parent")
+			request.Ext = r.Form.Get("ext")
 			request.OldName = r.Form.Get("oldName")
 			request.NewName = r.Form.Get("newName")
 		default:
@@ -174,6 +189,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 		response := Response{
 			FormErrors: make(url.Values),
 			Parent:     path.Clean(strings.Trim(request.Parent, "/")),
+			Ext:        request.Ext,
 			OldName:    request.OldName,
 			NewName:    request.NewName,
 		}
@@ -212,8 +228,8 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			writeResponse(w, r, response)
 			return
 		}
-		oldPath := path.Join(response.SitePrefix, response.Parent, response.OldName)
-		newPath := path.Join(response.SitePrefix, response.Parent, response.NewName)
+		oldPath := path.Join(response.SitePrefix, response.Parent, response.OldName+response.Ext)
+		newPath := path.Join(response.SitePrefix, response.Parent, response.NewName+response.Ext)
 		fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), oldPath)
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
@@ -226,6 +242,11 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		response.IsDir = fileInfo.IsDir()
+		if response.IsDir && response.Ext == "" {
+			response.Error = "InvalidFile"
+			writeResponse(w, r, response)
+			return
+		}
 		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), newPath)
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
@@ -245,6 +266,8 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			internalServerError(w, r, err)
 			return
 		}
+		// TODO: if head is pages or posts, we need to rename the outputDir as well.
+		// TODO: if the file is one of pages/index.html | pages/404.html | themes/post.html | themes/postlist.html, we must treat it like we created a duplicate file and call copyDir over
 		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)
