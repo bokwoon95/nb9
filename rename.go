@@ -85,7 +85,12 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 		head, _, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes", "pages", "posts", "output":
-			break
+			switch path.Join(response.Parent, response.OldName+response.Ext) {
+			case "pages/index.html", "pages/404.html", "output/themes/post.html", "output/themes/postlist.html":
+				response.Error = "InvalidFile"
+				writeResponse(w, r, response)
+				return
+			}
 		default:
 			response.Error = "InvalidFile"
 			writeResponse(w, r, response)
