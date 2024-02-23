@@ -17,7 +17,7 @@
   <a href='/users/logout/' class='ma2'>logout</a>
   {{- end }}
 </nav>
-{{- if eq $.Error "InvalidParent" "InvalidName" }}
+{{- if eq $.Error "InvalidFile" }}
 <div class='mv5 w-80 w-70-m w-60-l center'>
   {{- if referer }}
   <div><a href='{{ referer }}' data-go-back>&larr; back</a></div>
