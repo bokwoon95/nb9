@@ -312,7 +312,7 @@
           <img src='{{ imgURL $asset }}' class='w-100' loading='lazy'>
         </label>
         <div style='overflow-wrap: break-word;'>
-          <span class='b mr2 mb2'>{{ $asset.Name }} loremipsumdolorsitamet</span>
+          <span class='b mr2 mb2'>{{ $asset.Name }}</span>
           <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='dib mr2 mb2'>view</a>
           <a href='' class='dib mr2 mb2'>rename</a>
           <button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/cut" }}/' name='name' value='{{ $asset.Name }}' class='button ba br2 pa2 mr2 mb2'>cut</button>
