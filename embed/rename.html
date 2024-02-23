@@ -38,11 +38,11 @@
   <input type='hidden' name='name' value='{{ $.Prefix }}{{ $.From }}{{ $.Ext }}'>
   <div class='mv3'>
     <div>Old Name:</div>
-    <input value='{{ $.From }}' class='pv1 ph2 br2 ba w-100 bg-near-white' autocomplete='on' disabled>
+    {{ $.Prefix }}<input value='{{ $.From }}' class='pv1 ph2 br2 ba w-100 bg-near-white' autocomplete='on' disabled>{{ $.Ext }}
   </div>
   <div class='mv3'>
     <div><label for='newsubname' class='b'>New Name:</label></div>
-    <input id='to' name='to' value='{{ $.To }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "to" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>
+    {{ $.Prefix }}<input id='to' name='to' value='{{ $.To }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "to" }} b--invalid-red{{ end }}' autocomplete='on' required autofocus>{{ $.Ext }}
     <ul class='list-style-disc ph3 f6 invalid-red'>
       {{- range $error := index $.FormErrors "to" }}
       <li>{{ $error }}</li>
