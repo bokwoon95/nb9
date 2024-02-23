@@ -3,6 +3,7 @@ package nb9
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"mime"
@@ -179,49 +180,72 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 		head, _, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes":
-			if filenameSafe(response.NewName) != response.NewName {
-				response.FormErrors.Add("newName", "") // shit we can't just normalize silently, we need to report back to the user why their name is not allowed. Which means we can't use filenameSafe, we need to use the underlying isFilenameUnsafe character slice.
+			for _, char := range response.NewName {
+				if char >= 0 && char <= 31 {
+					continue
+				}
+				n := int(char)
+				if n >= len(isFilenameUnsafe) || !isFilenameUnsafe[n] {
+					continue
+				}
+				response.FormErrors.Add("newName", fmt.Sprintf("cannot use %c", char))
 				response.Error = "FormErrorsPresent"
 				writeResponse(w, r, response)
 				return
 			}
-			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, response.OldName))
-			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					response.Error = "InvalidFile"
-					writeResponse(w, r, response)
-					return
-				}
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			response.IsDir = fileInfo.IsDir()
 		case "pages", "posts", "output":
-			if urlSafe(response.NewName) != response.NewName {
-				response.FormErrors.Add("newName", "") // shit we can't just normalize silently, we need to report back to the user why their name is not allowed. Which means we can't use urlSafe, we need to use the underlying isURLUnsafe character slice.
+			for _, char := range response.NewName {
+				if char >= 0 && char <= 31 {
+					continue
+				}
+				n := int(char)
+				if n >= len(isURLUnsafe) || !isURLUnsafe[n] {
+					continue
+				}
+				response.FormErrors.Add("newName", fmt.Sprintf("cannot use %c", char))
 				response.Error = "FormErrorsPresent"
 				writeResponse(w, r, response)
 				return
 			}
-			fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, response.OldName))
-			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					response.Error = "InvalidFile"
-					writeResponse(w, r, response)
-					return
-				}
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
-				return
-			}
-			response.IsDir = fileInfo.IsDir()
 		default:
 			response.Error = "InvalidFile"
 			writeResponse(w, r, response)
 			return
 		}
-		// TODO: take newName at face value.
+		oldPath := path.Join(response.SitePrefix, response.Parent, response.OldName)
+		newPath := path.Join(response.SitePrefix, response.Parent, response.NewName)
+		fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), oldPath)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			response.Error = "InvalidFile"
+			writeResponse(w, r, response)
+			return
+		}
+		response.IsDir = fileInfo.IsDir()
+		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), newPath)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+		} else {
+			response.FormErrors.Add("newName", "a file with this name already exists")
+			response.Error = "FormErrorsPresent"
+			writeResponse(w, r, response)
+			return
+		}
+		err = nbrew.FS.WithContext(r.Context()).Rename(oldPath, newPath)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		writeResponse(w, r, response)
 	default:
 		methodNotAllowed(w, r)
 	}
