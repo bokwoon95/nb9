@@ -88,12 +88,6 @@
         "type": {
           "default": "INT"
         }
-      },
-      {
-        "column": "storage_used",
-        "type": {
-          "default": "INT"
-        }
       }
     ]
   },
@@ -108,7 +102,7 @@
         "primarykey": true
       },
       {
-        "column": "failed_logins",
+        "column": "failed_login_attempts",
         "type": {
           "default": "INT"
         },
