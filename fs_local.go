@@ -6,9 +6,12 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type LocalFSConfig struct {
@@ -282,9 +285,16 @@ func (fsys *LocalFS) Rename(oldName, newName string) error {
 			return err
 		}
 	} else {
-		return fs.ErrExist
+		return &fs.PathError{Op: "rename", Path: newName, Err: fs.ErrExist}
 	}
-	return os.Rename(filepath.Join(fsys.RootDir, oldName), filepath.Join(fsys.RootDir, newName))
+	err = os.Rename(filepath.Join(fsys.RootDir, oldName), filepath.Join(fsys.RootDir, newName))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return &fs.PathError{Op: "rename", Path: oldName, Err: fs.ErrNotExist}
+		}
+		return nil
+	}
+	return nil
 }
 
 func (fsys *LocalFS) Copy(srcName, destName string) error {
@@ -306,7 +316,78 @@ func (fsys *LocalFS) Copy(srcName, destName string) error {
 			return err
 		}
 	} else {
-		return fs.ErrExist
+		return &fs.PathError{Op: "copy", Path: destName, Err: fs.ErrExist}
+	}
+	srcFileInfo, err := os.Stat(filepath.Join(fsys.RootDir, srcName))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return &fs.PathError{Op: "copy", Path: srcName, Err: fs.ErrNotExist}
+		}
+		return err
+	}
+	if !srcFileInfo.IsDir() {
+		srcFile, err := fsys.WithContext(fsys.Context).Open(srcName)
+		if err != nil {
+			return err
+		}
+		defer srcFile.Close()
+		destFile, err := fsys.WithContext(fsys.Context).OpenWriter(destName, 0644)
+		if err != nil {
+			return err
+		}
+		defer destFile.Close()
+		_, err = io.Copy(destFile, srcFile)
+		if err != nil {
+			return err
+		}
+		err = destFile.Close()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	group, groupctx := errgroup.WithContext(fsys.Context)
+	err = fs.WalkDir(fsys.WithContext(groupctx), srcName, func(filePath string, dirEntry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relPath := strings.TrimPrefix(strings.TrimPrefix(filePath, srcName), string(os.PathSeparator))
+		if dirEntry.IsDir() {
+			err := fsys.WithContext(groupctx).MkdirAll(path.Join(destName, relPath), 0755)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		group.Go(func() error {
+			srcFile, err := fsys.WithContext(groupctx).Open(filePath)
+			if err != nil {
+				return err
+			}
+			defer srcFile.Close()
+			destFile, err := fsys.WithContext(groupctx).OpenWriter(path.Join(destName, relPath), 0644)
+			if err != nil {
+				return err
+			}
+			defer destFile.Close()
+			_, err = io.Copy(destFile, srcFile)
+			if err != nil {
+				return err
+			}
+			err = destFile.Close()
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	err = group.Wait()
+	if err != nil {
+		return err
 	}
 	return nil
 }

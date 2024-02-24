@@ -48,6 +48,8 @@ type FS interface {
 
 	// Rename renames (moves) oldName to newName. newName must not exist.
 	Rename(oldName, newName string) error
+
+	Copy(srcName, destName string) error
 }
 
 type FileType struct {

@@ -88,8 +88,12 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 		head, _, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "notes", "pages", "posts", "output":
-			switch path.Join(response.Parent, name) {
-			case "pages/index.html", "pages/404.html", "output/themes/post.html", "output/themes/postlist.html":
+			if response.Parent == "pages" && (name == "index.html" || name == "404.html") {
+				response.Error = "InvalidFile"
+				writeResponse(w, r, response)
+				return
+			}
+			if response.Parent == "output/themes" && (name == "post.html" || name == "postlist.html") {
 				response.Error = "InvalidFile"
 				writeResponse(w, r, response)
 				return
@@ -233,8 +237,12 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 				return
 			}
 		case "pages", "posts", "output":
-			switch path.Join(response.Parent, request.Name) {
-			case "pages/index.html", "pages/404.html", "output/themes/post.html", "output/themes/postlist.html":
+			if response.Parent == "pages" && (request.Name == "index.html" || request.Name == "404.html") {
+				response.Error = "InvalidFile"
+				writeResponse(w, r, response)
+				return
+			}
+			if response.Parent == "output/themes" && (request.Name == "post.html" || request.Name == "postlist.html") {
 				response.Error = "InvalidFile"
 				writeResponse(w, r, response)
 				return
