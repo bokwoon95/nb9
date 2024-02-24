@@ -31,6 +31,16 @@
         "notnull": true
       },
       {
+        "column": "file_name",
+        "type": {
+          "default": "VARCHAR(500)"
+        },
+        "expr": {
+          "definition": "replace(file_path, rtrim(file_path, replace(file_path, '/', '')), '')",
+          "stored": true
+        }
+      },
+      {
         "column": "is_dir",
         "type": {
           "default": "BOOLEAN"
@@ -81,7 +91,7 @@
           "default": "TSVECTOR"
         },
         "expr": {
-          "definition": "to_tsvector('english', text)",
+          "definition": "to_tsvector('english', file_name, text)",
           "stored": true
         }
       }
@@ -98,6 +108,7 @@
         "dialect": "mysql",
         "type": "FULLTEXT",
         "columns": [
+          "file_name",
           "text"
         ]
       }

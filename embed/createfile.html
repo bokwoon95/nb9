@@ -109,7 +109,7 @@
     </ul>
   </div>
   <div data-codemirror>
-    <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code'{{ if eq (head $.Parent) "notes" "posts" }} autofocus{{ end }}>{{ $.Content }}</textarea>
+    <textarea id='content' name='content' dir='auto' class='w-100 pa2 min-h5 h6 resize-vertical code'>{{ $.Content }}</textarea>
   </div>
   {{- if eq (head $.Parent) "pages" "posts" }}
   <div class='mt2'>

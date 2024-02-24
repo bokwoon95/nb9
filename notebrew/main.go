@@ -280,14 +280,14 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "database.json"), nbrew.Dialect, dataSourceName, err)
 			}
-			usersCatalog, err := nb9.UsersCatalog(nbrew.Dialect)
+			catalog, err := nb9.Catalog(nbrew.Dialect)
 			if err != nil {
 				return err
 			}
 			automigrateCmd := &ddl.AutomigrateCmd{
 				DB:             nbrew.DB,
 				Dialect:        nbrew.Dialect,
-				DestCatalog:    usersCatalog,
+				DestCatalog:    catalog,
 				DropObjects:    true, // TODO: turn this off when we go live.
 				AcceptWarnings: true,
 				Stderr:         io.Discard,
@@ -483,7 +483,7 @@ func main() {
 					return err
 				}
 				if len(tables) == 0 {
-					_, err := db.Exec("CREATE VIRTUAL TABLE files_fts5 USING fts5 (text, content=files);")
+					_, err := db.Exec("CREATE VIRTUAL TABLE files_fts5 USING fts5 (file_name, text, content=files);")
 					if err != nil {
 						return err
 					}
@@ -499,7 +499,7 @@ func main() {
 				}
 				if _, ok := triggerNames["files_after_insert"]; !ok {
 					_, err := db.Exec("CREATE TRIGGER files_after_insert AFTER INSERT ON files BEGIN" +
-						"\n    INSERT INTO files_fts5 (rowid, text) VALUES (NEW.rowid, NEW.text);" +
+						"\n    INSERT INTO files_fts5 (rowid, file_name, text) VALUES (NEW.rowid, NEW.file_name, NEW.text);" +
 						"\nEND;",
 					)
 					if err != nil {
@@ -508,7 +508,7 @@ func main() {
 				}
 				if _, ok := triggerNames["files_after_delete"]; !ok {
 					_, err := db.Exec("CREATE TRIGGER files_after_delete AFTER DELETE ON files BEGIN" +
-						"\n    INSERT INTO files_fts5 (files_fts5, rowid, text) VALUES ('delete', OLD.rowid, OLD.text);" +
+						"\n    INSERT INTO files_fts5 (files_fts5, rowid, file_name, text) VALUES ('delete', OLD.rowid, OLD.file_name, OLD.text);" +
 						"\nEND;",
 					)
 					if err != nil {
@@ -517,8 +517,8 @@ func main() {
 				}
 				if _, ok := triggerNames["files_after_update"]; !ok {
 					_, err := db.Exec("CREATE TRIGGER files_after_update AFTER UPDATE ON files BEGIN" +
-						"\n    INSERT INTO files_fts5 (files_fts5, rowid, text) VALUES ('delete', OLD.rowid, OLD.text);" +
-						"\n    INSERT INTO files_fts5 (rowid, text) VALUES (NEW.rowid, NEW.text);" +
+						"\n    INSERT INTO files_fts5 (files_fts5, rowid, file_name, text) VALUES ('delete', OLD.rowid, OLD.file_name, OLD.text);" +
+						"\n    INSERT INTO files_fts5 (rowid, file_name, text) VALUES (NEW.rowid, NEW.file_name, NEW.text);" +
 						"\nEND;",
 					)
 					if err != nil {

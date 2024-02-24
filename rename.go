@@ -86,23 +86,6 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		head, _, _ := strings.Cut(response.Parent, "/")
-		switch head {
-		case "notes", "pages", "posts", "output":
-			if response.Parent == "pages" && (name == "index.html" || name == "404.html") {
-				response.Error = "InvalidFile"
-				writeResponse(w, r, response)
-				return
-			}
-			if response.Parent == "output/themes" && (name == "post.html" || name == "postlist.html") {
-				response.Error = "InvalidFile"
-				writeResponse(w, r, response)
-				return
-			}
-		default:
-			response.Error = "InvalidFile"
-			writeResponse(w, r, response)
-			return
-		}
 		fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, name))
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
@@ -135,6 +118,23 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			ext := path.Ext(remainder)
 			response.From = strings.TrimSuffix(remainder, ext)
 			response.Ext = ext
+		}
+		switch head {
+		case "notes", "pages", "posts", "output":
+			if response.Parent == "pages" && (name == "index.html" || name == "404.html") {
+				response.Error = "InvalidFile"
+				writeResponse(w, r, response)
+				return
+			}
+			if response.Parent == "output/themes" && (name == "post.html" || name == "postlist.html") {
+				response.Error = "InvalidFile"
+				writeResponse(w, r, response)
+				return
+			}
+		default:
+			response.Error = "InvalidFile"
+			writeResponse(w, r, response)
+			return
 		}
 		writeResponse(w, r, response)
 	case "POST":
@@ -214,6 +214,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 		response := Response{
 			FormErrors: make(url.Values),
 			Parent:     path.Clean(strings.Trim(request.Parent, "/")),
+			To:         request.To,
 		}
 		if request.Name == "" || strings.Contains(request.Name, "/") {
 			response.Error = "InvalidFile"
@@ -221,6 +222,42 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		head, tail, _ := strings.Cut(response.Parent, "/")
+		fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, request.Name))
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				response.Error = "InvalidFile"
+				writeResponse(w, r, response)
+				return
+			}
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
+		}
+		response.IsDir = fileInfo.IsDir()
+		if response.IsDir {
+			response.From = request.Name
+		} else {
+			remainder := request.Name
+			ext := path.Ext(remainder)
+			if head == "posts" && ext == ".md" {
+				prefix, suffix, ok := strings.Cut(remainder, "-")
+				if ok && len(prefix) > 0 && len(prefix) <= 8 {
+					b, _ := base32Encoding.DecodeString(fmt.Sprintf("%08s", prefix))
+					if len(b) == 5 {
+						response.Prefix = prefix + "-"
+						remainder = suffix
+					}
+				}
+			}
+			response.From = strings.TrimSuffix(remainder, ext)
+			response.Ext = ext
+		}
+		if response.To == "" {
+			response.FormErrors.Add("to", fmt.Sprintf("cannot be empty"))
+			response.Error = "FormErrorsPresent"
+			writeResponse(w, r, response)
+			return
+		}
 		switch head {
 		case "notes":
 			for _, char := range response.To {
@@ -268,36 +305,6 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			response.Error = "InvalidFile"
 			writeResponse(w, r, response)
 			return
-		}
-		fileInfo, err := fs.Stat(nbrew.FS, path.Join(sitePrefix, response.Parent, request.Name))
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				response.Error = "InvalidFile"
-				writeResponse(w, r, response)
-				return
-			}
-			getLogger(r.Context()).Error(err.Error())
-			internalServerError(w, r, err)
-			return
-		}
-		response.IsDir = fileInfo.IsDir()
-		if response.IsDir {
-			response.From = request.Name
-		} else {
-			remainder := request.Name
-			ext := path.Ext(remainder)
-			if head == "posts" && ext == ".md" {
-				prefix, suffix, ok := strings.Cut(remainder, "-")
-				if ok && len(prefix) > 0 && len(prefix) <= 8 {
-					b, _ := base32Encoding.DecodeString(fmt.Sprintf("%08s", prefix))
-					if len(b) == 5 {
-						response.Prefix = prefix + "-"
-						remainder = suffix
-					}
-				}
-			}
-			response.From = strings.TrimSuffix(remainder, ext)
-			response.Ext = ext
 		}
 		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, response.Parent, response.Prefix+response.To+response.Ext))
 		if err != nil {

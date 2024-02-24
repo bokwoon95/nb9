@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.16
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.48.1
 	github.com/aws/smithy-go v1.19.0
-	github.com/bokwoon95/sqddl v0.4.9
+	github.com/bokwoon95/sqddl v0.4.10
 	github.com/caddyserver/certmagic v0.20.0
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/jackc/pgconn v1.14.1

@@ -42,11 +42,11 @@ func FilesCatalog(dialect string) (*ddl.Catalog, error) {
 	return unmarshalCatalog(dialect, filesCatalogBytes)
 }
 
-//go:embed catalog_users.json
-var usersCatalogBytes []byte
+//go:embed catalog.json
+var catalogBytes []byte
 
-func UsersCatalog(dialect string) (*ddl.Catalog, error) {
-	return unmarshalCatalog(dialect, usersCatalogBytes)
+func Catalog(dialect string) (*ddl.Catalog, error) {
+	return unmarshalCatalog(dialect, catalogBytes)
 }
 
 func unmarshalCatalog(dialect string, b []byte) (*ddl.Catalog, error) {
