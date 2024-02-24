@@ -351,9 +351,9 @@ func (fsys *LocalFS) Copy(srcName, destName string) error {
 		if err != nil {
 			return err
 		}
-		relPath := strings.TrimPrefix(strings.TrimPrefix(filePath, srcName), string(os.PathSeparator))
+		relativePath := strings.TrimPrefix(strings.TrimPrefix(filePath, srcName), string(os.PathSeparator))
 		if dirEntry.IsDir() {
-			err := fsys.WithContext(groupctx).MkdirAll(path.Join(destName, relPath), 0755)
+			err := fsys.WithContext(groupctx).MkdirAll(path.Join(destName, relativePath), 0755)
 			if err != nil {
 				return err
 			}
@@ -365,7 +365,7 @@ func (fsys *LocalFS) Copy(srcName, destName string) error {
 				return err
 			}
 			defer srcFile.Close()
-			destFile, err := fsys.WithContext(groupctx).OpenWriter(path.Join(destName, relPath), 0644)
+			destFile, err := fsys.WithContext(groupctx).OpenWriter(path.Join(destName, relativePath), 0644)
 			if err != nil {
 				return err
 			}
