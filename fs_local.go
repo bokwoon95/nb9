@@ -20,19 +20,19 @@ type LocalFSConfig struct {
 
 // LocalFS represents a filesystem rooted on a local directory.
 type LocalFS struct {
-	// ctx provides the context of all operations called on the LocalFS.
-	ctx context.Context
+	// Context provides the context of all operations called on the LocalFS.
+	Context context.Context
 
-	// rootDir is the root directory of the LocalFS. Has to be an absolute
+	// RootDir is the root directory of the LocalFS. Has to be an absolute
 	// path!!
-	rootDir string
+	RootDir string
 
-	// tempDir is the temp directory of the LocalFS. Files are first written to
-	// the tempDir before being swapped into the rootDir via an atomic rename
+	// TempDir is the temp directory of the LocalFS. Files are first written to
+	// the TempDir before being swapped into the rootDir via an atomic rename
 	// (windows is the exception I've found the renames there to be BUGGY AF!
 	// *insert github issue where rename on windows keep failing intermittently
 	// with an annoying permission error*)
-	tempDir string
+	TempDir string
 }
 
 func NewLocalFS(config LocalFSConfig) (*LocalFS, error) {
@@ -45,23 +45,23 @@ func NewLocalFS(config LocalFSConfig) (*LocalFS, error) {
 		return nil, err
 	}
 	localFS := &LocalFS{
-		ctx:     context.Background(),
-		rootDir: rootDir,
-		tempDir: tempDir,
+		Context: context.Background(),
+		RootDir: rootDir,
+		TempDir: tempDir,
 	}
 	return localFS, nil
 }
 
 func (fsys *LocalFS) WithContext(ctx context.Context) FS {
 	return &LocalFS{
-		ctx:     ctx,
-		rootDir: fsys.rootDir,
-		tempDir: fsys.tempDir,
+		Context: ctx,
+		RootDir: fsys.RootDir,
+		TempDir: fsys.TempDir,
 	}
 }
 
 func (fsys *LocalFS) Open(name string) (fs.File, error) {
-	err := fsys.ctx.Err()
+	err := fsys.Context.Err()
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (fsys *LocalFS) Open(name string) (fs.File, error) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
 	}
 	name = filepath.FromSlash(name)
-	file, err := os.Open(filepath.Join(fsys.rootDir, name))
+	file, err := os.Open(filepath.Join(fsys.RootDir, name))
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (fsys *LocalFS) Open(name string) (fs.File, error) {
 }
 
 func (fsys *LocalFS) Stat(name string) (fs.FileInfo, error) {
-	err := fsys.ctx.Err()
+	err := fsys.Context.Err()
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (fsys *LocalFS) Stat(name string) (fs.FileInfo, error) {
 		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
 	}
 	name = filepath.FromSlash(name)
-	fileInfo, err := os.Stat(filepath.Join(fsys.rootDir, name))
+	fileInfo, err := os.Stat(filepath.Join(fsys.RootDir, name))
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (fsys *LocalFS) Stat(name string) (fs.FileInfo, error) {
 }
 
 func (fsys *LocalFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, error) {
-	err := fsys.ctx.Err()
+	err := fsys.Context.Err()
 	if err != nil {
 		return nil, err
 	}
@@ -101,16 +101,16 @@ func (fsys *LocalFS) OpenWriter(name string, _ fs.FileMode) (io.WriteCloser, err
 		return nil, &fs.PathError{Op: "openwriter", Path: name, Err: fs.ErrInvalid}
 	}
 	if runtime.GOOS == "windows" {
-		file, err := os.OpenFile(filepath.Join(fsys.rootDir, name), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		file, err := os.OpenFile(filepath.Join(fsys.RootDir, name), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
 			return nil, err
 		}
 		return file, nil
 	}
 	file := &LocalFileWriter{
-		ctx:     fsys.ctx,
-		rootDir: fsys.rootDir,
-		tempDir: fsys.tempDir,
+		ctx:     fsys.Context,
+		rootDir: fsys.RootDir,
+		tempDir: fsys.TempDir,
 		name:    filepath.FromSlash(name),
 	}
 	if file.tempDir == "" {
@@ -203,7 +203,7 @@ func (file *LocalFileWriter) Close() error {
 }
 
 func (fsys *LocalFS) ReadDir(name string) ([]fs.DirEntry, error) {
-	err := fsys.ctx.Err()
+	err := fsys.Context.Err()
 	if err != nil {
 		return nil, err
 	}
@@ -211,11 +211,11 @@ func (fsys *LocalFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		return nil, &fs.PathError{Op: "mkdir", Path: name, Err: fs.ErrInvalid}
 	}
 	name = filepath.FromSlash(name)
-	return os.ReadDir(filepath.Join(fsys.rootDir, name))
+	return os.ReadDir(filepath.Join(fsys.RootDir, name))
 }
 
 func (fsys *LocalFS) Mkdir(name string, _ fs.FileMode) error {
-	err := fsys.ctx.Err()
+	err := fsys.Context.Err()
 	if err != nil {
 		return err
 	}
@@ -223,11 +223,11 @@ func (fsys *LocalFS) Mkdir(name string, _ fs.FileMode) error {
 		return &fs.PathError{Op: "mkdir", Path: name, Err: fs.ErrInvalid}
 	}
 	name = filepath.FromSlash(name)
-	return os.Mkdir(filepath.Join(fsys.rootDir, name), 0755)
+	return os.Mkdir(filepath.Join(fsys.RootDir, name), 0755)
 }
 
 func (fsys *LocalFS) MkdirAll(name string, _ fs.FileMode) error {
-	err := fsys.ctx.Err()
+	err := fsys.Context.Err()
 	if err != nil {
 		return err
 	}
@@ -235,11 +235,11 @@ func (fsys *LocalFS) MkdirAll(name string, _ fs.FileMode) error {
 		return &fs.PathError{Op: "mkdirall", Path: name, Err: fs.ErrInvalid}
 	}
 	name = filepath.FromSlash(name)
-	return os.MkdirAll(filepath.Join(fsys.rootDir, name), 0755)
+	return os.MkdirAll(filepath.Join(fsys.RootDir, name), 0755)
 }
 
 func (fsys *LocalFS) Remove(name string) error {
-	err := fsys.ctx.Err()
+	err := fsys.Context.Err()
 	if err != nil {
 		return err
 	}
@@ -247,11 +247,11 @@ func (fsys *LocalFS) Remove(name string) error {
 		return &fs.PathError{Op: "remove", Path: name, Err: fs.ErrInvalid}
 	}
 	name = filepath.FromSlash(name)
-	return os.Remove(filepath.Join(fsys.rootDir, name))
+	return os.Remove(filepath.Join(fsys.RootDir, name))
 }
 
 func (fsys *LocalFS) RemoveAll(name string) error {
-	err := fsys.ctx.Err()
+	err := fsys.Context.Err()
 	if err != nil {
 		return err
 	}
@@ -259,11 +259,11 @@ func (fsys *LocalFS) RemoveAll(name string) error {
 		return &fs.PathError{Op: "removeall", Path: name, Err: fs.ErrInvalid}
 	}
 	name = filepath.FromSlash(name)
-	return os.RemoveAll(filepath.Join(fsys.rootDir, name))
+	return os.RemoveAll(filepath.Join(fsys.RootDir, name))
 }
 
 func (fsys *LocalFS) Rename(oldname, newname string) error {
-	err := fsys.ctx.Err()
+	err := fsys.Context.Err()
 	if err != nil {
 		return err
 	}
@@ -275,5 +275,5 @@ func (fsys *LocalFS) Rename(oldname, newname string) error {
 	}
 	oldname = filepath.FromSlash(oldname)
 	newname = filepath.FromSlash(newname)
-	return os.Rename(filepath.Join(fsys.rootDir, oldname), filepath.Join(fsys.rootDir, newname))
+	return os.Rename(filepath.Join(fsys.RootDir, oldname), filepath.Join(fsys.RootDir, newname))
 }

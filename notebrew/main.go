@@ -364,9 +364,9 @@ func main() {
 			}
 		} else {
 			var dataSourceName string
-			var filesDialect string
-			var filesDB *sql.DB
-			var filesErrorCode func(error) string
+			var dialect string
+			var db *sql.DB
+			var errorCode func(error) string
 			switch filesConfig.Dialect {
 			case "sqlite":
 				if filesConfig.Filepath == "" {
@@ -377,12 +377,12 @@ func main() {
 					return fmt.Errorf("%s: sqlite: %w", filepath.Join(configDir, "files.json"), err)
 				}
 				dataSourceName = filesConfig.Filepath + "?" + sqliteQueryString(filesConfig.Params)
-				filesDialect = "sqlite"
-				filesDB, err = sql.Open(sqliteDriverName, dataSourceName)
+				dialect = "sqlite"
+				db, err = sql.Open(sqliteDriverName, dataSourceName)
 				if err != nil {
 					return fmt.Errorf("%s: sqlite: open %s: %w", filepath.Join(configDir, "files.json"), dataSourceName, err)
 				}
-				filesErrorCode = sqliteErrorCode
+				errorCode = sqliteErrorCode
 			case "postgres":
 				values := make(url.Values)
 				for key, value := range filesConfig.Params {
@@ -405,12 +405,12 @@ func main() {
 					RawQuery: values.Encode(),
 				}
 				dataSourceName = uri.String()
-				filesDialect = "postgres"
-				filesDB, err = sql.Open("pgx", dataSourceName)
+				dialect = "postgres"
+				db, err = sql.Open("pgx", dataSourceName)
 				if err != nil {
 					return fmt.Errorf("%s: postgres: open %s: %w", filepath.Join(configDir, "files.json"), dataSourceName, err)
 				}
-				filesErrorCode = func(err error) string {
+				errorCode = func(err error) string {
 					var pgErr *pgconn.PgError
 					if errors.As(err, &pgErr) {
 						return pgErr.Code
@@ -445,9 +445,9 @@ func main() {
 					return err
 				}
 				dataSourceName = config.FormatDSN()
-				filesDialect = "mysql"
-				filesDB = sql.OpenDB(driver)
-				filesErrorCode = func(err error) string {
+				dialect = "mysql"
+				db = sql.OpenDB(driver)
+				errorCode = func(err error) string {
 					var mysqlErr *mysql.MySQLError
 					if errors.As(err, &mysqlErr) {
 						return strconv.FormatUint(uint64(mysqlErr.Number), 10)
@@ -457,17 +457,17 @@ func main() {
 			default:
 				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "users.json"), filesConfig.Dialect)
 			}
-			err = filesDB.Ping()
+			err = db.Ping()
 			if err != nil {
-				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "users.json"), filesDialect, dataSourceName, err)
+				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "users.json"), dialect, dataSourceName, err)
 			}
-			filesCatalog, err := nb9.FilesCatalog(filesDialect)
+			filesCatalog, err := nb9.FilesCatalog(dialect)
 			if err != nil {
 				return err
 			}
 			automigrateCmd := &ddl.AutomigrateCmd{
-				DB:             filesDB,
-				Dialect:        filesDialect,
+				DB:             db,
+				Dialect:        dialect,
 				DestCatalog:    filesCatalog,
 				DropObjects:    true, // TODO: turn this off when we go live.
 				AcceptWarnings: true,
@@ -477,15 +477,15 @@ func main() {
 			if err != nil {
 				return err
 			}
-			if filesDialect == "sqlite" {
-				dbi := ddl.NewDatabaseIntrospector(filesDialect, filesDB)
+			if dialect == "sqlite" {
+				dbi := ddl.NewDatabaseIntrospector(dialect, db)
 				dbi.Tables = []string{"files_fts5"}
 				tables, err := dbi.GetTables()
 				if err != nil {
 					return err
 				}
 				if len(tables) == 0 {
-					_, err := filesDB.Exec("CREATE VIRTUAL TABLE files_fts5 USING fts5 (text, content=files);")
+					_, err := db.Exec("CREATE VIRTUAL TABLE files_fts5 USING fts5 (text, content=files);")
 					if err != nil {
 						return err
 					}
@@ -500,7 +500,7 @@ func main() {
 					triggerNames[trigger.TriggerName] = struct{}{}
 				}
 				if _, ok := triggerNames["files_after_insert"]; !ok {
-					_, err := filesDB.Exec("CREATE TRIGGER files_after_insert AFTER INSERT ON files BEGIN" +
+					_, err := db.Exec("CREATE TRIGGER files_after_insert AFTER INSERT ON files BEGIN" +
 						"\n    INSERT INTO files_fts5 (rowid, text) VALUES (NEW.rowid, NEW.text);" +
 						"\nEND;",
 					)
@@ -509,7 +509,7 @@ func main() {
 					}
 				}
 				if _, ok := triggerNames["files_after_delete"]; !ok {
-					_, err := filesDB.Exec("CREATE TRIGGER files_after_delete AFTER DELETE ON files BEGIN" +
+					_, err := db.Exec("CREATE TRIGGER files_after_delete AFTER DELETE ON files BEGIN" +
 						"\n    INSERT INTO files_fts5 (files_fts5, rowid, text) VALUES ('delete', OLD.rowid, OLD.text);" +
 						"\nEND;",
 					)
@@ -518,7 +518,7 @@ func main() {
 					}
 				}
 				if _, ok := triggerNames["files_after_update"]; !ok {
-					_, err := filesDB.Exec("CREATE TRIGGER files_after_update AFTER UPDATE ON files BEGIN" +
+					_, err := db.Exec("CREATE TRIGGER files_after_update AFTER UPDATE ON files BEGIN" +
 						"\n    INSERT INTO files_fts5 (files_fts5, rowid, text) VALUES ('delete', OLD.rowid, OLD.text);" +
 						"\n    INSERT INTO files_fts5 (rowid, text) VALUES (NEW.rowid, NEW.text);" +
 						"\nEND;",
@@ -529,22 +529,22 @@ func main() {
 				}
 			}
 			defer func() {
-				if filesDialect == "sqlite" {
-					filesDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
+				if dialect == "sqlite" {
+					db.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
 				}
 				ticker := time.NewTicker(4 * time.Hour)
 				go func() {
 					for {
 						<-ticker.C
 						ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-						_, err = filesDB.ExecContext(ctx, "PRAGMA analysis_limit(400); PRAGMA optimize;")
+						_, err = db.ExecContext(ctx, "PRAGMA analysis_limit(400); PRAGMA optimize;")
 						if err != nil {
 							nbrew.Logger.Error(err.Error())
 						}
 						cancel()
 					}
 				}()
-				filesDB.Close()
+				db.Close()
 			}()
 
 			var storage nb9.Storage
@@ -611,14 +611,13 @@ func main() {
 				}
 				storage = nb9.NewLocalStorage(objectsDir, os.TempDir())
 			}
-			nbrew.FS = &nb9.RemoteFS{
-				Context:   context.Background(),
-				DB:        filesDB,
-				Dialect:   filesDialect,
-				ErrorCode: filesErrorCode,
+			nbrew.FS = nb9.NewRemoteFS(nb9.RemoteFSConfig{
+				DB:        db,
+				Dialect:   dialect,
+				ErrorCode: errorCode,
 				Storage:   storage,
 				Logger:    nbrew.Logger,
-			}
+			})
 		}
 		for _, dir := range []string{
 			"notes",
