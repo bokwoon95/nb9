@@ -23,9 +23,14 @@ rename.go
 serve_http.go
 notebrew/main.go
 
-TODO: there was a catastrophic loss of data when I randomly renamed some file. need to test it again!
-TODO: There is a conflict between when renaming a file called abc.html and renaming a folder called abc. Because both their output directories point at output/abc/, simply renaming the outputDir would make it unreachable for the other un-renamed one.
-    - The worrying thing is this extends to clipboard cut and paste too. If you cut pages/abcd.html and paste it somewhere else, renaming the output/abcd/ outputDir would affect any existing folder in pages/abcd/*. You'll need to rename both! Or just don't rename the outputDir at all!
+TODO: rename.go and clipboard.go: instead of calling a blanket rename of srcOutputDir to destOutputDir, we need to do a more nuanced check of whether the srcIsDir, then only moving the files over only or moving the folders over only. This can be done in a single SQL query, or it can be done with a good old fashioned loop + errgroup.
+    - For posts, it's pretty safe to do a blanket rename on the srcOutputDir to destOutputDir.
+    - But for pages, pages/abc.html has a dependency on pages/abc/ because every single direct descendent file inside will be in the Pages field of pages/abc.html.
+        - So, if we are renaming abc.html we need to regenerate the index.html after moving everything over.
+        - And if we are renaming abc/, we need to regenerate the index.html as well.
+        - We'll take the cheeky way out and not regenerate at all, instead asking the user to manually regenerate the index.html themselves. We only move files over, if the index.html being moved is outdated in its new location then so be it.
+    - An additional optimization is we can first check if pages/abc/ even exists if we are renaming pages/abc.html, or if pages/abc.html even exists if we are renaming pages/abc/. If not exist, we can just do a blanket rename for pages like we do for posts. If it does exist, only then will we do the loop + copying files over one by one in parallel.
+        - Since this optimization eliminates the need to loop if only the file exists or only the folder exists, maybe we can skip the custom SQL query for updating files-only or folders-only directly and take the hit potentially issuing multiple UPDATEs to the database when one only would do. That way, we preserve the property that all writes to the FS go through the FS interface methods only, and someone can mirror all writes to the FS by simply hijacking those methods.
 TODO: clipboard/paste: pasting a directory into itself deletes everything that was in the clipboard. Need to do an additional check to see if the the destination resides in any of the names in the clipboard.
 TODO: oh boy pagination on output/themes is broken again (why? investigate)
 TODO: once you can upload images with uploadfile, make it so that any image uploaded but is not mentioned in the markdown content (use goldmark's markdown parser for this) is added to the Images field in PostData. Then in the default post.html, loop over the images and display them in a nice grid or something. No image viewer, pure HTML for this. The easiest dumbest way would be to put some kind of overlay <a href> that links directly to the image (so the browser is the image viewer).
