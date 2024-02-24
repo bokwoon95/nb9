@@ -328,6 +328,11 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			internalServerError(w, r, err)
 			return
 		}
+		// If we are renaming a page, we do need to move all its dependencies over.
+		// If we are renaming a html page, we need to move only the files over to the new outputDir.
+		// If we are renaming a html folder, we need to move only the html folders over to the new outputDir.
+		// This can be done efficiently in a single SQL query. But it would be an UPDATE statement that bypasses the FS's Rename() method.
+		// Maybe call it RenameFilesWithin() and RenameFoldersWithin()?
 		switch head {
 		case "pages":
 			err = nbrew.FS.WithContext(r.Context()).Rename(
