@@ -48,7 +48,7 @@
     <div><label for='to' class='b'>New Name:</label></div>
     <div class='flex items-center'>
       {{ if $.Prefix }}<span class='mr2'>{{ $.Prefix }}</span>{{ end }}
-      <input id='to' name='to' value='{{ $.To }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "to" }} b--invalid-red{{ end }}' autocomplete='on'{{ if not (index $.FormErrors "to") }} autofocus{{ end }}>
+      <input id='to' name='to' value='{{ $.To }}' class='pv1 ph2 br2 ba w-100{{ if index $.FormErrors "to" }} b--invalid-red{{ end }}' autocomplete='on' required{{ if not (index $.FormErrors "to") }} autofocus{{ end }}>
       {{ if $.Ext }}<span class='ml2'>{{ $.Ext }}<span>{{ end }}
     </div>
     <ul class='list-style-disc ph3 f6 invalid-red'>
