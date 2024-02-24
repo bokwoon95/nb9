@@ -21,7 +21,7 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 	}
 	type Request struct {
 		Parent string `json:"parent"`
-		Text   string `json:"text"`
+		Term   string `json:"term"`
 	}
 	type Response struct {
 		Error       string     `json:"error,omitempty"`
@@ -29,7 +29,7 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 		Username    NullString `json:"username"`
 		SitePrefix  string     `json:"sitePrefix"`
 		Parent      string     `json:"parent,omitempty"`
-		Text        string     `json:"text,omitempty"`
+		Term        string     `json:"term,omitempty"`
 		Exts        []string   `json:"exts,omitempty"`
 		Matches     []Match    `json:"matches,omitempty"`
 	}
@@ -122,7 +122,7 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 	response.Username = NullString{String: username, Valid: nbrew.DB != nil}
 	response.SitePrefix = sitePrefix
 	response.Parent = path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
-	response.Text = strings.TrimSpace(r.Form.Get("text"))
+	response.Term = strings.TrimSpace(r.Form.Get("term"))
 	if r.Form.Has("ext") {
 		for _, ext := range r.Form["ext"] {
 			switch ext {
@@ -136,7 +136,7 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 	if !isValidParent(response.Parent) {
 		response.Parent = "."
 	}
-	if response.Text == "" {
+	if response.Term == "" {
 		writeResponse(w, r, response)
 		return
 	}
@@ -172,12 +172,12 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 				" FROM files" +
 				" JOIN files_fts5 ON files_fts5.rowid = files.rowid" +
 				" WHERE {parentFilter}" +
-				" AND files_fts5.text MATCH {text}" +
+				" AND files_fts5 MATCH {term}" +
 				" AND {extensionFilter}" +
 				" ORDER BY files_fts5.rank, files.creation_time DESC",
 			Values: []any{
 				sq.Param("parentFilter", parentFilter),
-				sq.StringParam("text", `"`+strings.ReplaceAll(response.Text, `"`, `""`)+`"`),
+				sq.StringParam("term", `"`+strings.ReplaceAll(response.Term, `"`, `""`)+`"`),
 				sq.Param("extensionFilter", extensionFilter),
 			},
 		}, func(row *sq.Row) Match {
