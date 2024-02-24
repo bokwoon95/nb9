@@ -611,15 +611,14 @@ func main() {
 				}
 				storage = nb9.NewLocalStorage(objectsDir, os.TempDir())
 			}
-			nbrew.FS = nb9.NewRemoteFS(nb9.RemoteFSConfig{
-				FilesDB:        filesDB,
-				FilesDialect:   filesDialect,
-				FilesErrorCode: filesErrorCode,
-				Storage:        storage,
-				UsersDB:        nbrew.UsersDB,
-				UsersDialect:   nbrew.UsersDialect,
-				Logger:         nbrew.Logger,
-			})
+			nbrew.FS = &nb9.RemoteFS{
+				Context:   context.Background(),
+				DB:        filesDB,
+				Dialect:   filesDialect,
+				ErrorCode: filesErrorCode,
+				Storage:   storage,
+				Logger:    nbrew.Logger,
+			}
 		}
 		for _, dir := range []string{
 			"notes",

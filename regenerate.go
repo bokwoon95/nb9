@@ -75,8 +75,8 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 		startedAt := time.Now()
 		groupA, groupctxA := errgroup.WithContext(r.Context())
 		groupA.Go(func() error {
-			cursor, err := sq.FetchCursor(groupctxA, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			cursor, err := sq.FetchCursor(groupctxA, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE file_path LIKE {pattern} ESCAPE '\\'" +
@@ -123,8 +123,8 @@ func (nbrew *Notebrew) regenerate(w http.ResponseWriter, r *http.Request, sitePr
 			if err != nil {
 				return err
 			}
-			cursor, err := sq.FetchCursor(groupctxA, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			cursor, err := sq.FetchCursor(groupctxA, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE (file_path = {posts} OR file_path LIKE {pattern} ESCAPE '\\')" +

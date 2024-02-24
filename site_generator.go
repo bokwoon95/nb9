@@ -145,12 +145,12 @@ func NewSiteGenerator(ctx context.Context, fsys FS, sitePrefix, contentDomain, i
 	if !ok {
 		return siteGen, nil
 	}
-	_, isS3Storage := remoteFS.storage.(*S3Storage)
+	_, isS3Storage := remoteFS.Storage.(*S3Storage)
 	if !isS3Storage {
 		return siteGen, nil
 	}
-	cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
-		Dialect: remoteFS.filesDialect,
+	cursor, err := sq.FetchCursor(ctx, remoteFS.DB, sq.Query{
+		Dialect: remoteFS.Dialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
 			" WHERE file_path LIKE {pattern}" +
@@ -455,8 +455,8 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 	group.Go(func() error {
 		markdownMu := sync.Mutex{}
 		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-			cursor, err := sq.FetchCursor(groupctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			cursor, err := sq.FetchCursor(groupctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
@@ -578,8 +578,8 @@ func (siteGen *SiteGenerator) GeneratePage(ctx context.Context, filePath, text s
 	group.Go(func() error {
 		pageDir := path.Join(siteGen.sitePrefix, "pages", urlPath)
 		if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-			pageData.ChildPages, err = sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			pageData.ChildPages, err = sq.FetchAll(groupctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {pageDir})" +
@@ -838,8 +838,8 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 		}
 	}
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
+		cursor, err := sq.FetchCursor(ctx, remoteFS.DB, sq.Query{
+			Dialect: remoteFS.Dialect,
 			Format: "SELECT {*}" +
 				" FROM files" +
 				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {outputDir})" +
@@ -981,8 +981,8 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		config.PostsPerPage = 100
 	}
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		count, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
+		count, err := sq.FetchOne(ctx, remoteFS.DB, sq.Query{
+			Dialect: remoteFS.Dialect,
 			Format: "SELECT {*}" +
 				" FROM files" +
 				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {parent})" +
@@ -1000,8 +1000,8 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 		lastPage := int(math.Ceil(float64(count) / float64(config.PostsPerPage)))
 		group, groupctx := errgroup.WithContext(ctx)
 		group.Go(func() error {
-			filePaths, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			filePaths, err := sq.FetchAll(groupctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {parent})" +
@@ -1026,8 +1026,8 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 					continue
 				}
 				subgroup.Go(func() error {
-					_, err := sq.Exec(subctx, remoteFS.filesDB, sq.Query{
-						Dialect: remoteFS.filesDialect,
+					_, err := sq.Exec(subctx, remoteFS.DB, sq.Query{
+						Dialect: remoteFS.Dialect,
 						Format:  "DELETE FROM files WHERE file_path = {filePath} OR file_path LIKE {pattern} ESCAPE '\\'",
 						Values: []any{
 							sq.StringParam("filePath", filePath),
@@ -1046,8 +1046,8 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 			}
 			return nil
 		})
-		cursor, err := sq.FetchCursor(groupctx, remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
+		cursor, err := sq.FetchCursor(groupctx, remoteFS.DB, sq.Query{
+			Dialect: remoteFS.Dialect,
 			Format: "SELECT {*}" +
 				" FROM files" +
 				" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {parent})" +
@@ -1504,7 +1504,7 @@ func (siteGen *SiteGenerator) GeneratePostListPage(ctx context.Context, category
 func (siteGen *SiteGenerator) rewriteURLs(writer io.Writer, reader io.Reader, urlPath string) error {
 	var isS3Storage bool
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		_, isS3Storage = remoteFS.storage.(*S3Storage)
+		_, isS3Storage = remoteFS.Storage.(*S3Storage)
 	}
 	tokenizer := html.NewTokenizer(reader)
 	for {
@@ -1971,8 +1971,8 @@ func (siteGen *SiteGenerator) PostTemplate(ctx context.Context) (tmpl *template.
 	var text string
 	var found bool
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		result, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
+		result, err := sq.FetchOne(ctx, remoteFS.DB, sq.Query{
+			Dialect: remoteFS.Dialect,
 			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
 			Values: []any{
 				sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "output/themes/post.html")),
@@ -2059,8 +2059,8 @@ func (siteGen *SiteGenerator) PostListTemplate(ctx context.Context, category str
 	var text string
 	var found bool
 	if remoteFS, ok := siteGen.fsys.(*RemoteFS); ok {
-		result, err := sq.FetchOne(ctx, remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
+		result, err := sq.FetchOne(ctx, remoteFS.DB, sq.Query{
+			Dialect: remoteFS.Dialect,
 			Format:  "SELECT {*} FROM files WHERE file_path = {filePath}",
 			Values: []any{
 				sq.StringParam("filePath", path.Join(siteGen.sitePrefix, "output/themes/postlist.html")),

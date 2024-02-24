@@ -220,8 +220,8 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	files, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-		Dialect: remoteFS.filesDialect,
+	files, err := sq.FetchAll(r.Context(), remoteFS.DB, sq.Query{
+		Dialect: remoteFS.Dialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
 			" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
@@ -273,8 +273,8 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 	if response.From != "" {
 		group, groupctx := errgroup.WithContext(r.Context())
 		group.Go(func() error {
-			sites, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			sites, err := sq.FetchAll(groupctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id IS NULL" +
@@ -309,8 +309,8 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 			return nil
 		})
 		group.Go(func() error {
-			hasPreviousSite, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			hasPreviousSite, err := sq.FetchExists(groupctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "SELECT 1" +
 					" FROM files" +
 					" WHERE parent_id IS NULL" +
@@ -349,8 +349,8 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 	if response.Before != "" {
 		group, groupctx := errgroup.WithContext(r.Context())
 		group.Go(func() error {
-			response.Sites, err = sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			response.Sites, err = sq.FetchAll(groupctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id IS NULL" +
@@ -384,8 +384,8 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 			return nil
 		})
 		group.Go(func() error {
-			nextSite, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			nextSite, err := sq.FetchOne(groupctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "SELECT {*}" +
 					" FROM files" +
 					" WHERE parent_id IS NULL" +
@@ -424,8 +424,8 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 
-	sites, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-		Dialect: remoteFS.filesDialect,
+	sites, err := sq.FetchAll(r.Context(), remoteFS.DB, sq.Query{
+		Dialect: remoteFS.Dialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
 			" WHERE parent_id IS NULL" +

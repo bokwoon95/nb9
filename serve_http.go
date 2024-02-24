@@ -377,7 +377,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case ".jpeg", ".jpg", ".png", ".webp", ".gif":
 		var isS3Storage bool
 		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-			_, isS3Storage = remoteFS.storage.(*S3Storage)
+			_, isS3Storage = remoteFS.Storage.(*S3Storage)
 		}
 		if nbrew.ImgDomain != "" && isS3Storage {
 			cacheControl = "max-age=31536000, immutable"

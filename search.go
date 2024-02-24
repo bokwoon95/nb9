@@ -6,9 +6,9 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"slices"
 	"strings"
 	"time"
-	"slices"
 
 	"github.com/bokwoon95/nb9/sq"
 )
@@ -141,7 +141,7 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 		return
 	}
 	var err error
-	switch remoteFS.filesDialect {
+	switch remoteFS.Dialect {
 	case "sqlite":
 		var parentFilter sq.Expression
 		parent := path.Join(sitePrefix, response.Parent)
@@ -166,8 +166,8 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 			b.WriteString(")")
 			extensionFilter = sq.Expr(b.String())
 		}
-		response.Matches, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
+		response.Matches, err = sq.FetchAll(r.Context(), remoteFS.DB, sq.Query{
+			Dialect: remoteFS.Dialect,
 			Format: "SELECT {*}" +
 				" FROM files" +
 				" JOIN files_fts5 ON files_fts5.rowid = files.rowid" +

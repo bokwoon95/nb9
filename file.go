@@ -185,8 +185,8 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 				response.AssetDir = path.Join("output", strings.TrimSuffix(tail, ".html"))
 			}
 			if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-				response.Assets, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				response.Assets, err = sq.FetchAll(r.Context(), remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {assetDir})" +
@@ -255,8 +255,8 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			response.URL = response.ContentSite + "/" + strings.TrimSuffix(filePath, ".md") + "/"
 			response.AssetDir = path.Join("output", strings.TrimSuffix(filePath, ".md"))
 			if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-				response.Assets, err = sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				response.Assets, err = sq.FetchAll(r.Context(), remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {assetDir})" +
@@ -367,7 +367,7 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		}
 		isS3Storage := false
 		if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-			_, isS3Storage = remoteFS.storage.(*S3Storage)
+			_, isS3Storage = remoteFS.Storage.(*S3Storage)
 		}
 		funcMap := map[string]any{
 			"join":             path.Join,

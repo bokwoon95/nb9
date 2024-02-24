@@ -350,8 +350,8 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					} else {
 						destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, name)
 						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-							exists, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
-								Dialect: remoteFS.filesDialect,
+							exists, err := sq.FetchExists(groupctx, remoteFS.DB, sq.Query{
+								Dialect: remoteFS.Dialect,
 								Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.html'",
 								Values: []any{
 									sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcFilePath)+"/%"),
@@ -393,8 +393,8 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					} else {
 						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, name)
 						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
-							exists, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
-								Dialect: remoteFS.filesDialect,
+							exists, err := sq.FetchExists(groupctx, remoteFS.DB, sq.Query{
+								Dialect: remoteFS.Dialect,
 								Format:  "SELECT 1 FROM files WHERE file_path LIKE {pattern} AND NOT is_dir AND file_path NOT LIKE '%.md'",
 								Values: []any{
 									sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcFilePath)+"/%"),
@@ -563,8 +563,8 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 	if remoteFS, ok := fsys.(*RemoteFS); ok {
 		srcFileID := srcFileInfo.(*RemoteFileInfo).FileID
 		destFileID := NewID()
-		_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
+		_, err := sq.Exec(ctx, remoteFS.DB, sq.Query{
+			Dialect: remoteFS.Dialect,
 			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 				" SELECT" +
 				" {destFileID}" +
@@ -592,7 +592,7 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 		ext := path.Ext(srcFilePath)
 		fileType := fileTypes[ext]
 		if fileType.IsObject {
-			err := remoteFS.storage.Copy(ctx, encodeUUID(srcFileID)+ext, encodeUUID(destFileID)+ext)
+			err := remoteFS.Storage.Copy(ctx, encodeUUID(srcFileID)+ext, encodeUUID(destFileID)+ext)
 			if err != nil {
 				getLogger(ctx).Error(err.Error())
 			}
@@ -622,8 +622,8 @@ func copyFile(ctx context.Context, fsys FS, srcFileInfo fs.FileInfo, srcFilePath
 
 func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error {
 	if remoteFS, ok := fsys.(*RemoteFS); ok {
-		cursor, err := sq.FetchCursor(ctx, remoteFS.filesDB, sq.Query{
-			Dialect: remoteFS.filesDialect,
+		cursor, err := sq.FetchCursor(ctx, remoteFS.DB, sq.Query{
+			Dialect: remoteFS.Dialect,
 			Format:  "SELECT {*} FROM files WHERE file_path = {srcDirPath} OR file_path LIKE {pattern} ORDER BY file_path",
 			Values: []any{
 				sq.StringParam("srcDirPath", srcDirPath),
@@ -673,7 +673,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					err := remoteFS.storage.Copy(ctx, hex.EncodeToString(srcFile.FileID[:])+ext, hex.EncodeToString(destFileID[:])+ext)
+					err := remoteFS.Storage.Copy(ctx, hex.EncodeToString(srcFile.FileID[:])+ext, hex.EncodeToString(destFileID[:])+ext)
 					if err != nil {
 						getLogger(ctx).Error(err.Error())
 					}
@@ -689,10 +689,10 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 		if err != nil {
 			return err
 		}
-		switch remoteFS.filesDialect {
+		switch remoteFS.Dialect {
 		case "sqlite":
-			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			_, err := sq.Exec(ctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 					" SELECT" +
 					" unhex(items.value->>0, '-') AS dest_file_id" +
@@ -717,8 +717,8 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 				return err
 			}
 		case "postgres":
-			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			_, err := sq.Exec(ctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 					" SELECT" +
 					" CAST(items.value->>0 AS UUID) AS dest_file_id" +
@@ -743,8 +743,8 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 				return err
 			}
 		case "mysql":
-			_, err := sq.Exec(ctx, remoteFS.filesDB, sq.Query{
-				Dialect: remoteFS.filesDialect,
+			_, err := sq.Exec(ctx, remoteFS.DB, sq.Query{
+				Dialect: remoteFS.Dialect,
 				Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
 					" SELECT" +
 					" uuid_to_bin(items.dest_file_id) AS dest_file_id" +
@@ -774,7 +774,7 @@ func copyDir(ctx context.Context, fsys FS, srcDirPath, destDirPath string) error
 				return err
 			}
 		default:
-			return fmt.Errorf("unsupported dialect %q", remoteFS.filesDialect)
+			return fmt.Errorf("unsupported dialect %q", remoteFS.Dialect)
 		}
 		wg.Wait()
 		return nil

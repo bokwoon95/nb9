@@ -351,8 +351,8 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 					filter = sq.Expr("file_path <= {}", path.Join(sitePrefix, filePath, response.From))
 					order = sq.Expr("file_path DESC")
 				}
-				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				files, err := sq.FetchAll(groupctx, remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
@@ -400,8 +400,8 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 					filter = sq.Expr("file_path > {}", path.Join(sitePrefix, filePath, response.From))
 					order = sq.Expr("file_path ASC")
 				}
-				hasPreviousFile, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				hasPreviousFile, err := sq.FetchExists(groupctx, remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT 1" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
@@ -448,8 +448,8 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 					filter = sq.Expr("file_path > {}", path.Join(sitePrefix, filePath, response.Before))
 					order = sq.Expr("file_path DESC")
 				}
-				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				files, err := sq.FetchAll(groupctx, remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
@@ -496,8 +496,8 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 					filter = sq.Expr("file_path <= {}", path.Join(sitePrefix, filePath, response.Before))
 					order = sq.Expr("file_path ASC")
 				}
-				nextFile, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				nextFile, err := sq.FetchOne(groupctx, remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
@@ -571,8 +571,8 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 						order = sq.Expr("creation_time DESC, file_path DESC")
 					}
 				}
-				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				files, err := sq.FetchAll(groupctx, remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
@@ -634,8 +634,8 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 						order = sq.Expr("creation_time ASC, file_path ASC")
 					}
 				}
-				hasPreviousFile, err := sq.FetchExists(groupctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				hasPreviousFile, err := sq.FetchExists(groupctx, remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT 1" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
@@ -701,8 +701,8 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 						order = sq.Expr("creation_time DESC, file_path DESC")
 					}
 				}
-				files, err := sq.FetchAll(groupctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				files, err := sq.FetchAll(groupctx, remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
@@ -763,8 +763,8 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 						order = sq.Expr("creation_time DESC, file_path DESC")
 					}
 				}
-				nextFile, err := sq.FetchOne(groupctx, remoteFS.filesDB, sq.Query{
-					Dialect: remoteFS.filesDialect,
+				nextFile, err := sq.FetchOne(groupctx, remoteFS.DB, sq.Query{
+					Dialect: remoteFS.Dialect,
 					Format: "SELECT {*}" +
 						" FROM files" +
 						" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
@@ -833,8 +833,8 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 			order = sq.Expr("creation_time DESC, file_path DESC")
 		}
 	}
-	files, err := sq.FetchAll(r.Context(), remoteFS.filesDB, sq.Query{
-		Dialect: remoteFS.filesDialect,
+	files, err := sq.FetchAll(r.Context(), remoteFS.DB, sq.Query{
+		Dialect: remoteFS.Dialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
 			" WHERE parent_id = (SELECT file_id FROM files WHERE file_path = {filePath})" +
