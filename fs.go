@@ -46,9 +46,8 @@ type FS interface {
 
 	RemoveAll(name string) error
 
-	// Rename renames (moves) oldname to newname. If newname already exists and
-	// is not a directory, Rename replaces it.
-	Rename(oldname, newname string) error
+	// Rename renames (moves) oldName to newName. newName must not exist.
+	Rename(oldName, newName string) error
 }
 
 type FileType struct {

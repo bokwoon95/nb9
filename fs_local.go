@@ -2,6 +2,7 @@ package nb9
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
@@ -262,18 +263,50 @@ func (fsys *LocalFS) RemoveAll(name string) error {
 	return os.RemoveAll(filepath.Join(fsys.RootDir, name))
 }
 
-func (fsys *LocalFS) Rename(oldname, newname string) error {
+func (fsys *LocalFS) Rename(oldName, newName string) error {
 	err := fsys.Context.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(oldname) || strings.Contains(oldname, "\\") {
-		return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrInvalid}
+	if !fs.ValidPath(oldName) || strings.Contains(oldName, "\\") {
+		return &fs.PathError{Op: "rename", Path: oldName, Err: fs.ErrInvalid}
 	}
-	if !fs.ValidPath(newname) || strings.Contains(newname, "\\") {
-		return &fs.PathError{Op: "rename", Path: newname, Err: fs.ErrInvalid}
+	if !fs.ValidPath(newName) || strings.Contains(newName, "\\") {
+		return &fs.PathError{Op: "rename", Path: newName, Err: fs.ErrInvalid}
 	}
-	oldname = filepath.FromSlash(oldname)
-	newname = filepath.FromSlash(newname)
-	return os.Rename(filepath.Join(fsys.RootDir, oldname), filepath.Join(fsys.RootDir, newname))
+	oldName = filepath.FromSlash(oldName)
+	newName = filepath.FromSlash(newName)
+	_, err = os.Stat(filepath.Join(fsys.RootDir, newName))
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	} else {
+		return fs.ErrExist
+	}
+	return os.Rename(filepath.Join(fsys.RootDir, oldName), filepath.Join(fsys.RootDir, newName))
+}
+
+func (fsys *LocalFS) Copy(srcName, destName string) error {
+	err := fsys.Context.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(srcName) || strings.Contains(srcName, "\\") {
+		return &fs.PathError{Op: "copy", Path: srcName, Err: fs.ErrInvalid}
+	}
+	if !fs.ValidPath(destName) || strings.Contains(destName, "\\") {
+		return &fs.PathError{Op: "copy", Path: destName, Err: fs.ErrInvalid}
+	}
+	srcName = filepath.FromSlash(srcName)
+	destName = filepath.FromSlash(destName)
+	_, err = os.Stat(filepath.Join(fsys.RootDir, destName))
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	} else {
+		return fs.ErrExist
+	}
+	return nil
 }

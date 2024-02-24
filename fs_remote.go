@@ -7,6 +7,8 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -982,152 +984,107 @@ func (fsys *RemoteFS) RemoveAll(name string) error {
 	return nil
 }
 
-func (fsys *RemoteFS) Rename(oldname, newname string) error {
+func (fsys *RemoteFS) Rename(oldName, newName string) error {
 	err := fsys.Context.Err()
 	if err != nil {
 		return err
 	}
-	if !fs.ValidPath(oldname) || strings.Contains(oldname, "\\") {
-		return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrInvalid}
+	if !fs.ValidPath(oldName) || strings.Contains(oldName, "\\") {
+		return &fs.PathError{Op: "rename", Path: oldName, Err: fs.ErrInvalid}
 	}
-	if !fs.ValidPath(newname) || strings.Contains(newname, "\\") {
-		return &fs.PathError{Op: "rename", Path: newname, Err: fs.ErrInvalid}
+	if !fs.ValidPath(newName) || strings.Contains(newName, "\\") {
+		return &fs.PathError{Op: "rename", Path: newName, Err: fs.ErrInvalid}
+	}
+	exists, err := sq.FetchExists(fsys.Context, fsys.DB, sq.Query{
+		Dialect: fsys.Dialect,
+		Format:  "SELECT 1 FROM files WHERE file_path = {newName}",
+		Values: []any{
+			sq.StringParam("newName", newName),
+		},
+	})
+	if exists {
+		return fs.ErrExist
 	}
 	tx, err := fsys.DB.BeginTx(fsys.Context, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	var deletedFileID [16]byte
 	switch fsys.Dialect {
 	case "sqlite", "postgres":
-		deletedFileID, err = sq.FetchOne(fsys.Context, tx, sq.Query{
-			Dialect: fsys.Dialect,
-			Format:  "DELETE FROM files WHERE file_path = {newname} AND NOT is_dir RETURNING {*}",
-			Values: []any{
-				sq.StringParam("newname", newname),
-			},
-		}, func(row *sq.Row) (fileID [16]byte) {
-			return row.UUID("file_id")
-		})
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
 		// If the parent changes, also update the parent_id.
 		var updateParent sq.Expression
-		if path.Dir(oldname) != path.Dir(newname) {
-			updateParent = sq.Expr(", parent_id = (SELECT file_id FROM files WHERE file_path = {})", path.Dir(newname))
+		if path.Dir(oldName) != path.Dir(newName) {
+			updateParent = sq.Expr(", parent_id = (SELECT file_id FROM files WHERE file_path = {})", path.Dir(newName))
 		}
-		oldnameIsDir, err := sq.FetchOne(fsys.Context, tx, sq.Query{
+		oldNameIsDir, err := sq.FetchOne(fsys.Context, tx, sq.Query{
 			Dialect: fsys.Dialect,
-			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime}{updateParent} WHERE file_path = {oldname} RETURNING {*}",
+			Format:  "UPDATE files SET file_path = {newName}, mod_time = {modTime}{updateParent} WHERE file_path = {oldName} RETURNING {*}",
 			Values: []any{
-				sq.StringParam("newname", newname),
+				sq.StringParam("newName", newName),
 				sq.TimeParam("modTime", time.Now().UTC()),
 				sq.Param("updateParent", updateParent),
-				sq.StringParam("oldname", oldname),
+				sq.StringParam("oldName", oldName),
 			},
 		}, func(row *sq.Row) bool {
 			return row.Bool("is_dir")
 		})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrNotExist}
-			}
-			if fsys.ErrorCode != nil {
-				errcode := fsys.ErrorCode(err)
-				if IsKeyViolation(fsys.Dialect, errcode) {
-					// We weren't able to delete {newname} earlier, which means it is a
-					// directory.
-					return &fs.PathError{Op: "rename", Path: newname, Err: syscall.EISDIR}
-				}
+				return &fs.PathError{Op: "rename", Path: oldName, Err: fs.ErrNotExist}
 			}
 			return err
 		}
-		if oldnameIsDir {
+		if oldNameIsDir {
 			_, err := sq.Exec(fsys.Context, tx, sq.Query{
 				Dialect: fsys.Dialect,
 				Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 				Values: []any{
-					sq.Param("filePath", sq.Expr("concat({}, substring(file_path, {}))", newname, utf8.RuneCountInString(oldname)+1)),
+					sq.Param("filePath", sq.Expr("concat({}, substring(file_path, {}))", newName, utf8.RuneCountInString(oldName)+1)),
 					sq.TimeParam("modTime", time.Now().UTC()),
-					sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldname)+"/%"),
+					sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldName)+"/%"),
 				},
 			})
 			if err != nil {
 				return err
 			}
 		} else {
-			if path.Ext(oldname) != path.Ext(newname) {
+			if path.Ext(oldName) != path.Ext(newName) {
 				return fmt.Errorf("file extension cannot be changed")
 			}
 		}
 	case "mysql":
-		result, err := sq.FetchOne(fsys.Context, tx, sq.Query{
+		oldNameIsDir, err := sq.FetchOne(fsys.Context, tx, sq.Query{
 			Dialect: fsys.Dialect,
-			Format:  "SELECT {*} FROM files WHERE file_path = {newname}",
+			Format:  "SELECT {*} FROM files WHERE file_path = {oldName}",
 			Values: []any{
-				sq.StringParam("newname", newname),
-			},
-		}, func(row *sq.Row) (result struct {
-			FileID [16]byte
-			IsDir  bool
-		}) {
-			result.FileID = row.UUID("file_id")
-			result.IsDir = row.Bool("is_dir")
-			return result
-		})
-		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-		} else {
-			if result.IsDir {
-				return &fs.PathError{Op: "rename", Path: newname, Err: syscall.EISDIR}
-			}
-			_, err := sq.Exec(fsys.Context, tx, sq.Query{
-				Dialect: fsys.Dialect,
-				Format:  "DELETE FROM files WHERE file_path = {newname}",
-				Values: []any{
-					sq.StringParam("newname", newname),
-				},
-			})
-			if err != nil {
-				return err
-			}
-			deletedFileID = result.FileID
-		}
-		oldnameIsDir, err := sq.FetchOne(fsys.Context, tx, sq.Query{
-			Dialect: fsys.Dialect,
-			Format:  "SELECT {*} FROM files WHERE file_path = {oldname}",
-			Values: []any{
-				sq.StringParam("oldname", oldname),
+				sq.StringParam("oldName", oldName),
 			},
 		}, func(row *sq.Row) bool {
 			return row.Bool("is_dir")
 		})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrNotExist}
+				return &fs.PathError{Op: "rename", Path: oldName, Err: fs.ErrNotExist}
 			}
 			return err
 		}
-		if !oldnameIsDir && path.Ext(oldname) != path.Ext(newname) {
+		if !oldNameIsDir && path.Ext(oldName) != path.Ext(newName) {
 			return fmt.Errorf("file extension cannot be changed")
 		}
 		// If the parent changes, also update the parent_id.
 		var updateParent sq.Expression
-		if path.Dir(oldname) != path.Dir(newname) {
-			updateParent = sq.Expr(", parent_id = (SELECT file_id FROM files WHERE file_path = {})", path.Dir(newname))
+		if path.Dir(oldName) != path.Dir(newName) {
+			updateParent = sq.Expr(", parent_id = (SELECT file_id FROM files WHERE file_path = {})", path.Dir(newName))
 		}
 		_, err = sq.Exec(fsys.Context, tx, sq.Query{
 			Dialect: fsys.Dialect,
-			Format:  "UPDATE files SET file_path = {newname}, mod_time = {modTime}{updateParent} WHERE file_path = {oldname}",
+			Format:  "UPDATE files SET file_path = {newName}, mod_time = {modTime}{updateParent} WHERE file_path = {oldName}",
 			Values: []any{
-				sq.StringParam("newname", newname),
+				sq.StringParam("newName", newName),
 				sq.TimeParam("modTime", time.Now().UTC()),
 				sq.Param("updateParent", updateParent),
-				sq.StringParam("oldname", oldname),
+				sq.StringParam("oldName", oldName),
 			},
 		})
 		if err != nil {
@@ -1137,9 +1094,9 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 			Dialect: fsys.Dialect,
 			Format:  "UPDATE files SET file_path = {filePath}, mod_time = {modTime} WHERE file_path LIKE {pattern} ESCAPE '\\'",
 			Values: []any{
-				sq.Param("filePath", sq.Expr("concat({}, substring(file_path, {}))", newname, utf8.RuneCountInString(oldname)+1)),
+				sq.Param("filePath", sq.Expr("concat({}, substring(file_path, {}))", newName, utf8.RuneCountInString(oldName)+1)),
 				sq.TimeParam("modTime", time.Now().UTC()),
-				sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldname)+"/%"),
+				sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(oldName)+"/%"),
 			},
 		})
 		if err != nil {
@@ -1152,12 +1109,253 @@ func (fsys *RemoteFS) Rename(oldname, newname string) error {
 	if err != nil {
 		return err
 	}
-	if deletedFileID != [16]byte{} {
-		err := fsys.Storage.Delete(fsys.Context, encodeUUID(deletedFileID)+path.Ext(newname))
+	return nil
+}
+
+func (fsys *RemoteFS) Copy(srcName, destName string) error {
+	err := fsys.Context.Err()
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(srcName) || strings.Contains(srcName, "\\") {
+		return &fs.PathError{Op: "copy", Path: srcName, Err: fs.ErrInvalid}
+	}
+	if !fs.ValidPath(destName) || strings.Contains(destName, "\\") {
+		return &fs.PathError{Op: "copy", Path: destName, Err: fs.ErrInvalid}
+	}
+	var srcFileID [16]byte
+	var srcIsDir bool
+	var destExists bool
+	fileInfos, err := sq.FetchAll(fsys.Context, fsys.DB, sq.Query{
+		Dialect: fsys.Dialect,
+		Format:  "SELECT {*} FROM files WHERE file_path IN ({srcName}, {destName})",
+		Values: []any{
+			sq.StringParam("srcName", srcName),
+			sq.StringParam("destName", destName),
+		},
+	}, func(row *sq.Row) (fileInfo struct {
+		FilePath string
+		FileID   [16]byte
+		IsDir    bool
+	}) {
+		fileInfo.FilePath = row.String("file_path")
+		fileInfo.FileID = row.UUID("file_id")
+		fileInfo.IsDir = row.Bool("is_dir")
+		return fileInfo
+	})
+	if err != nil {
+		return err
+	}
+	for _, fileInfo := range fileInfos {
+		switch fileInfo.FilePath {
+		case srcName:
+			srcFileID = fileInfo.FileID
+			srcIsDir = fileInfo.IsDir
+		case destName:
+			destExists = true
+		}
+	}
+	if srcFileID == [16]byte{} {
+		return fs.ErrNotExist
+	}
+	if destExists {
+		return fs.ErrExist
+	}
+	if !srcIsDir {
+		srcFilePath := srcName
+		destFilePath := destName
+		destFileID := NewID()
+		_, err := sq.Exec(fsys.Context, fsys.DB, sq.Query{
+			Dialect: fsys.Dialect,
+			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
+				" SELECT" +
+				" {destFileID}" +
+				", (SELECT file_id FROM files WHERE file_path = {destParent})" +
+				", {destFilePath}" +
+				", {modTime}" +
+				", {modTime}" +
+				", is_dir" +
+				", size" +
+				", text" +
+				", data" +
+				" FROM files" +
+				" WHERE file_path = {srcFilePath}",
+			Values: []any{
+				sq.UUIDParam("destFileID", destFileID),
+				sq.StringParam("destParent", path.Dir(destFilePath)),
+				sq.StringParam("destFilePath", destFilePath),
+				sq.TimeParam("modTime", time.Now().UTC()),
+				sq.StringParam("srcFilePath", srcFilePath),
+			},
+		})
 		if err != nil {
 			return err
 		}
+		ext := path.Ext(srcFilePath)
+		fileType := fileTypes[ext]
+		if fileType.IsObject {
+			err := fsys.Storage.Copy(fsys.Context, encodeUUID(srcFileID)+ext, encodeUUID(destFileID)+ext)
+			if err != nil {
+				fsys.Logger.Error(err.Error())
+			}
+		}
+		return nil
 	}
+	cursor, err := sq.FetchCursor(fsys.Context, fsys.DB, sq.Query{
+		Dialect: fsys.Dialect,
+		Format:  "SELECT {*} FROM files WHERE file_path = {srcName} OR file_path LIKE {pattern} ORDER BY file_path",
+		Values: []any{
+			sq.StringParam("srcName", srcName),
+			sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(srcName)+"/%"),
+		},
+	}, func(row *sq.Row) (srcFile struct {
+		FileID   [16]byte
+		FilePath string
+		IsDir    bool
+	}) {
+		srcFile.FileID = row.UUID("file_id")
+		srcFile.FilePath = row.String("file_path")
+		srcFile.IsDir = row.Bool("is_dir")
+		return srcFile
+	})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close()
+	var wg sync.WaitGroup
+	var items [][4]string // destFileID, destParentID, destParent, srcFilePath
+	fileIDs := make(map[string][16]byte)
+	for cursor.Next() {
+		srcFile, err := cursor.Result()
+		if err != nil {
+			return nil
+		}
+		destFileID := NewID()
+		destFilePath := destName + strings.TrimPrefix(srcFile.FilePath, srcName)
+		fileIDs[destFilePath] = destFileID
+		var item [4]string
+		item[0] = encodeUUID(destFileID)
+		destParent := path.Dir(destFilePath)
+		if destParentID, ok := fileIDs[destParent]; ok {
+			item[1] = encodeUUID(destParentID)
+		} else {
+			item[2] = destParent
+		}
+		item[3] = srcFile.FilePath
+		items = append(items, item)
+		if srcFile.IsDir {
+			continue
+		}
+		ext := path.Ext(srcFile.FilePath)
+		fileType := fileTypes[ext]
+		if fileType.IsObject {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				err := fsys.Storage.Copy(fsys.Context, hex.EncodeToString(srcFile.FileID[:])+ext, hex.EncodeToString(destFileID[:])+ext)
+				if err != nil {
+					fsys.Logger.Error(err.Error())
+				}
+			}()
+		}
+	}
+	err = cursor.Close()
+	if err != nil {
+		return err
+	}
+	var b strings.Builder
+	err = json.NewEncoder(&b).Encode(items)
+	if err != nil {
+		return err
+	}
+	switch fsys.Dialect {
+	case "sqlite":
+		_, err := sq.Exec(fsys.Context, fsys.DB, sq.Query{
+			Dialect: fsys.Dialect,
+			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
+				" SELECT" +
+				" unhex(items.value->>0, '-') AS dest_file_id" +
+				", CASE WHEN items.value->>1 <> '' THEN unhex(items.value->>1, '-') ELSE (SELECT file_id FROM files WHERE file_path = items.value->>2) END AS dest_parent_id" +
+				", concat({destName}, substring(src_files.file_path, {start})) AS dest_file_path" +
+				", {modTime}" +
+				", {modTime}" +
+				", src_files.is_dir" +
+				", src_files.size" +
+				", src_files.text" +
+				", src_files.data" +
+				" FROM json_each({items}) AS items" +
+				" JOIN files AS src_files ON src_files.file_path = items.value->>3",
+			Values: []any{
+				sq.StringParam("destName", destName),
+				sq.IntParam("start", utf8.RuneCountInString(srcName)+1),
+				sq.TimeParam("modTime", time.Now().UTC()),
+				sq.StringParam("items", b.String()),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	case "postgres":
+		_, err := sq.Exec(fsys.Context, fsys.DB, sq.Query{
+			Dialect: fsys.Dialect,
+			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
+				" SELECT" +
+				" CAST(items.value->>0 AS UUID) AS dest_file_id" +
+				", CASE WHEN items.value->>1 <> '' THEN CAST(items.value->>1 AS UUID) ELSE (SELECT file_id FROM files WHERE file_path = items.value->>2) END AS dest_parent_id" +
+				", concat({destName}, substring(src_files.file_path, {start})) AS dest_file_path" +
+				", {modTime}" +
+				", {modTime}" +
+				", src_files.is_dir" +
+				", src_files.size" +
+				", src_files.text" +
+				", src_files.data" +
+				" FROM json_array_elements({items}) AS items" +
+				" JOIN files AS src_files ON src_files.file_path = items.value->>3",
+			Values: []any{
+				sq.StringParam("destName", destName),
+				sq.IntParam("start", utf8.RuneCountInString(srcName)+1),
+				sq.TimeParam("modTime", time.Now().UTC()),
+				sq.StringParam("items", b.String()),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	case "mysql":
+		_, err := sq.Exec(fsys.Context, fsys.DB, sq.Query{
+			Dialect: fsys.Dialect,
+			Format: "INSERT INTO files (file_id, parent_id, file_path, mod_time, creation_time, is_dir, size, text, data)" +
+				" SELECT" +
+				" uuid_to_bin(items.dest_file_id) AS dest_file_id" +
+				", CASE WHEN items.dest_parent_id <> '' THEN uuid_to_bin(items.dest_parent_id) ELSE (SELECT file_id FROM files WHERE file_path = items.parent_path) END AS dest_parent_id" +
+				", concat({destName}, substring(src_files.file_path, {start})) AS dest_file_path" +
+				", {modTime}" +
+				", {modTime}" +
+				", src_files.is_dir" +
+				", src_files.size" +
+				", src_files.text" +
+				", src_files.data" +
+				" FROM json_table({items}, '$[*]' COLUMNS (" +
+				"dest_file_id VARCHAR(36) PATH '$[0]'" +
+				", dest_parent_id VARCHAR(36) PATH '$[1]'" +
+				", dest_parent VARCHAR(500) PATH '$[2]'" +
+				", src_file_path VARCHAR(500) PATH '$[3]'" +
+				")) AS items" +
+				" JOIN files AS src_files ON src_files.file_path = items.src_file_path",
+			Values: []any{
+				sq.StringParam("destName", destName),
+				sq.IntParam("start", utf8.RuneCountInString(srcName)+1),
+				sq.TimeParam("modTime", time.Now().UTC()),
+				sq.StringParam("items", b.String()),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported dialect %q", fsys.Dialect)
+	}
+	wg.Wait()
 	return nil
 }
 
@@ -1531,4 +1729,18 @@ func isFulltextIndexed(filePath string) bool {
 		}
 	}
 	return false
+}
+
+func encodeUUID(id [16]byte) string {
+	var b [32 + 4]byte
+	hex.Encode(b[:], id[:4])
+	b[8] = '-'
+	hex.Encode(b[9:13], id[4:6])
+	b[13] = '-'
+	hex.Encode(b[14:18], id[6:8])
+	b[18] = '-'
+	hex.Encode(b[19:23], id[8:10])
+	b[23] = '-'
+	hex.Encode(b[24:], id[10:])
+	return string(b[:])
 }

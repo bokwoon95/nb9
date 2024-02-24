@@ -1026,14 +1026,7 @@ func (siteGen *SiteGenerator) GeneratePostList(ctx context.Context, category str
 					continue
 				}
 				subgroup.Go(func() error {
-					_, err := sq.Exec(subctx, remoteFS.DB, sq.Query{
-						Dialect: remoteFS.Dialect,
-						Format:  "DELETE FROM files WHERE file_path = {filePath} OR file_path LIKE {pattern} ESCAPE '\\'",
-						Values: []any{
-							sq.StringParam("filePath", filePath),
-							sq.StringParam("pattern", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(filePath)+"/%"),
-						},
-					})
+					err := remoteFS.WithContext(subctx).RemoveAll(filePath)
 					if err != nil {
 						return err
 					}

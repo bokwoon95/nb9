@@ -23,7 +23,6 @@ rename.go
 serve_http.go
 notebrew/main.go
 
-TODO: make all fields in RemoteFS and LocalFS public, so that people can easily extend their behaviour as they wish e.g. mirror all writes to S3/dedicated nginx server/Cloudflare or something.
 TODO: check that all our writes (OpenWriter/Delete/Copy) go through the FS. Only reads are permitted to access the underlying filesystem directly (for efficiency reasons).
 TODO: rename.go
     TODO: first off, rename seems broken
