@@ -23,7 +23,6 @@ rename.go
 serve_http.go
 notebrew/main.go
 
-TODO: check that all our writes (OpenWriter/Delete/Copy) go through the FS. Only reads are permitted to access the underlying filesystem directly (for efficiency reasons).
 TODO: rename.go
     TODO: first off, rename seems broken
     TODO: second off, rename doesn't handle to being empty (.html is a valid result).
