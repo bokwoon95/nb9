@@ -76,7 +76,7 @@
         "type": {
           "default": "VARCHAR(500)"
         }
-      },  
+      },
       {
         "column": "site_limit",
         "type": {
