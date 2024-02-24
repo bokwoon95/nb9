@@ -97,7 +97,7 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 		}
 		nbrew.clearSession(w, r, "flash")
 		response.ContentSite = nbrew.contentSite(sitePrefix)
-		response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
+		response.Username = NullString{String: username, Valid: nbrew.DB != nil}
 		response.SitePrefix = sitePrefix
 		response.Parent = path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
 		if response.Error != "" {

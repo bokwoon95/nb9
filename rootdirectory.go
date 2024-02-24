@@ -125,13 +125,13 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 	}
 	nbrew.clearSession(w, r, "flash")
 	response.ContentSite = nbrew.contentSite(sitePrefix)
-	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
+	response.Username = NullString{String: username, Valid: nbrew.DB != nil}
 	response.SitePrefix = sitePrefix
 	response.IsDir = true
 	_, response.SearchSupported = nbrew.FS.(*RemoteFS)
-	if sitePrefix == "" && nbrew.UsersDB != nil {
-		sites, err := sq.FetchAll(r.Context(), nbrew.UsersDB, sq.Query{
-			Dialect: nbrew.UsersDialect,
+	if sitePrefix == "" && nbrew.DB != nil {
+		sites, err := sq.FetchAll(r.Context(), nbrew.DB, sq.Query{
+			Dialect: nbrew.Dialect,
 			Format: "SELECT {*}" +
 				" FROM site_user" +
 				" JOIN site ON site.site_id = site_user.site_id" +
@@ -196,7 +196,7 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 			})
 		}
 
-		if sitePrefix != "" || nbrew.UsersDB != nil {
+		if sitePrefix != "" || nbrew.DB != nil {
 			writeResponse(w, r, response)
 			return
 		}
@@ -255,7 +255,7 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 	}
 	response.Files = files
 
-	if sitePrefix != "" || nbrew.UsersDB != nil {
+	if sitePrefix != "" || nbrew.DB != nil {
 		writeResponse(w, r, response)
 		return
 	}

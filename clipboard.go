@@ -208,9 +208,9 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			writeResponse(w, r, response)
 			return
 		}
-		if nbrew.UsersDB != nil {
-			exists, err := sq.FetchExists(r.Context(), nbrew.UsersDB, sq.Query{
-				Dialect: nbrew.UsersDialect,
+		if nbrew.DB != nil {
+			exists, err := sq.FetchExists(r.Context(), nbrew.DB, sq.Query{
+				Dialect: nbrew.Dialect,
 				Format: "SELECT 1" +
 					" FROM site" +
 					" JOIN site_user ON site_user.site_id = site.site_id" +

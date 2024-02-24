@@ -156,7 +156,7 @@ func (nbrew *Notebrew) directory(w http.ResponseWriter, r *http.Request, usernam
 	}
 	nbrew.clearSession(w, r, "flash")
 	response.ContentSite = nbrew.contentSite(sitePrefix)
-	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
+	response.Username = NullString{String: username, Valid: nbrew.DB != nil}
 	response.SitePrefix = sitePrefix
 	response.FilePath = filePath
 	response.IsDir = true

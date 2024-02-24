@@ -119,7 +119,7 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 
 	var response Response
 	response.ContentSite = nbrew.contentSite(sitePrefix)
-	response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
+	response.Username = NullString{String: username, Valid: nbrew.DB != nil}
 	response.SitePrefix = sitePrefix
 	response.Parent = path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
 	response.Text = strings.TrimSpace(r.Form.Get("text"))

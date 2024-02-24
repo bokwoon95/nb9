@@ -57,26 +57,6 @@ var (
 // - dynamic private: captcha.json
 // - dynamic public: allowsignup.txt, 503.html
 
-// TODO: move this inline, we only use it twice. We can define an inline variable twice.
-type DatabaseConfig struct {
-	Dialect  string
-	Filepath string
-	User     string
-	Password string
-	Host     string
-	Port     string
-	DBName   string
-	Params   map[string]string
-}
-
-type S3Config struct {
-	Endpoint        string
-	Region          string
-	Bucket          string
-	AccessKeyID     string
-	SecretAccessKey string
-}
-
 func main() {
 	// Wrap main in anonymous function to honor deferred calls.
 	// https://stackoverflow.com/questions/27629380/how-to-exit-a-go-program-honoring-deferred-calls
@@ -181,38 +161,47 @@ func main() {
 			nbrew.ImgDomain = string(bytes.TrimSpace(b))
 		}
 
-		b, err = os.ReadFile(filepath.Join(configDir, "users.json"))
+		b, err = os.ReadFile(filepath.Join(configDir, "database.json"))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("%s: %w", filepath.Join(configDir, "users.json"), err)
+			return fmt.Errorf("%s: %w", filepath.Join(configDir, "database.json"), err)
 		}
 		b = bytes.TrimSpace(b)
 		if len(b) > 0 {
-			var databaseConfig DatabaseConfig
+			var databaseConfig struct {
+				Dialect  string
+				Filepath string
+				User     string
+				Password string
+				Host     string
+				Port     string
+				DBName   string
+				Params   map[string]string
+			}
 			decoder := json.NewDecoder(bytes.NewReader(b))
 			decoder.DisallowUnknownFields()
 			err := decoder.Decode(&databaseConfig)
 			if err != nil {
-				return fmt.Errorf("%s: %w", filepath.Join(configDir, "users.json"), err)
+				return fmt.Errorf("%s: %w", filepath.Join(configDir, "database.json"), err)
 			}
 			var dataSourceName string
 			switch databaseConfig.Dialect {
 			case "":
-				return fmt.Errorf("%s: missing dialect field", filepath.Join(configDir, "users.json"))
+				return fmt.Errorf("%s: missing dialect field", filepath.Join(configDir, "database.json"))
 			case "sqlite":
 				if databaseConfig.Filepath == "" {
 					databaseConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-users.db")
 				}
 				databaseConfig.Filepath, err = filepath.Abs(databaseConfig.Filepath)
 				if err != nil {
-					return fmt.Errorf("%s: sqlite: %w", filepath.Join(configDir, "users.json"), err)
+					return fmt.Errorf("%s: sqlite: %w", filepath.Join(configDir, "database.json"), err)
 				}
 				dataSourceName = databaseConfig.Filepath + "?" + sqliteQueryString(databaseConfig.Params)
-				nbrew.UsersDialect = "sqlite"
-				nbrew.UsersDB, err = sql.Open(sqliteDriverName, dataSourceName)
+				nbrew.Dialect = "sqlite"
+				nbrew.DB, err = sql.Open(sqliteDriverName, dataSourceName)
 				if err != nil {
-					return fmt.Errorf("%s: sqlite: open %s: %w", filepath.Join(configDir, "users.json"), dataSourceName, err)
+					return fmt.Errorf("%s: sqlite: open %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
 				}
-				nbrew.UsersErrorCode = sqliteErrorCode
+				nbrew.ErrorCode = sqliteErrorCode
 			case "postgres":
 				values := make(url.Values)
 				for key, value := range databaseConfig.Params {
@@ -235,12 +224,12 @@ func main() {
 					RawQuery: values.Encode(),
 				}
 				dataSourceName = uri.String()
-				nbrew.UsersDialect = "postgres"
-				nbrew.UsersDB, err = sql.Open("pgx", dataSourceName)
+				nbrew.Dialect = "postgres"
+				nbrew.DB, err = sql.Open("pgx", dataSourceName)
 				if err != nil {
-					return fmt.Errorf("%s: postgres: open %s: %w", filepath.Join(configDir, "users.json"), dataSourceName, err)
+					return fmt.Errorf("%s: postgres: open %s: %w", filepath.Join(configDir, "database.json"), dataSourceName, err)
 				}
-				nbrew.UsersErrorCode = func(err error) string {
+				nbrew.ErrorCode = func(err error) string {
 					var pgErr *pgconn.PgError
 					if errors.As(err, &pgErr) {
 						return pgErr.Code
@@ -275,9 +264,9 @@ func main() {
 					return err
 				}
 				dataSourceName = config.FormatDSN()
-				nbrew.UsersDialect = "mysql"
-				nbrew.UsersDB = sql.OpenDB(driver)
-				nbrew.UsersErrorCode = func(err error) string {
+				nbrew.Dialect = "mysql"
+				nbrew.DB = sql.OpenDB(driver)
+				nbrew.ErrorCode = func(err error) string {
 					var mysqlErr *mysql.MySQLError
 					if errors.As(err, &mysqlErr) {
 						return strconv.FormatUint(uint64(mysqlErr.Number), 10)
@@ -285,19 +274,19 @@ func main() {
 					return ""
 				}
 			default:
-				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "users.json"), databaseConfig.Dialect)
+				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "database.json"), databaseConfig.Dialect)
 			}
 
 			if err != nil {
-				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "users.json"), nbrew.UsersDialect, dataSourceName, err)
+				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "database.json"), nbrew.Dialect, dataSourceName, err)
 			}
-			usersCatalog, err := nb9.UsersCatalog(nbrew.UsersDialect)
+			usersCatalog, err := nb9.UsersCatalog(nbrew.Dialect)
 			if err != nil {
 				return err
 			}
 			automigrateCmd := &ddl.AutomigrateCmd{
-				DB:             nbrew.UsersDB,
-				Dialect:        nbrew.UsersDialect,
+				DB:             nbrew.DB,
+				Dialect:        nbrew.Dialect,
 				DestCatalog:    usersCatalog,
 				DropObjects:    true, // TODO: turn this off when we go live.
 				AcceptWarnings: true,
@@ -308,22 +297,22 @@ func main() {
 				return err
 			}
 			defer func() {
-				if nbrew.UsersDialect == "sqlite" {
-					nbrew.UsersDB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
+				if nbrew.Dialect == "sqlite" {
+					nbrew.DB.Exec("PRAGMA analysis_limit(400); PRAGMA optimize;")
 				}
 				ticker := time.NewTicker(4 * time.Hour)
 				go func() {
 					for {
 						<-ticker.C
 						ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-						_, err = nbrew.UsersDB.ExecContext(ctx, "PRAGMA analysis_limit(400); PRAGMA optimize;")
+						_, err = nbrew.DB.ExecContext(ctx, "PRAGMA analysis_limit(400); PRAGMA optimize;")
 						if err != nil {
 							nbrew.Logger.Error(err.Error())
 						}
 						cancel()
 					}
 				}()
-				nbrew.UsersDB.Close()
+				nbrew.DB.Close()
 			}()
 		}
 
@@ -332,7 +321,16 @@ func main() {
 			return fmt.Errorf("%s: %w", filepath.Join(configDir, "files.json"), err)
 		}
 		b = bytes.TrimSpace(b)
-		var filesConfig DatabaseConfig
+		var filesConfig struct {
+			Dialect  string
+			Filepath string
+			User     string
+			Password string
+			Host     string
+			Port     string
+			DBName   string
+			Params   map[string]string
+		}
 		if len(b) > 0 {
 			decoder := json.NewDecoder(bytes.NewReader(b))
 			decoder.DisallowUnknownFields()
@@ -455,11 +453,11 @@ func main() {
 					return ""
 				}
 			default:
-				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "users.json"), filesConfig.Dialect)
+				return fmt.Errorf("%s: unsupported dialect %q (possible values: sqlite, postgres, mysql)", filepath.Join(configDir, "database.json"), filesConfig.Dialect)
 			}
 			err = db.Ping()
 			if err != nil {
-				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "users.json"), dialect, dataSourceName, err)
+				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "database.json"), dialect, dataSourceName, err)
 			}
 			filesCatalog, err := nb9.FilesCatalog(dialect)
 			if err != nil {

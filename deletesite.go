@@ -36,11 +36,11 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 	}
 
 	siteIsUser := func(siteName string) (bool, error) {
-		if nbrew.UsersDB == nil {
+		if nbrew.DB == nil {
 			return false, nil
 		}
-		exists, err := sq.FetchExists(r.Context(), nbrew.UsersDB, sq.Query{
-			Dialect: nbrew.UsersDialect,
+		exists, err := sq.FetchExists(r.Context(), nbrew.DB, sq.Query{
+			Dialect: nbrew.Dialect,
 			Format:  "SELECT 1 FROM users WHERE username = {siteName}",
 			Values: []any{
 				sq.StringParam("siteName", siteName),
@@ -53,11 +53,11 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 	}
 
 	getSitePermissions := func(siteName, username string) (siteNotFound, userIsAuthorized bool, err error) {
-		if nbrew.UsersDB == nil {
+		if nbrew.DB == nil {
 			return false, true, nil
 		}
-		userIsAuthorized, err = sq.FetchOne(r.Context(), nbrew.UsersDB, sq.Query{
-			Dialect: nbrew.UsersDialect,
+		userIsAuthorized, err = sq.FetchOne(r.Context(), nbrew.DB, sq.Query{
+			Dialect: nbrew.Dialect,
 			Format: "SELECT {*}" +
 				" FROM site" +
 				" LEFT JOIN site_owner ON site_owner.site_id = site.site_id" +
@@ -118,7 +118,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			getLogger(r.Context()).Error(err.Error())
 		}
 		nbrew.clearSession(w, r, "flash")
-		response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
+		response.Username = NullString{String: username, Valid: nbrew.DB != nil}
 		if response.Error != "" {
 			writeResponse(w, r, response)
 			return
@@ -232,7 +232,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 		}
 
 		response := Response{
-			Username: NullString{String: username, Valid: nbrew.UsersDB != nil},
+			Username: NullString{String: username, Valid: nbrew.DB != nil},
 			SiteName: request.SiteName,
 		}
 		if response.SiteName == "" {
@@ -286,8 +286,8 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			internalServerError(w, r, err)
 			return
 		}
-		if nbrew.UsersDB != nil {
-			tx, err := nbrew.UsersDB.Begin()
+		if nbrew.DB != nil {
+			tx, err := nbrew.DB.Begin()
 			if err != nil {
 				getLogger(r.Context()).Error(err.Error())
 				internalServerError(w, r, err)
@@ -295,7 +295,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 			}
 			defer tx.Rollback()
 			_, err = sq.Exec(r.Context(), tx, sq.Query{
-				Dialect: nbrew.UsersDialect,
+				Dialect: nbrew.Dialect,
 				Format: "DELETE FROM site_user WHERE EXISTS (" +
 					"SELECT 1" +
 					" FROM site" +
@@ -312,7 +312,7 @@ func (nbrew *Notebrew) deletesite(w http.ResponseWriter, r *http.Request, userna
 				return
 			}
 			_, err = sq.Exec(r.Context(), tx, sq.Query{
-				Dialect: nbrew.UsersDialect,
+				Dialect: nbrew.Dialect,
 				Format:  "DELETE FROM site WHERE site_name = {siteName}",
 				Values: []any{
 					sq.StringParam("siteName", request.SiteName),

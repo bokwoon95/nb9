@@ -120,7 +120,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 		}
 		nbrew.clearSession(w, r, "flash")
 		response.ContentSite = nbrew.contentSite(sitePrefix)
-		response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
+		response.Username = NullString{String: username, Valid: nbrew.DB != nil}
 		response.SitePrefix = sitePrefix
 		response.Parent = path.Clean(strings.Trim(r.Form.Get("parent"), "/"))
 		if response.Error != "" {
@@ -189,7 +189,7 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			}
 			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent, response.Name+response.Ext), http.StatusFound)
 		}
-		if nbrew.UsersDB != nil {
+		if nbrew.DB != nil {
 			// TODO: calculate the available storage space of the owner and add
 			// it as a MaxBytesReader to the request body.
 			//

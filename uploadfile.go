@@ -64,7 +64,7 @@ func (nbrew *Notebrew) uploadfile(w http.ResponseWriter, r *http.Request, userna
 		}
 		http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
 	}
-	if nbrew.UsersDB != nil {
+	if nbrew.DB != nil {
 		// TODO: calculate the available storage space of the owner and add
 		// it as a MaxBytesReader to the request body.
 		//

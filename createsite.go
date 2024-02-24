@@ -30,11 +30,11 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 	const maxSites = 3
 
 	getSiteInfo := func(username string) (userSiteNames []string, maxSitesReached bool, err error) {
-		if nbrew.UsersDB == nil {
+		if nbrew.DB == nil {
 			return nil, false, nil
 		}
-		userSiteNames, err = sq.FetchAll(r.Context(), nbrew.UsersDB, sq.Query{
-			Dialect: nbrew.UsersDialect,
+		userSiteNames, err = sq.FetchAll(r.Context(), nbrew.DB, sq.Query{
+			Dialect: nbrew.Dialect,
 			Format: "SELECT {*}" +
 				" FROM site" +
 				" JOIN site_owner ON site_owner.site_id = site.site_id" +
@@ -103,7 +103,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			getLogger(r.Context()).Error(err.Error())
 		}
 		nbrew.clearSession(w, r, "flash")
-		response.Username = NullString{String: username, Valid: nbrew.UsersDB != nil}
+		response.Username = NullString{String: username, Valid: nbrew.DB != nil}
 		if response.Error != "" {
 			writeResponse(w, r, response)
 			return
@@ -246,9 +246,9 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 					internalServerError(w, r, err)
 					return
 				}
-				if nbrew.UsersDB != nil {
-					exists, err := sq.FetchExists(r.Context(), nbrew.UsersDB, sq.Query{
-						Dialect: nbrew.UsersDialect,
+				if nbrew.DB != nil {
+					exists, err := sq.FetchExists(r.Context(), nbrew.DB, sq.Query{
+						Dialect: nbrew.Dialect,
 						Format:  "SELECT 1 FROM site WHERE site_name = {siteName}",
 						Values: []any{
 							sq.StringParam("siteName", response.SiteName),
@@ -417,16 +417,16 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 			}
 			return nil
 		})
-		if nbrew.UsersDB != nil {
+		if nbrew.DB != nil {
 			group.Go(func() error {
-				tx, err := nbrew.UsersDB.Begin()
+				tx, err := nbrew.DB.Begin()
 				if err != nil {
 					return err
 				}
 				defer tx.Rollback()
 				siteID := NewID()
 				_, err = sq.Exec(groupctx, tx, sq.Query{
-					Dialect: nbrew.UsersDialect,
+					Dialect: nbrew.Dialect,
 					Format:  "INSERT INTO site (site_id, site_name) VALUES ({siteID}, {siteName})",
 					Values: []any{
 						sq.UUIDParam("siteID", siteID),
@@ -437,7 +437,7 @@ func (nbrew *Notebrew) createsite(w http.ResponseWriter, r *http.Request, userna
 					return err
 				}
 				_, err = sq.Exec(groupctx, tx, sq.Query{
-					Dialect: nbrew.UsersDialect,
+					Dialect: nbrew.Dialect,
 					Format: "INSERT INTO site_user (site_id, user_id)" +
 						" VALUES ((SELECT site_id FROM site WHERE site_name = {siteName}), (SELECT user_id FROM users WHERE username = {username}))",
 					Values: []any{

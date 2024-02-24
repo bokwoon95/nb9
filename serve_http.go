@@ -142,7 +142,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// access the files for this site.
 		var username string
 		var isAuthorizedForSite bool
-		if nbrew.UsersDB != nil {
+		if nbrew.DB != nil {
 			authenticationTokenHash := getAuthenticationTokenHash(r)
 			if authenticationTokenHash == nil {
 				if head == "" {
@@ -152,8 +152,8 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				notAuthenticated(w, r)
 				return
 			}
-			result, err := sq.FetchOne(r.Context(), nbrew.UsersDB, sq.Query{
-				Dialect: nbrew.UsersDialect,
+			result, err := sq.FetchOne(r.Context(), nbrew.DB, sq.Query{
+				Dialect: nbrew.Dialect,
 				Format: "SELECT {*}" +
 					" FROM authentication" +
 					" JOIN users ON users.user_id = authentication.user_id" +
@@ -203,7 +203,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch head {
 		case "", "notes", "pages", "posts", "output":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				if sitePrefix != "" || urlPath != "" {
 					notAuthorized(w, r)
 					return
@@ -212,7 +212,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			nbrew.files(w, r, username, sitePrefix, urlPath)
 			return
 		case "clipboard":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
@@ -222,13 +222,13 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch urlPath {
 		case "regenerate":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.regenerate(w, r, sitePrefix)
 		case "regeneratelist":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
@@ -246,37 +246,37 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			nbrew.deletesite(w, r, username)
 		case "createfolder":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.createfolder(w, r, username, sitePrefix)
 		case "createfile":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.createfile(w, r, username, sitePrefix)
 		case "delete":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.delete(w, r, username, sitePrefix)
 		case "search":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.search(w, r, username, sitePrefix)
 		case "uploadfile":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
 			nbrew.uploadfile(w, r, username, sitePrefix)
 		case "rename":
-			if nbrew.UsersDB != nil && !isAuthorizedForSite {
+			if nbrew.DB != nil && !isAuthorizedForSite {
 				notAuthorized(w, r)
 				return
 			}
