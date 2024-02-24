@@ -36,8 +36,8 @@
         "type": {
           "default": "VARCHAR(500)"
         },
-        "expr": {
-          "definition": "replace(file_path, rtrim(file_path, replace(file_path, '/', '')), '')",
+        "generated": {
+          "expression": "replace(file_path, rtrim(file_path, replace(file_path, '/', '')), '')",
           "stored": true
         }
       },
@@ -47,8 +47,8 @@
         "type": {
           "default": "VARCHAR(500)"
         },
-        "expr": {
-          "definition": "regexp_replace(file_path, '^.+/', '');",
+        "generated": {
+          "expression": "regexp_replace(file_path, '^.+/', '');",
           "stored": true
         }
       },
@@ -58,8 +58,8 @@
         "type": {
           "default": "VARCHAR(500)"
         },
-        "expr": {
-          "definition": "substring_index(file_path, '/', -1);",
+        "generated": {
+          "expression": "substring_index(file_path, '/', -1);",
           "stored": true
         }
       },
@@ -113,8 +113,8 @@
         "type": {
           "default": "TSVECTOR"
         },
-        "expr": {
-          "definition": "to_tsvector('english', file_name, text)",
+        "generated": {
+          "expression": "to_tsvector('english', file_name, text)",
           "stored": true
         }
       }

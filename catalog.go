@@ -12,11 +12,11 @@ type rawTable struct {
 	Table      string
 	PrimaryKey []string
 	Columns    []struct {
-		Dialect string
-		Column  string
-		Type    map[string]string
-		Expr    struct {
-			Definition string
+		Dialect   string
+		Column    string
+		Type      map[string]string
+		Generated struct {
+			Expression string
 			Stored     bool
 		}
 		Index      bool
@@ -85,8 +85,8 @@ func unmarshalCatalog(dialect string, b []byte) (*ddl.Catalog, error) {
 				IsPrimaryKey:        rawColumn.PrimaryKey,
 				IsUnique:            rawColumn.Unique,
 				IsNotNull:           rawColumn.NotNull,
-				GeneratedExpr:       rawColumn.Expr.Definition,
-				GeneratedExprStored: rawColumn.Expr.Stored,
+				GeneratedExpr:       rawColumn.Generated.Expression,
+				GeneratedExprStored: rawColumn.Generated.Stored,
 			})
 			if rawColumn.PrimaryKey {
 				cache.AddOrUpdateConstraint(table, ddl.Constraint{
