@@ -46,7 +46,7 @@ type RemoteFS struct {
 	Logger    *slog.Logger
 }
 
-func NewRemoteFS(config RemoteFSConfig) *RemoteFS {
+func NewRemoteFS(config RemoteFSConfig) (*RemoteFS, error) {
 	remoteFS := &RemoteFS{
 		Context:   context.Background(),
 		DB:        config.DB,
@@ -55,7 +55,7 @@ func NewRemoteFS(config RemoteFSConfig) *RemoteFS {
 		Storage:   config.Storage,
 		Logger:    config.Logger,
 	}
-	return remoteFS
+	return remoteFS, nil
 }
 
 func (fsys *RemoteFS) WithContext(ctx context.Context) FS {
