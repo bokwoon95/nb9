@@ -27,7 +27,7 @@ TODO: rename.go
     TODO: first off, rename seems broken
     TODO: second off, rename doesn't handle to being empty (.html is a valid result).
         - Once you handle this on the backend, you can add a required attribute on the frontend.
-TODO: add name to the files table and keep in in sync with file_path. Also instead of calling path.Base in file_path, return name instead.
+TODO: add file_name to the files table and keep in in sync with file_path. Also instead of calling path.Base in file_path, return file_name instead.
     - TODO: once this is done, add relative_path to be fulltext indexed so that it also shows up in the search page (you can search a directory)
 TODO: clipboard/paste: pasting a directory into itself deletes everything that was in the clipboard. Need to do an additional check to see if the the destination resides in any of the names in the clipboard.
 TODO: oh boy pagination on output/themes is broken again (why? investigate)
