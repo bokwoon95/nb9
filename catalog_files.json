@@ -31,12 +31,35 @@
         "notnull": true
       },
       {
+        "dialect": "sqlite",
         "column": "file_name",
         "type": {
           "default": "VARCHAR(500)"
         },
         "expr": {
           "definition": "replace(file_path, rtrim(file_path, replace(file_path, '/', '')), '')",
+          "stored": true
+        }
+      },
+      {
+        "dialect": "postgres",
+        "column": "file_name",
+        "type": {
+          "default": "VARCHAR(500)"
+        },
+        "expr": {
+          "definition": "regexp_replace(file_path, '^.+/', '');",
+          "stored": true
+        }
+      },
+      {
+        "dialect": "mysql",
+        "column": "file_name",
+        "type": {
+          "default": "VARCHAR(500)"
+        },
+        "expr": {
+          "definition": "substring_index(file_path, '/', -1);",
           "stored": true
         }
       },
