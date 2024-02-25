@@ -515,7 +515,7 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 				}
 				group, groupctx := errgroup.WithContext(r.Context())
 				for _, dirEntry := range dirEntries {
-					if srcFileInfo.IsDir() == dirEntry.IsDir() {
+					if dirEntry.IsDir() == srcFileInfo.IsDir() {
 						name := dirEntry.Name()
 						group.Go(func() error {
 							if isMove {
