@@ -319,32 +319,14 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					existCh <- name
 					return nil
 				}
-				var srcOutputDir string
-				switch srcHead {
-				case "pages":
-					if !srcFileInfo.IsDir() {
-						srcOutputDir = path.Join(response.SrcSitePrefix, "output", srcTail, strings.TrimSuffix(name, ".html"))
-					} else {
-						srcOutputDir = path.Join(response.SrcSitePrefix, "output", srcTail, name)
-					}
-				case "posts":
-					if !srcFileInfo.IsDir() {
-						srcOutputDir = path.Join(response.SrcSitePrefix, "output/posts", srcTail, strings.TrimSuffix(name, ".md"))
-					} else {
-						srcOutputDir = path.Join(response.SrcSitePrefix, "output/posts", srcTail, name)
-					}
-				}
-				var destOutputDir string
 				switch destHead {
 				case "pages":
 					if !srcFileInfo.IsDir() {
-						destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, strings.TrimSuffix(name, ".html"))
 						if !strings.HasSuffix(srcFilePath, ".html") {
 							invalidCh <- name
 							return nil
 						}
 					} else {
-						destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, name)
 						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
 							exists, err := sq.FetchExists(groupctx, remoteFS.DB, sq.Query{
 								Dialect: remoteFS.Dialect,
@@ -381,13 +363,11 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					}
 				case "posts":
 					if !srcFileInfo.IsDir() {
-						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
 						if !strings.HasSuffix(srcFilePath, ".md") {
 							invalidCh <- name
 							return nil
 						}
 					} else {
-						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, name)
 						if remoteFS, ok := nbrew.FS.(*RemoteFS); ok {
 							exists, err := sq.FetchExists(groupctx, remoteFS.DB, sq.Query{
 								Dialect: remoteFS.Dialect,
@@ -459,28 +439,96 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						isMandatoryFile = name == "post.html" || name == "postlist.html"
 					}
 				}
-				if response.IsCut && !moveNotAllowed && !isMandatoryFile {
+				isMove := response.IsCut && !moveNotAllowed && !isMandatoryFile
+				if isMove {
 					err := nbrew.FS.WithContext(groupctx).Rename(srcFilePath, destFilePath)
 					if err != nil {
 						return err
 					}
-					if srcOutputDir != "" && destOutputDir != "" {
-						err := nbrew.FS.WithContext(groupctx).Rename(srcOutputDir, destOutputDir)
+				} else {
+					err := nbrew.FS.WithContext(groupctx).Copy(srcFilePath, destFilePath)
+					if err != nil {
+						return err
+					}
+				}
+				if srcHead == "posts" && destHead == "posts" {
+					if !isMove {
+						panic("unreachable: PostNoCopy")
+					}
+					var srcOutputDir, destOutputDir string
+					if !srcFileInfo.IsDir() {
+						srcOutputDir = path.Join(response.SrcSitePrefix, "output/posts", srcTail, strings.TrimSuffix(name, ".md"))
+						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, strings.TrimSuffix(name, ".md"))
+					} else {
+						srcOutputDir = path.Join(response.SrcSitePrefix, "output/posts", srcTail, name)
+						destOutputDir = path.Join(response.DestSitePrefix, "output/posts", destTail, name)
+					}
+					err = nbrew.FS.WithContext(groupctx).Rename(srcOutputDir, destOutputDir)
+					if err != nil {
+						return err
+					}
+					return nil
+				}
+				if srcHead != "pages" || destHead != "pages" {
+					return nil
+				}
+				var counterpart, srcOutputDir, destOutputDir string
+				if !srcFileInfo.IsDir() {
+					counterpart = strings.TrimSuffix(srcFilePath, ".html")
+					srcOutputDir = path.Join(response.SrcSitePrefix, "output", srcTail, strings.TrimSuffix(name, ".html"))
+					destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, strings.TrimSuffix(name, ".html"))
+				} else {
+					counterpart = srcFilePath + ".html"
+					srcOutputDir = path.Join(response.SrcSitePrefix, "output", srcTail, name)
+					destOutputDir = path.Join(response.DestSitePrefix, "output", destTail, name)
+				}
+				var counterpartExists bool
+				counterpartFileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), counterpart)
+				if err != nil {
+					if !errors.Is(err, fs.ErrNotExist) {
+						return err
+					}
+				} else {
+					counterpartExists = true
+				}
+				if !counterpartExists || counterpartFileInfo.IsDir() == srcFileInfo.IsDir() {
+					if isMove {
+						err = nbrew.FS.WithContext(groupctx).Rename(srcOutputDir, destOutputDir)
+						if err != nil {
+							return err
+						}
+					} else {
+						err = nbrew.FS.WithContext(groupctx).Copy(srcOutputDir, destOutputDir)
 						if err != nil {
 							return err
 						}
 					}
 					return nil
 				}
-				err = nbrew.FS.WithContext(groupctx).Copy(srcFilePath, destFilePath)
+				err = nbrew.FS.WithContext(r.Context()).MkdirAll(destOutputDir, 0755)
 				if err != nil {
 					return err
 				}
-				if srcOutputDir != "" && destOutputDir != "" {
-					err = nbrew.FS.WithContext(groupctx).Copy(srcOutputDir, destOutputDir)
-					if err != nil {
-						return err
+				dirEntries, err := nbrew.FS.WithContext(r.Context()).ReadDir(srcOutputDir)
+				if err != nil {
+					return err
+				}
+				group, groupctx := errgroup.WithContext(r.Context())
+				for _, dirEntry := range dirEntries {
+					if srcFileInfo.IsDir() == dirEntry.IsDir() {
+						name := dirEntry.Name()
+						group.Go(func() error {
+							if isMove {
+								return nbrew.FS.WithContext(groupctx).Rename(path.Join(srcOutputDir, name), path.Join(destOutputDir, name))
+							} else {
+								return nbrew.FS.WithContext(groupctx).Copy(path.Join(srcOutputDir, name), path.Join(destOutputDir, name))
+							}
+						})
 					}
+				}
+				err = group.Wait()
+				if err != nil {
+					return err
 				}
 				return nil
 			})

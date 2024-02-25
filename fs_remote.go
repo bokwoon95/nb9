@@ -1025,7 +1025,7 @@ func (fsys *RemoteFS) Rename(oldName, newName string) error {
 		},
 	})
 	if exists {
-		return fs.ErrExist
+		return &fs.PathError{Op: "rename", Path: newName, Err: fs.ErrExist}
 	}
 	tx, err := fsys.DB.BeginTx(fsys.Context, nil)
 	if err != nil {
@@ -1034,9 +1034,9 @@ func (fsys *RemoteFS) Rename(oldName, newName string) error {
 	defer tx.Rollback()
 	switch fsys.Dialect {
 	case "sqlite", "postgres":
-		// If the parent changes, also update the parent_id.
 		var updateParent sq.Expression
 		if path.Dir(oldName) != path.Dir(newName) {
+			// If the parent changes, also update the parent_id.
 			updateParent = sq.Expr(", parent_id = (SELECT file_id FROM files WHERE file_path = {})", path.Dir(newName))
 		}
 		oldNameIsDir, err := sq.FetchOne(fsys.Context, tx, sq.Query{
@@ -1097,9 +1097,9 @@ func (fsys *RemoteFS) Rename(oldName, newName string) error {
 		if !oldNameIsDir && path.Ext(oldName) != path.Ext(newName) {
 			return fmt.Errorf("file extension cannot be changed")
 		}
-		// If the parent changes, also update the parent_id.
 		var updateParent sq.Expression
 		if path.Dir(oldName) != path.Dir(newName) {
+			// If the parent changes, also update the parent_id.
 			updateParent = sq.Expr(", parent_id = (SELECT file_id FROM files WHERE file_path = {})", path.Dir(newName))
 		}
 		_, err = sq.Exec(fsys.Context, tx, sq.Query{
@@ -1187,7 +1187,7 @@ func (fsys *RemoteFS) Copy(srcName, destName string) error {
 		return fs.ErrNotExist
 	}
 	if destExists {
-		return fs.ErrExist
+		return &fs.PathError{Op: "copy", Path: destName, Err: fs.ErrExist}
 	}
 	if !srcIsDir {
 		srcFilePath := srcName

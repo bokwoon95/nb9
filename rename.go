@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"path"
 	"strings"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, sitePrefix string) {
@@ -306,7 +308,9 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			writeResponse(w, r, response)
 			return
 		}
-		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, response.Parent, response.Prefix+response.To+response.Ext))
+		oldName := path.Join(sitePrefix, response.Parent, response.Prefix+response.From+response.Ext)
+		newName := path.Join(sitePrefix, response.Parent, response.Prefix+response.To+response.Ext)
+		_, err = fs.Stat(nbrew.FS.WithContext(r.Context()), newName)
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				getLogger(r.Context()).Error(err.Error())
@@ -319,13 +323,26 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 			writeResponse(w, r, response)
 			return
 		}
-		err = nbrew.FS.WithContext(r.Context()).Rename(
-			path.Join(sitePrefix, response.Parent, response.Prefix+response.From+response.Ext),
-			path.Join(sitePrefix, response.Parent, response.Prefix+response.To+response.Ext),
-		)
+		err = nbrew.FS.WithContext(r.Context()).Rename(oldName, newName)
 		if err != nil {
 			getLogger(r.Context()).Error(err.Error())
 			internalServerError(w, r, err)
+			return
+		}
+		if head != "pages" && head != "posts" {
+			writeResponse(w, r, response)
+			return
+		}
+		if head == "posts" {
+			oldOutputDir := path.Join(sitePrefix, "output/posts", tail, response.Prefix+response.From)
+			newOutputDir := path.Join(sitePrefix, "output/posts", tail, response.Prefix+response.To)
+			err = nbrew.FS.WithContext(r.Context()).Rename(oldOutputDir, newOutputDir)
+			if err != nil {
+				getLogger(r.Context()).Error(err.Error())
+				internalServerError(w, r, err)
+				return
+			}
+			writeResponse(w, r, response)
 			return
 		}
 		// If we are renaming a page, we do need to move all its dependencies over.
@@ -333,27 +350,94 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 		// If we are renaming a html folder, we need to move only the html folders over to the new outputDir.
 		// This can be done efficiently in a single SQL query. But it would be an UPDATE statement that bypasses the FS's Rename() method.
 		// Maybe call it RenameFilesWithin() and RenameFoldersWithin()?
-		switch head {
-		case "pages":
-			err = nbrew.FS.WithContext(r.Context()).Rename(
-				path.Join(sitePrefix, "output", tail, response.From),
-				path.Join(sitePrefix, "output", tail, response.To),
-			)
+		oldOutputDir := path.Join(sitePrefix, "output", tail, response.From)
+		newOutputDir := path.Join(sitePrefix, "output", tail, response.To)
+		if !response.IsDir {
+			fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), strings.TrimSuffix(oldName, ".html"))
 			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
+				if !errors.Is(err, fs.ErrNotExist) {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+			} else if fileInfo.IsDir() {
+				err := nbrew.FS.WithContext(r.Context()).MkdirAll(newOutputDir, 0755)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				dirEntries, err := nbrew.FS.WithContext(r.Context()).ReadDir(oldOutputDir)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				group, groupctx := errgroup.WithContext(r.Context())
+				for _, dirEntry := range dirEntries {
+					if dirEntry.IsDir() {
+						continue
+					}
+					name := dirEntry.Name()
+					group.Go(func() error {
+						return nbrew.FS.WithContext(groupctx).Rename(path.Join(oldOutputDir, name), path.Join(newOutputDir, name))
+					})
+				}
+				err = group.Wait()
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				writeResponse(w, r, response)
 				return
 			}
-		case "posts":
-			err = nbrew.FS.WithContext(r.Context()).Rename(
-				path.Join(sitePrefix, "output/posts", tail, response.Prefix+response.From),
-				path.Join(sitePrefix, "output/posts", tail, response.Prefix+response.To),
-			)
+		} else {
+			fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), oldName+".html")
 			if err != nil {
-				getLogger(r.Context()).Error(err.Error())
-				internalServerError(w, r, err)
+				if !errors.Is(err, fs.ErrNotExist) {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+			} else if !fileInfo.IsDir() {
+				err := nbrew.FS.WithContext(r.Context()).MkdirAll(newOutputDir, 0755)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				dirEntries, err := nbrew.FS.WithContext(r.Context()).ReadDir(oldOutputDir)
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				group, groupctx := errgroup.WithContext(r.Context())
+				for _, dirEntry := range dirEntries {
+					if !dirEntry.IsDir() {
+						continue
+					}
+					name := dirEntry.Name()
+					group.Go(func() error {
+						return nbrew.FS.WithContext(groupctx).Rename(path.Join(oldOutputDir, name), path.Join(newOutputDir, name))
+					})
+				}
+				err = group.Wait()
+				if err != nil {
+					getLogger(r.Context()).Error(err.Error())
+					internalServerError(w, r, err)
+					return
+				}
+				writeResponse(w, r, response)
 				return
 			}
+		}
+		err = nbrew.FS.WithContext(r.Context()).Rename(oldOutputDir, newOutputDir)
+		if err != nil {
+			getLogger(r.Context()).Error(err.Error())
+			internalServerError(w, r, err)
+			return
 		}
 		writeResponse(w, r, response)
 	default:
