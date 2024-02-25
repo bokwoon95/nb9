@@ -115,12 +115,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			return
 		}
 	case "output":
-		if tail != "index.html" {
-			n := strings.Index(tail, "/")
-			if n < 0 {
-				notFound(w, r)
-				return
-			}
+		n := strings.Index(tail, "/")
+		if n < 0 {
+			isEditable = fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md"
+		} else {
 			switch tail[:n] {
 			case "posts":
 				isEditable = false

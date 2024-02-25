@@ -450,7 +450,11 @@ func (nbrew *Notebrew) createfile(w http.ResponseWriter, r *http.Request, userna
 			if head == "posts" {
 				outputDir = path.Join(sitePrefix, "output/posts", tail, response.Name)
 			} else {
-				outputDir = path.Join(sitePrefix, "output", tail, response.Name)
+				if response.Parent == "pages" && response.Name == "index" && response.Ext == ".html" {
+					outputDir = path.Join(sitePrefix, "output")
+				} else {
+					outputDir = path.Join(sitePrefix, "output", tail, response.Name)
+				}
 			}
 			tempDir, err := filepath.Abs(filepath.Join(os.TempDir(), "notebrew-temp"))
 			if err != nil {
