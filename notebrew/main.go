@@ -280,7 +280,7 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "database.json"), nbrew.Dialect, dataSourceName, err)
 			}
-			catalog, err := nb9.Catalog(nbrew.Dialect)
+			catalog, err := nb9.DatabaseCatalog(nbrew.Dialect)
 			if err != nil {
 				return err
 			}
