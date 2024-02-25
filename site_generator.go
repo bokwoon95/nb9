@@ -806,7 +806,6 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 	postData.Content = template.HTML(buf.String())
 	imgIsMentioned := make(map[string]struct{})
 	tokenizer := html.NewTokenizer(bytes.NewReader(buf.Bytes()))
-	fmt.Printf("content: %s\n", buf.String())
 	for {
 		tokenType := tokenizer.Next()
 		if tokenType == html.ErrorToken {
@@ -827,7 +826,6 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 				if !bytes.Equal(key, []byte("src")) {
 					continue
 				}
-				fmt.Printf("img src: %q\n", string(val))
 				uri, err := url.Parse(string(val))
 				if err != nil {
 					continue
@@ -864,13 +862,11 @@ func (siteGen *SiteGenerator) GeneratePost(ctx context.Context, filePath, text s
 			return err
 		}
 		defer cursor.Close()
-		fmt.Printf("imgIsMentioned: %#v\n", imgIsMentioned)
 		for cursor.Next() {
 			name, err := cursor.Result()
 			if err != nil {
 				return err
 			}
-			fmt.Printf("name: %q\n", name)
 			if _, ok := imgIsMentioned[name]; ok {
 				continue
 			}
