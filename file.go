@@ -595,7 +595,11 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			if head == "posts" {
 				outputDir = path.Join(sitePrefix, "output/posts", strings.TrimSuffix(tail, ".md"))
 			} else {
-				outputDir = path.Join(sitePrefix, "output", strings.TrimSuffix(tail, ".html"))
+				if filePath == "pages/index.html" {
+					outputDir = path.Join(sitePrefix, "output")
+				} else {
+					outputDir = path.Join(sitePrefix, "output", strings.TrimSuffix(tail, ".html"))
+				}
 			}
 			tempDir, err := filepath.Abs(filepath.Join(os.TempDir(), "notebrew-temp"))
 			if err != nil {

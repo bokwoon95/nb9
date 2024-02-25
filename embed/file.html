@@ -144,6 +144,19 @@
   <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
 </div>
 {{- end }}
+{{- if eq (index $.PostRedirectGet "from") "rename" }}
+<div role='alert' class='alert mv2 pa2 br2 flex items-start'>
+  {{ $parent := index $.PostRedirectGet "parent" }}
+  {{ $oldName := index $.PostRedirectGet "oldName" }}
+  {{ $newName := index $.PostRedirectGet "newName" }}
+  {{ $isDir := index $.PostRedirectGet "isDir" }}
+  <div class='flex items-center'>
+    <div>renamed {{ $oldName }}{{ if $isDir }}/{{ end }} =&gt; <a href='/{{ join "files" $.SitePrefix $parent $newName }}{{ if $isDir }}/{{ end }}'>{{ $newName }}{{ if $isDir}}/{{ end }}</a></div>
+  </div>
+  <div class='flex-grow-1'></div>
+  <button class='f3 bg-transparent bn o-70 hover-black' data-dismiss-alert>&times;</button>
+</div>
+{{- end }}
 {{- if len $clipboard }}
 {{- $srcSitePrefix := $clipboard.Get "sitePrefix" }}
 {{- $srcParent := $clipboard.Get "parent" }}
@@ -184,7 +197,7 @@
 </div>
 {{- end }}
 <div class='mv2'>
-  {{- if eq (index $.PostRedirectGet "from") "createfile" }}
+  {{- if eq (index $.PostRedirectGet "from") "createfile" "rename" }}
   <a href='/{{ join "files" $.SitePrefix (dir $.FilePath) }}/'>&larr; back</a>
   <span>&boxv;</span>
   {{- else }}
@@ -314,7 +327,7 @@
         <div style='overflow-wrap: break-word;'>
           <span class='b mr2 mb2'>{{ $asset.Name }}</span>
           <a href='/{{ join "files" $.SitePrefix $.AssetDir $asset.Name }}' class='dib mr2 mb2'>view</a>
-          <a href='' class='dib mr2 mb2'>rename</a>
+          <a href='/{{ join "files" $.SitePrefix "rename" }}/?parent={{ $.AssetDir }}&name={{ $asset.Name }}' class='dib mr2 mb2'>rename</a>
           <button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/cut" }}/' name='name' value='{{ $asset.Name }}' class='button ba br2 pa2 mr2 mb2'>cut</button>
           <button type='submit' formmethod='post' formaction='/{{ join "files" $.SitePrefix "clipboard/copy" }}/' name='name' value='{{ $asset.Name }}' class='button ba br2 pa2 mr2 mb2'>copy</button>
           <button type='submit' formmethod='get' formaction='/{{ join "files" $.SitePrefix "delete" }}/' name='name' value='{{ $asset.Name }}' class='button-danger ba br2 b--dark-red pa2 mr2 mb2'>delete</button>
