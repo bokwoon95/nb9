@@ -280,14 +280,14 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("%s: %s: ping %s: %w", filepath.Join(configDir, "database.json"), nbrew.Dialect, dataSourceName, err)
 			}
-			catalog, err := nb9.DatabaseCatalog(nbrew.Dialect)
+			databaseCatalog, err := nb9.DatabaseCatalog(nbrew.Dialect)
 			if err != nil {
 				return err
 			}
 			automigrateCmd := &ddl.AutomigrateCmd{
 				DB:             nbrew.DB,
 				Dialect:        nbrew.Dialect,
-				DestCatalog:    catalog,
+				DestCatalog:    databaseCatalog,
 				DropObjects:    true, // TODO: turn this off when we go live.
 				AcceptWarnings: true,
 				Stderr:         io.Discard,
