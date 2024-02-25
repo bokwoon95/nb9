@@ -245,10 +245,19 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 			writeResponse(w, r, response)
 			return
 		}
-		if response.SrcSitePrefix == response.DestSitePrefix && response.SrcParent == response.DestParent {
-			response.Error = "PasteSameDestination"
-			writeResponse(w, r, response)
-			return
+		if response.SrcSitePrefix == response.DestSitePrefix {
+			if response.SrcParent == response.DestParent {
+				response.Error = "PasteSameDestination"
+				writeResponse(w, r, response)
+				return
+			}
+			for _, name := range names {
+				if strings.HasPrefix(response.DestParent, path.Join(response.SrcParent, name)+"/") {
+					response.Error = "PasteIntoSelf"
+					writeResponse(w, r, response)
+					return
+				}
+			}
 		}
 		srcHead, srcTail, _ := strings.Cut(response.SrcParent, "/")
 		destHead, destTail, _ := strings.Cut(response.DestParent, "/")
@@ -451,6 +460,9 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 						return err
 					}
 				}
+				if !(srcHead == "pages" && destHead == "pages") && !(srcHead == "posts" && destHead == "posts") {
+					return nil
+				}
 				if srcHead == "posts" && destHead == "posts" {
 					if !isMove {
 						panic("unreachable: PostNoCopy")
@@ -467,9 +479,6 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					if err != nil {
 						return err
 					}
-					return nil
-				}
-				if srcHead != "pages" || destHead != "pages" {
 					return nil
 				}
 				var counterpart, srcOutputDir, destOutputDir string
