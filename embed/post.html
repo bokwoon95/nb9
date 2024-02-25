@@ -16,7 +16,7 @@ p, ul, ol { margin-bottom: 2em; color: #1d1d1d; font-family: sans-serif; }
   <li>
     <figure style='margin: 0; padding: 0;'>
       <img src='{{ $image.Name }}' style='max-height: 100%; max-width: 100%; object-fit: cover;' loading='lazy'>
-      <figcaption style='white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.875rem;'><a href='/{{ join $image.Parent $image.Name }}'>{{ $image.Name }}</a></figcaption>
+      <figcaption style='white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.875rem;'><a href='{{ $image.Name }}'>{{ $image.Name }}</a></figcaption>
     </figure>
   </li>
   {{- end }}
