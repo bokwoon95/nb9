@@ -189,7 +189,7 @@ func main() {
 				return fmt.Errorf("%s: missing dialect field", filepath.Join(configDir, "database.json"))
 			case "sqlite":
 				if databaseConfig.Filepath == "" {
-					databaseConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-users.db")
+					databaseConfig.Filepath = filepath.Join(dataHomeDir, "notebrew-database.db")
 				}
 				databaseConfig.Filepath, err = filepath.Abs(databaseConfig.Filepath)
 				if err != nil {
