@@ -98,7 +98,7 @@
       },
       {
         "dialect": "postgres",
-        "column": "tsv",
+        "column": "fts",
         "type": {
           "default": "TSVECTOR"
         },
@@ -113,7 +113,7 @@
         "dialect": "postgres",
         "type": "GIN",
         "columns": [
-          "tsv"
+          "fts"
         ]
       },
       {
