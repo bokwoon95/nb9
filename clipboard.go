@@ -514,28 +514,28 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					}
 					return nil
 				}
-				err = nbrew.FS.WithContext(r.Context()).MkdirAll(destOutputDir, 0755)
+				err = nbrew.FS.WithContext(groupctx).MkdirAll(destOutputDir, 0755)
 				if err != nil {
 					return err
 				}
-				dirEntries, err := nbrew.FS.WithContext(r.Context()).ReadDir(srcOutputDir)
+				dirEntries, err := nbrew.FS.WithContext(groupctx).ReadDir(srcOutputDir)
 				if err != nil {
 					return err
 				}
-				group, groupctx := errgroup.WithContext(r.Context())
+				subgroup, subctx := errgroup.WithContext(groupctx)
 				for _, dirEntry := range dirEntries {
 					if dirEntry.IsDir() == srcFileInfo.IsDir() {
 						name := dirEntry.Name()
-						group.Go(func() error {
+						subgroup.Go(func() error {
 							if isMove {
-								return nbrew.FS.WithContext(groupctx).Rename(path.Join(srcOutputDir, name), path.Join(destOutputDir, name))
+								return nbrew.FS.WithContext(subctx).Rename(path.Join(srcOutputDir, name), path.Join(destOutputDir, name))
 							} else {
-								return nbrew.FS.WithContext(groupctx).Copy(path.Join(srcOutputDir, name), path.Join(destOutputDir, name))
+								return nbrew.FS.WithContext(subctx).Copy(path.Join(srcOutputDir, name), path.Join(destOutputDir, name))
 							}
 						})
 					}
 				}
-				err = group.Wait()
+				err = subgroup.Wait()
 				if err != nil {
 					return err
 				}
