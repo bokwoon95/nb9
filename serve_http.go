@@ -133,7 +133,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// Figure out the sitePrefix of the site we are serving.
 		var sitePrefix string
-		if strings.HasPrefix(head, "@") || strings.Contains(head, ".") {
+		if strings.HasPrefix(head, "@") || (strings.Contains(head, ".") && head != "site.json") {
 			sitePrefix, urlPath = head, tail
 			head, tail, _ = strings.Cut(urlPath, "/")
 		}
@@ -202,7 +202,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		switch head {
-		case "", "notes", "pages", "posts", "output":
+		case "", "notes", "pages", "posts", "output", "site.json":
 			if nbrew.DB != nil && !isAuthorizedForSite {
 				if sitePrefix != "" || urlPath != "" {
 					notAuthorized(w, r)
@@ -218,20 +218,6 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			nbrew.clipboard(w, r, username, sitePrefix, tail)
 			return
-		case "settings":
-			if nbrew.DB != nil && !isAuthorizedForSite {
-				notAuthorized(w, r)
-				return
-			}
-			switch tail {
-			case "site":
-				nbrew.sitesettings(w, r, username, sitePrefix)
-				return
-			case "list":
-			default:
-				notFound(w, r)
-				return
-			}
 		}
 
 		switch urlPath {

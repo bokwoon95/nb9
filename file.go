@@ -56,14 +56,13 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		FilesTooBig     []string       `json:"filesTooBig,omitempty"`
 	}
 
-	serveRawFile := r.Method == "GET" && r.Form.Has("raw")
 	head, tail, _ := strings.Cut(filePath, "/")
-	if head == "posts" && strings.HasSuffix(filePath, "/settings.json") && !serveRawFile {
-		category := strings.TrimSuffix(tail, "/settings.json")
-		_ = category
-		// TODO: listsettings() for post category
-		return
-	}
+	// if head == "posts" && strings.HasSuffix(filePath, "/settings.json") && !(r.Method == "GET" && r.Form.Has("raw")) {
+	// 	category := strings.TrimSuffix(tail, "/settings.json")
+	// 	_ = category
+	// 	// TODO: listsettings() for post category
+	// 	return
+	// }
 
 	file, err := nbrew.FS.Open(path.Join(".", sitePrefix, filePath))
 	if err != nil {
@@ -110,16 +109,8 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		isEditable = fileType.Ext == ".html" || fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md" || fileType.Ext == ".txt"
 	case "pages":
 		isEditable = fileType.Ext == ".html"
-		if !isEditable {
-			notFound(w, r)
-			return
-		}
 	case "posts":
 		isEditable = fileType.Ext == ".md"
-		if !isEditable {
-			notFound(w, r)
-			return
-		}
 	case "output":
 		next, _, _ := strings.Cut(tail, "/")
 		switch next {
@@ -132,6 +123,8 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		default:
 			isEditable = fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md"
 		}
+	case "site.json":
+		isEditable = false
 	default:
 		notFound(w, r)
 		return
@@ -323,8 +316,8 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 			}
 		case "output":
 			if isEditable {
-				n := strings.Index(tail, "/")
-				if tail[:n] != "posts" && tail[:n] != "themes" {
+				next, _, _ := strings.Cut(tail, "/")
+				if next != "posts" && next != "themes" {
 					response.BelongsTo = path.Join("pages", path.Dir(tail)+".html")
 				}
 			}
