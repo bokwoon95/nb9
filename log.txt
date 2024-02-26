@@ -25,13 +25,17 @@ rename.go
 serve_http.go
 notebrew/main.go
 
+TODO: huge pivot: the post.html and postlist.html template now reside inside posts/ and posts/{category}/ itself, allowing us to trigger post/postlist regeneration specifically for the post category that the template file resides in.
+    - Also it's becomes very straightforward and direct when you first go into the /posts/ folder and there's a post.html and a postlist.html file in-your-face prompting you to explore further.
+TODO: on initial site generation, the postlist page is always missing the "posts" header plus the first item is an empty bullet point.
+    - Investigate by using an IDE and deleting the files database + running the server for the first time.
 TODO: no choice, editing themes/post.html should regenerate all posts and editing themes/postlist.html should regenerate all post lists. It's too clunky otherwise for people to tweak their own post templates, bc they have to keep switching to a third tab to regenerate site (which is more intensive than just regenerating posts to begin with).
     - This means we should remove 'regeneratelist' entirely because it can be replicated by simply saving postlist.html. A win!
     - and whenever we save post.html and regenerate all posts or save postlist.html and regenerate all post lists, display the number of files generated and time it took.
         - actually, extend that to pages and posts in general. only editing html template/css/javascript files won't regenerate anything.
     - ooh and when we edit a markdown file belonging to a page, we must also regenerate that page.
 TODO: site.json: site settings needs a way for users to customize their navbar items. the default is 'home' and 'posts', but the user may choose to link it to something else. as usual, site setting changes will trigger a whole-site rebuild.
-    - json files are a special format that the user cannot create by themselves, only read. And there is special handling for site.json and posts/{category}/site.json.
+    - json files are a special format that the user cannot create by themselves, only read. And there is special handling for site.json and posts/{category}/postlist.json.
     - files/settings.json
     - files/posts/settings.json
 TODO: make site deletion prompt the user to type in the full site name into an input and delete only if it matches. Bc the cost of deleting an entire site it too high, it could be years of someone's effort gone in an instant (and backups being the only option to restore data).
