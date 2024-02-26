@@ -184,7 +184,7 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
 				return
 			}
-			if response.Parent == "output" {
+			if next == "" {
 				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages/index.html"), http.StatusFound)
 				return
 			}
