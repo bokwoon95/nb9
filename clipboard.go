@@ -554,42 +554,43 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 		close(pastedCh)
 		if srcHead == "posts" && destHead == "posts" {
 			func() {
-				siteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, response.SrcSitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
+				srcSiteGen, err := NewSiteGenerator(r.Context(), nbrew.FS, response.SrcSitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 				if err != nil {
 					getLogger(r.Context()).Error(err.Error())
 					return
 				}
 				srcCategory := srcTail
-				srcTemplate, err := siteGen.PostListTemplate(r.Context(), srcCategory)
+				srcTemplate, err := srcSiteGen.PostListTemplate(r.Context(), srcCategory)
 				if err != nil {
 					if !errors.As(err, &response.TemplateError) {
 						getLogger(r.Context()).Error(err.Error())
 					}
 					return
 				}
-				_, err = siteGen.GeneratePostList(r.Context(), srcCategory, srcTemplate)
+				_, err = srcSiteGen.GeneratePostList(r.Context(), srcCategory, srcTemplate)
 				if err != nil {
 					if !errors.As(err, &response.TemplateError) {
 						getLogger(r.Context()).Error(err.Error())
 					}
 					return
 				}
+				destSiteGen := srcSiteGen
 				if response.SrcSitePrefix != response.DestSitePrefix {
-					siteGen, err = NewSiteGenerator(r.Context(), nbrew.FS, response.SrcSitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
+					destSiteGen, err = NewSiteGenerator(r.Context(), nbrew.FS, response.DestSitePrefix, nbrew.ContentDomain, nbrew.ImgDomain)
 					if err != nil {
 						getLogger(r.Context()).Error(err.Error())
 						return
 					}
 				}
 				destCategory := destTail
-				destTemplate, err := siteGen.PostListTemplate(r.Context(), destCategory)
+				destTemplate, err := destSiteGen.PostListTemplate(r.Context(), destCategory)
 				if err != nil {
 					if !errors.As(err, &response.TemplateError) {
 						getLogger(r.Context()).Error(err.Error())
 					}
 					return
 				}
-				_, err = siteGen.GeneratePostList(r.Context(), destCategory, destTemplate)
+				_, err = destSiteGen.GeneratePostList(r.Context(), destCategory, destTemplate)
 				if err != nil {
 					if !errors.As(err, &response.TemplateError) {
 						getLogger(r.Context()).Error(err.Error())

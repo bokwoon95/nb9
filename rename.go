@@ -179,26 +179,25 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 				return
 			}
 			head, tail, _ := strings.Cut(response.Parent, "/")
-			if head != "output" || next == "themes" {
+			if head != "output" {
 				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
 				return
 			}
 			next, _, _ := strings.Cut(tail, "/")
 			switch next {
 			case "themes":
+				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
+				return
 			case "posts":
-			case "":
-			default:
-			}
-			if next == "posts" {
 				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, tail+".md"), http.StatusFound)
 				return
-			}
-			if next == "" {
+			case "":
 				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages/index.html"), http.StatusFound)
 				return
+			default:
+				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages", tail+".html"), http.StatusFound)
+				return
 			}
-			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages", tail+".html"), http.StatusFound)
 		}
 
 		var request Request
