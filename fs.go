@@ -56,7 +56,7 @@ type FileType struct {
 	Ext         string
 	ContentType string
 	IsGzippable bool
-	IsObject      bool
+	IsObject    bool
 }
 
 var fileTypes = map[string]FileType{
@@ -78,4 +78,5 @@ var fileTypes = map[string]FileType{
 	".woff":  {Ext: ".woff", ContentType: "font/woff"},
 	".woff2": {Ext: ".woff2", ContentType: "font/woff2"},
 	".atom":  {Ext: ".atom", ContentType: "application/atom+xml; charset=utf-8", IsGzippable: true},
+	".json":  {Ext: ".json", ContentType: "application/json", IsGzippable: true},
 }

@@ -171,8 +171,8 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 
 	remoteFS, ok := nbrew.FS.(*RemoteFS)
 	if !ok {
-		for _, dir := range []string{"notes", "pages", "posts", "output/themes", "output"} {
-			fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, dir))
+		for _, name := range []string{"notes", "pages", "posts", "output/themes", "output", "site.json"} {
+			fileInfo, err := fs.Stat(nbrew.FS.WithContext(r.Context()), path.Join(sitePrefix, name))
 			if err != nil {
 				if errors.Is(err, fs.ErrNotExist) {
 					continue
@@ -181,12 +181,14 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 				internalServerError(w, r, err)
 				return
 			}
-			if !fileInfo.IsDir() {
+			isDir := fileInfo.IsDir()
+			containsDot := strings.Contains(name, ".")
+			if (isDir && !containsDot) || (!isDir && containsDot) {
 				continue
 			}
 			var absolutePath string
 			if localFS, ok := nbrew.FS.(*LocalFS); ok {
-				absolutePath = path.Join(localFS.RootDir, sitePrefix, dir)
+				absolutePath = path.Join(localFS.RootDir, sitePrefix, name)
 			}
 			response.Files = append(response.Files, File{
 				Name:         fileInfo.Name(),
@@ -224,14 +226,15 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 		Dialect: remoteFS.Dialect,
 		Format: "SELECT {*}" +
 			" FROM files" +
-			" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output})" +
-			" AND is_dir" +
+			" WHERE file_path IN ({notes}, {pages}, {posts}, {themes}, {output}, {sitejson})" +
+			" AND ((is_dir AND file_path NOT LIKE '%.%') OR (NOT is_dir AND file_path LIKE '%.%'))" +
 			" ORDER BY CASE file_path" +
 			" WHEN {notes} THEN 1" +
 			" WHEN {pages} THEN 2" +
 			" WHEN {posts} THEN 3" +
 			" WHEN {themes} THEN 4" +
 			" WHEN {output} THEN 5" +
+			" WHEN {sitejson} THEN 6" +
 			" END",
 		Values: []any{
 			sq.StringParam("notes", path.Join(sitePrefix, "notes")),
@@ -239,13 +242,14 @@ func (nbrew *Notebrew) rootdirectory(w http.ResponseWriter, r *http.Request, use
 			sq.StringParam("posts", path.Join(sitePrefix, "posts")),
 			sq.StringParam("themes", path.Join(sitePrefix, "output/themes")),
 			sq.StringParam("output", path.Join(sitePrefix, "output")),
+			sq.StringParam("sitejson", path.Join(sitePrefix, "site.json")),
 		},
 	}, func(row *sq.Row) File {
 		return File{
 			Name:         strings.Trim(strings.TrimPrefix(row.String("file_path"), sitePrefix), "/"),
 			ModTime:      row.Time("mod_time"),
 			CreationTime: row.Time("creation_time"),
-			IsDir:        true,
+			IsDir:        row.Bool("is_dir"),
 		}
 	})
 	if err != nil {

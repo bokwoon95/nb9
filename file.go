@@ -56,8 +56,9 @@ func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, si
 		FilesTooBig     []string       `json:"filesTooBig,omitempty"`
 	}
 
+	serveRawFile := r.Method == "GET" && r.Form.Has("raw")
 	head, tail, _ := strings.Cut(filePath, "/")
-	if head == "posts" && strings.HasSuffix(filePath, "/settings.json") {
+	if head == "posts" && strings.HasSuffix(filePath, "/settings.json") && !serveRawFile {
 		category := strings.TrimSuffix(tail, "/settings.json")
 		_ = category
 		// TODO: listsettings() for post category

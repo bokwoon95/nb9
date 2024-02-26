@@ -126,7 +126,7 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 	if r.Form.Has("ext") {
 		for _, ext := range r.Form["ext"] {
 			switch ext {
-			case ".html", ".css", ".js", ".md", ".txt":
+			case ".html", ".css", ".js", ".md", ".txt", ".json":
 				response.Exts = append(response.Exts, ext)
 			}
 		}
@@ -149,7 +149,8 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 			parentFilter = sq.Expr("(file_path LIKE 'notes/%'" +
 				" OR file_path LIKE 'pages/%'" +
 				" OR file_path LIKE 'posts/%'" +
-				" OR file_path LIKE 'output/%')")
+				" OR file_path LIKE 'output/%'" +
+				" OR parent_id IS NULL)")
 		} else {
 			parentFilter = sq.Expr("file_path LIKE {} ESCAPE '\\'", strings.NewReplacer("%", "\\%", "_", "\\_").Replace(parent)+"/%")
 		}
@@ -183,7 +184,7 @@ func (nbrew *Notebrew) search(w http.ResponseWriter, r *http.Request, username, 
 		}, func(row *sq.Row) Match {
 			match := Match{
 				FilePath:     row.String("files.file_path"),
-				Preview:      row.String("substr(files.text, 1, 500)"),
+				Preview:      row.String("CASE WHEN files.file_path LIKE '%.json' THEN '' ELSE substr(files.text, 1, 500) END"),
 				CreationTime: row.Time("files.creation_time"),
 			}
 			if sitePrefix != "" {

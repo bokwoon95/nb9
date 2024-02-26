@@ -633,6 +633,52 @@ func main() {
 				return err
 			}
 		}
+		_, err = fs.Stat(nbrew.FS, "site.json")
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			b, err := fs.ReadFile(nb9.RuntimeFS, "embed/site.json")
+			if err != nil {
+				return err
+			}
+			writer, err := nbrew.FS.OpenWriter("site.json", 0644)
+			if err != nil {
+				return err
+			}
+			defer writer.Close()
+			_, err = writer.Write(b)
+			if err != nil {
+				return err
+			}
+			err = writer.Close()
+			if err != nil {
+				return err
+			}
+		}
+		_, err = fs.Stat(nbrew.FS, "posts/postlist.json")
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			b, err := fs.ReadFile(nb9.RuntimeFS, "embed/postlist.json")
+			if err != nil {
+				return err
+			}
+			writer, err := nbrew.FS.OpenWriter("posts/postlist.json", 0644)
+			if err != nil {
+				return err
+			}
+			defer writer.Close()
+			_, err = writer.Write(b)
+			if err != nil {
+				return err
+			}
+			err = writer.Close()
+			if err != nil {
+				return err
+			}
+		}
 		siteGen, err := nb9.NewSiteGenerator(context.Background(), nbrew.FS, "", nbrew.ContentDomain, nbrew.ImgDomain)
 		if err != nil {
 			return err

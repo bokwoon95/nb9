@@ -24,9 +24,14 @@ serve_http.go
 notebrew/main.go
 
 TODO: no choice, editing themes/post.html should regenerate all posts and editing themes/postlist.html should regenerate all post lists. It's too clunky otherwise for people to tweak their own post templates, bc they have to keep switching to a third tab to regenerate site (which is more intensive than just regenerating posts to begin with).
+    - This means we should remove 'regeneratelist' entirely because it can be replicated by simply saving postlist.html. A win!
+    - and whenever we save post.html and regenerate all posts or save postlist.html and regenerate all post lists, display the number of files generated and time it took.
+        - actually, extend that to pages and posts in general. only editing html template/css/javascript files won't regenerate anything.
+    - ooh and when we edit a markdown file belonging to a page, we must also regenerate that page.
 TODO: site.json: site settings needs a way for users to customize their navbar items. the default is 'home' and 'posts', but the user may choose to link it to something else. as usual, site setting changes will trigger a whole-site rebuild.
-    - files/settings/?posts&category=abc
-    - files/settings/?site
+    - Do I want users to be able to create arbitrary JSON files? But if I do, they will start asking for the ability to create TOML or YAML files as well (in themes). I really don't want JSON to be a special file format.
+    - files/settings.json
+    - files/posts/settings.json
 TODO: make site deletion prompt the user to type in the full site name into an input and delete only if it matches. Bc the cost of deleting an entire site it too high, it could be years of someone's effort gone in an instant (and backups being the only option to restore data).
 TODO: now that directory.html is pretty much set in stone, go about deleting extraneous SVGs so we don't bloat the app.
 TODO: oh boy pagination on output/themes is broken again (why? investigate)

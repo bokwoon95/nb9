@@ -194,6 +194,13 @@ func (nbrew *Notebrew) createfolder(w http.ResponseWriter, r *http.Request, user
 			writeResponse(w, r, response)
 			return
 		}
+		_, ok := fileTypes[path.Ext(response.Name)]
+		if ok {
+			response.FormErrors.Add("name", "cannot end in a file extension")
+			response.Error = "FormErrorsPresent"
+			writeResponse(w, r, response)
+			return
+		}
 		head, tail, _ := strings.Cut(response.Parent, "/")
 		switch head {
 		case "pages":

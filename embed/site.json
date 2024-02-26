@@ -1,0 +1,12 @@
+{
+  "lang": "en",
+  "title": "",
+  "description": "",
+  "emoji": "☕",
+  "favicon": "",
+  "codeStyle": "onedark",
+  "navigationLinks": [
+    {"name": "home", "url": "/"},
+    {"name": "posts", "url": "/posts/"}
+  ]
+}

@@ -439,16 +439,16 @@ func (nbrew *Notebrew) clipboard(w http.ResponseWriter, r *http.Request, usernam
 					}
 				}
 				pastedCh <- name
-				isMandatoryFile := false
+				isPermanentFile := false
 				if !srcFileInfo.IsDir() {
 					switch response.SrcParent {
 					case "pages":
-						isMandatoryFile = name == "index.html" || name == "404.html"
+						isPermanentFile = name == "index.html" || name == "404.html"
 					case "output/themes":
-						isMandatoryFile = name == "post.html" || name == "postlist.html"
+						isPermanentFile = name == "post.html" || name == "postlist.html"
 					}
 				}
-				isMove := response.IsCut && !moveNotAllowed && !isMandatoryFile
+				isMove := response.IsCut && !moveNotAllowed && !isPermanentFile
 				if isMove {
 					err := nbrew.FS.WithContext(groupctx).Rename(srcFilePath, destFilePath)
 					if err != nil {
