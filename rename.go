@@ -184,12 +184,12 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, response.Parent)+"/", http.StatusFound)
 				return
 			}
-			if next == "" {
-				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages/index.html"), http.StatusFound)
-				return
-			}
 			if next == "posts" {
 				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, tail+".md"), http.StatusFound)
+				return
+			}
+			if next == "" {
+				http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages/index.html"), http.StatusFound)
 				return
 			}
 			http.Redirect(w, r, "/"+path.Join("files", sitePrefix, "pages", tail+".html"), http.StatusFound)
