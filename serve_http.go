@@ -66,7 +66,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("X-Frame-Options", "DENY")
 	w.Header().Add("X-Content-Type-Options", "nosniff")
 	w.Header().Add("Referrer-Policy", "strict-origin-when-cross-origin")
-	w.Header().Add("Permissions-Policy", "geolocation=(), microphone=()")
+	w.Header().Add("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
 	w.Header().Add("Cross-Origin-Opener-Policy", "same-origin")
 	w.Header().Add("Cross-Origin-Embedder-Policy", "require-corp")
 	w.Header().Add("Cross-Origin-Resource-Policy", "same-origin")
