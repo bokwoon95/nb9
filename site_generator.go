@@ -1856,8 +1856,8 @@ func NewPagination(currentPage, lastPage, visiblePages int) Pagination {
 		}
 	} else {
 		// If we reach here, it means the current page is directly in the
-		// center the slots. Fill in the consecutive band of numbers around the
-		// center, then fill in the remaining slots to the left and to the
+		// center of the slots. Fill in the consecutive band of numbers around
+		// the center, then fill in the remaining slots to the left and to the
 		// right.
 		consecutiveStart := len(slots)>>1 - numConsecutiveNeighbours
 		consecutiveEnd := len(slots)>>1 + numConsecutiveNeighbours

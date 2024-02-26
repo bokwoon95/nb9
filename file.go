@@ -843,7 +843,7 @@ func serveFile(w http.ResponseWriter, r *http.Request, file fs.File, fileInfo fs
 		return
 	}
 
-	// .html .css .js .md .txt .svg .ico .eot .otf .ttf .atom .webmanifest
+	// .html .css .js .md .txt .svg .ico .eot .otf .ttf .atom .json
 
 	if remoteFile, ok := file.(*RemoteFile); ok {
 		// If file is a RemoteFile is gzippable and is not fulltext indexed,
