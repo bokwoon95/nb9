@@ -247,9 +247,10 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 			return
 		}
 		seen := make(map[string]bool)
-		group, groupctx := errgroup.WithContext(r.Context())
+		head, tail, _ := strings.Cut(response.Parent, "/")
 		response.DeleteErrors = make([]string, len(request.Names))
 		response.Files = make([]File, len(request.Names))
+		group, groupctx := errgroup.WithContext(r.Context())
 		for i, name := range request.Names {
 			i, name := i, filepath.ToSlash(name)
 			if strings.Contains(name, "/") {
@@ -266,7 +267,6 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				} else {
 					response.Files[i] = File{Name: name}
 				}
-				head, tail, _ := strings.Cut(response.Parent, "/")
 				switch head {
 				case "pages":
 					if tail != "" || (name != "index.html" && name != "404.html") {
@@ -387,6 +387,11 @@ func (nbrew *Notebrew) delete(w http.ResponseWriter, r *http.Request, username, 
 				}
 				return nil
 			})
+		}
+		if head == "output" {
+			next, _, _ := strings.Cut(tail, "/")
+			if next == "posts" {
+			}
 		}
 		err := group.Wait()
 		if err != nil {

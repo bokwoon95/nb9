@@ -23,6 +23,7 @@ rename.go
 serve_http.go
 notebrew/main.go
 
+TODO: no choice, editing themes/post.html should regenerate all posts and editing themes/postlist.html should regenerate all post lists. It's too clunky otherwise for people to tweak their own post templates, bc they have to keep switching to a third tab to regenerate site (which is more intensive than just regenerating posts to begin with).
 TODO: site.json: site settings needs a way for users to customize their navbar items. the default is 'home' and 'posts', but the user may choose to link it to something else. as usual, site setting changes will trigger a whole-site rebuild.
     - files/settings/?posts&category=abc
     - files/settings/?site
