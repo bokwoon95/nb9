@@ -29,7 +29,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
+func (nbrew *Notebrew) file(w http.ResponseWriter, r *http.Request, username, sitePrefix, filePath string) {
 	type Asset struct {
 		FileID       [16]byte  `json:"-"`
 		Name         string    `json:"name"`
@@ -54,6 +54,14 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 		Assets          []Asset        `json:"assets,omitempty"`
 		FilesExist      []string       `json:"filesExist,omitempty"`
 		FilesTooBig     []string       `json:"filesTooBig,omitempty"`
+	}
+
+	head, tail, _ := strings.Cut(filePath, "/")
+	if head == "posts" && strings.HasSuffix(filePath, "/settings.json") {
+		category := strings.TrimSuffix(tail, "/settings.json")
+		_ = category
+		// TODO: listsettings() for post category
+		return
 	}
 
 	file, err := nbrew.FS.Open(path.Join(".", sitePrefix, filePath))
@@ -93,13 +101,10 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 
 	// Figure out if the file is a user-editable file.
 	var isEditable bool
-	n := strings.Index(filePath, "/")
-	if n < 0 {
+	switch head {
+	case "":
 		notFound(w, r)
 		return
-	}
-	head, tail := filePath[:n], filePath[n+1:]
-	switch head {
 	case "notes":
 		isEditable = fileType.Ext == ".html" || fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md" || fileType.Ext == ".txt"
 	case "pages":
@@ -115,18 +120,16 @@ func (nbrew *Notebrew) files(w http.ResponseWriter, r *http.Request, username, s
 			return
 		}
 	case "output":
-		n := strings.Index(tail, "/")
-		if n < 0 {
+		next, _, _ := strings.Cut(tail, "/")
+		switch next {
+		case "":
 			isEditable = fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md"
-		} else {
-			switch tail[:n] {
-			case "posts":
-				isEditable = false
-			case "themes":
-				isEditable = fileType.Ext == ".html" || fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md" || fileType.Ext == ".txt"
-			default:
-				isEditable = fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md"
-			}
+		case "posts":
+			isEditable = false
+		case "themes":
+			isEditable = fileType.Ext == ".html" || fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md" || fileType.Ext == ".txt"
+		default:
+			isEditable = fileType.Ext == ".css" || fileType.Ext == ".js" || fileType.Ext == ".md"
 		}
 	default:
 		notFound(w, r)

@@ -209,7 +209,7 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			nbrew.files(w, r, username, sitePrefix, urlPath)
+			nbrew.file(w, r, username, sitePrefix, urlPath)
 			return
 		case "clipboard":
 			if nbrew.DB != nil && !isAuthorizedForSite {
@@ -218,6 +218,20 @@ func (nbrew *Notebrew) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			nbrew.clipboard(w, r, username, sitePrefix, tail)
 			return
+		case "settings":
+			if nbrew.DB != nil && !isAuthorizedForSite {
+				notAuthorized(w, r)
+				return
+			}
+			switch tail {
+			case "site":
+				nbrew.sitesettings(w, r, username, sitePrefix)
+				return
+			case "list":
+			default:
+				notFound(w, r)
+				return
+			}
 		}
 
 		switch urlPath {

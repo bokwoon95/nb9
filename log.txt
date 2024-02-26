@@ -24,6 +24,8 @@ serve_http.go
 notebrew/main.go
 
 TODO: site.json: site settings needs a way for users to customize their navbar items. the default is 'home' and 'posts', but the user may choose to link it to something else. as usual, site setting changes will trigger a whole-site rebuild.
+    - files/settings/?posts&category=abc
+    - files/settings/?site
 TODO: make site deletion prompt the user to type in the full site name into an input and delete only if it matches. Bc the cost of deleting an entire site it too high, it could be years of someone's effort gone in an instant (and backups being the only option to restore data).
 TODO: now that directory.html is pretty much set in stone, go about deleting extraneous SVGs so we don't bloat the app.
 TODO: oh boy pagination on output/themes is broken again (why? investigate)
