@@ -42,17 +42,6 @@
         }
       },
       {
-        "dialect": "postgres",
-        "column": "file_name",
-        "type": {
-          "default": "VARCHAR(500)"
-        },
-        "generated": {
-          "expression": "regexp_replace(file_path, '^.+/', '');",
-          "stored": true
-        }
-      },
-      {
         "dialect": "mysql",
         "column": "file_name",
         "type": {
@@ -114,7 +103,7 @@
           "default": "TSVECTOR"
         },
         "generated": {
-          "expression": "to_tsvector('english', file_name, text)",
+          "expression": "to_tsvector('english', regexp_replace(file_path, '^.+/', ''), text)",
           "stored": true
         }
       }
