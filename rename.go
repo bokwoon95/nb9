@@ -390,6 +390,8 @@ func (nbrew *Notebrew) rename(w http.ResponseWriter, r *http.Request, username, 
 				internalServerError(w, r, err)
 				return
 			}
+			writeResponse(w, r, response)
+			return
 		}
 		err = nbrew.FS.WithContext(r.Context()).MkdirAll(newOutputDir, 0755)
 		if err != nil {
